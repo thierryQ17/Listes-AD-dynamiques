@@ -4,8 +4,9 @@ param()
 try {
     Import-Module -Name $(Join-Path $PSScriptRoot "_initGlobalVariables.psm1") -Force -ErrorAction Stop
     Import-Module -Name $global:path."f_connect.psm1"     -Force -ErrorAction Stop
-    Import-Module -Name $global:path."f_ad-reader.psm1"   -Force -ErrorAction Stop
-    Import-Module -Name $global:path."f_http-server.psm1" -Force -ErrorAction Stop
+    Import-Module -Name $global:path."f_ad-reader.psm1"      -Force -ErrorAction Stop
+    Import-Module -Name $global:path."f_csv-generator.psm1" -Force -ErrorAction Stop
+    Import-Module -Name $global:path."f_http-server.psm1"   -Force -ErrorAction Stop
 } catch {
     Write-Host "ERREUR chargement des modules : $($_.Exception.Message)" -ForegroundColor Red
     Read-Host "`nAppuyez sur Entrée pour fermer"

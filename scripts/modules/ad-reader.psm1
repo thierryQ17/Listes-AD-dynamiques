@@ -1,5 +1,14 @@
 # Lecture seule — aucune commande d'écriture AD dans ce module
 
+function Get-ADParams {
+    param([hashtable]$Extra = @{})
+    $p = @{ Credential = $global:AD_credential }
+    $s = $global:parametresJson.ad.server
+    if ($s) { $p['Server'] = $s }
+    foreach ($k in $Extra.Keys) { $p[$k] = $Extra[$k] }
+    return $p
+}
+
 function Get-I2NGroups {
     $searchBase = $global:parametresJson.ad.groupsOU
 
@@ -199,34 +208,32 @@ function Get-OUSiteUsers {
             -Credential $global:AD_credential `
             -Properties DisplayName, Mail, Department, Description, Title, Enabled, ProxyAddresses, `
                         UserPrincipalName, Type, Company, EmployeeNumber, Manager, Office, `
-                        extensionAttribute1, dateDeFin, PostalCode, StreetAddress `
+                        extensionAttribute1, PostalCode, StreetAddress `
             -ErrorAction Stop
 
         return @(
-            $users |
-            Select-Object @{N='displayName';         E={ if ($_.DisplayName) { $_.DisplayName } else { $_.SamAccountName } }},
-                          @{N='description';         E={ $_.Description }},
-                          @{N='mail';                E={ $_.Mail }},
-                          @{N='title';               E={ $_.Title }},
-                          @{N='department';          E={ $_.Department }},
-                          @{N='samAccountName';      E={ $_.SamAccountName }},
-                          @{N='enabled';             E={ [bool]$_.Enabled }},
-                          @{N='proxyAddresses';      E={
-                              $list = [System.Collections.Generic.List[string]]::new()
-                              foreach ($p in $_.ProxyAddresses) { if ($p) { $list.Add([string]$p) } }
-                              $list
-                          }},
-                          @{N='userPrincipalName';   E={ $_.UserPrincipalName }},
-                          @{N='type';                E={ $_.Type }},
-                          @{N='company';             E={ $_.Company }},
-                          @{N='employeeNumber';      E={ $_.EmployeeNumber }},
-                          @{N='manager';             E={ if ($_.Manager -match '^CN=([^,]+)') { $Matches[1] } else { $_.Manager } }},
-                          @{N='office';              E={ $_.Office }},
-                          @{N='extensionAttribute1'; E={ $_.extensionAttribute1 }},
-                          @{N='dateDeFin';           E={ $_.dateDeFin }},
-                          @{N='postalCode';          E={ $_.PostalCode }},
-                          @{N='streetAddress';       E={ $_.StreetAddress }} |
-            Sort-Object displayName
+            $users | ForEach-Object {
+                $u = $_
+                [PSCustomObject]@{
+                    displayName       = if ($u.DisplayName) { $u.DisplayName } else { $u.SamAccountName }
+                    description       = $u.Description
+                    mail              = $u.Mail
+                    title             = $u.Title
+                    department        = $u.Department
+                    samAccountName    = $u.SamAccountName
+                    enabled           = [bool]$u.Enabled
+                    proxyAddresses    = [string[]]@($u.ProxyAddresses | Where-Object { $_ } | ForEach-Object { [string]$_ })
+                    userPrincipalName = $u.UserPrincipalName
+                    type              = $u.Type
+                    company           = $u.Company
+                    employeeNumber    = $u.EmployeeNumber
+                    manager           = if ($u.Manager -match '^CN=([^,]+)') { $Matches[1] } else { $u.Manager }
+                    office            = $u.Office
+                    extensionAttribute1 = $u.extensionAttribute1
+                    postalCode        = $u.PostalCode
+                    streetAddress     = $u.StreetAddress
+                }
+            } | Sort-Object displayName
         )
     } catch {
         add-msg -msg "Erreur lecture utilisateurs '$SiteDN' : $($_.Exception.Message)" -foregroundColor Yellow

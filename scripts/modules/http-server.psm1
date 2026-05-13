@@ -79,11 +79,13 @@ function Invoke-RouteHandler {
             Serve-StaticFile -Response $Response -Key "f_explorer.html" -ContentType "text/html"
         }
         '^/regles(\.html)?$' {
-            $reglesPath = Join-Path (Split-Path $global:path."f_explorer.html" -Parent) "regles.html"
-            $bytes = [System.IO.File]::ReadAllBytes($reglesPath)
-            $Response.ContentType     = "text/html; charset=utf-8"
-            $Response.ContentLength64 = $bytes.Length
-            $Response.OutputStream.Write($bytes, 0, $bytes.Length)
+            Serve-StaticFile -Response $Response -Key "f_regles.html" -ContentType "text/html"
+        }
+        '^/regles\.js$' {
+            Serve-StaticFile -Response $Response -Key "f_regles.js" -ContentType "application/javascript"
+        }
+        '^/regles\.css$' {
+            Serve-StaticFile -Response $Response -Key "f_regles.css" -ContentType "text/css"
         }
         '^/explorer\.js$' {
             Serve-StaticFile -Response $Response -Key "f_explorer.js" -ContentType "application/javascript"
@@ -126,13 +128,69 @@ function Invoke-RouteHandler {
                 add-msg -msg "  → cache HIT : $dn" -foregroundColor DarkGray -quelType writeHost
             } else {
                 $userList = [System.Collections.ArrayList]@(Get-OUSiteUsers -SiteDN $dn)
-                $data     = ConvertTo-Json -InputObject $userList -Depth 3 -Compress
+                $data     = ConvertTo-Json -InputObject $userList -Depth 5 -Compress
                 [System.IO.File]::WriteAllText($cachePath, $data, [System.Text.Encoding]::UTF8)
                 Update-CacheIndex -DN $dn -Count $userList.Count
                 $Response.Headers.Add("X-Cache", "MISS")
                 add-msg -msg "  → cache MISS (écrit) : $dn" -foregroundColor DarkGray -quelType writeHost
             }
             Send-JsonResponse -Response $Response -Body $data
+        }
+        '^/api/regles$' {
+            $rPath = Get-ReglesPath
+            if ($Method -eq 'GET') {
+                $data = if (Test-Path $rPath) { [System.IO.File]::ReadAllText($rPath, [System.Text.Encoding]::UTF8) } else { '[]' }
+                Send-JsonResponse -Response $Response -Body $data
+            } elseif ($Method -eq 'POST') {
+                $rule   = ConvertFrom-Json (Read-RequestBody -Request $Request)
+                $regles = if (Test-Path $rPath) { @(ConvertFrom-Json ([System.IO.File]::ReadAllText($rPath, [System.Text.Encoding]::UTF8))) } else { @() }
+                $idx    = -1
+                for ($i = 0; $i -lt $regles.Count; $i++) { if ($regles[$i].id -eq $rule.id) { $idx = $i; break } }
+                if ($idx -ge 0) { $regles[$idx] = $rule } else { $regles += $rule }
+                [System.IO.File]::WriteAllText($rPath, (ConvertTo-Json -InputObject @($regles) -Depth 10 -Compress), [System.Text.Encoding]::UTF8)
+                Send-JsonResponse -Response $Response -Body '{"ok":true}'
+            }
+        }
+        '^/api/regles/([^/]+)/generate$' {
+            $id    = [uri]::UnescapeDataString($Matches[1])
+            $rPath = Get-ReglesPath
+            if ($Method -eq 'POST') {
+                $regles = if (Test-Path $rPath) { @(ConvertFrom-Json ([System.IO.File]::ReadAllText($rPath, [System.Text.Encoding]::UTF8))) } else { @() }
+                $rule   = $regles | Where-Object { $_.id -eq $id } | Select-Object -First 1
+                if (-not $rule) {
+                    $Response.StatusCode = 404
+                    Send-JsonResponse -Response $Response -Body '{"error":"Règle introuvable"}'
+                } else {
+                    try {
+                        $result     = Invoke-RuleGeneration -Rule $rule
+                        $resultJson = ConvertTo-Json -InputObject $result -Depth 5 -Compress
+                        Send-JsonResponse -Response $Response -Body $resultJson
+                    } catch {
+                        $errMsg = $_.Exception.Message -replace '"', "'"
+                        Send-JsonResponse -Response $Response -Body "{`"ok`":false,`"error`":`"$errMsg`"}"
+                    }
+                }
+            }
+        }
+        '^/api/regles/([^/]+)$' {
+            $id     = [uri]::UnescapeDataString($Matches[1])
+            $rPath  = Get-ReglesPath
+            if ($Method -eq 'DELETE') {
+                $regles = if (Test-Path $rPath) { @(ConvertFrom-Json ([System.IO.File]::ReadAllText($rPath, [System.Text.Encoding]::UTF8))) } else { @() }
+                $regles = @($regles | Where-Object { $_.id -ne $id })
+                [System.IO.File]::WriteAllText($rPath, (ConvertTo-Json -InputObject @($regles) -Depth 10 -Compress), [System.Text.Encoding]::UTF8)
+                Send-JsonResponse -Response $Response -Body '{"ok":true}'
+            }
+        }
+        '^/api/ad/values$' {
+            $field = $Request.QueryString["field"]
+            if (-not $field) {
+                Send-JsonResponse -Response $Response -Body '[]'
+            } else {
+                $values = Get-ADFieldValues -Field $field
+                $data   = ConvertTo-Json -InputObject @($values) -Depth 2 -Compress
+                Send-JsonResponse -Response $Response -Body $data
+            }
         }
         default {
             $Response.StatusCode = 404
@@ -199,7 +257,7 @@ function Start-CacheWarmup {
             }
             try {
                 $list = [System.Collections.ArrayList]@(Get-OUSiteUsers -SiteDN $site.dn)
-                $json = ConvertTo-Json -InputObject $list -Depth 3 -Compress
+                $json = ConvertTo-Json -InputObject $list -Depth 5 -Compress
                 [System.IO.File]::WriteAllText($cp, $json, [System.Text.Encoding]::UTF8)
                 Update-LocalIndex -DN $site.dn -Count $list.Count
                 $done++
@@ -248,6 +306,35 @@ function Get-OUCachePath {
     $checksum = 0
     foreach ($c in $DN.ToCharArray()) { $checksum = ($checksum * 31 + [int][char]$c) -band 0x7FFFFFFF }
     return Join-Path $cacheDir "${firstOU}_${checksum}.json"
+}
+
+function Get-ADFieldValues {
+    param([string]$Field)
+    $scriptsDir = Split-Path ($global:path."r_settings" -replace '/', '\') -Parent
+    $cacheDir   = Join-Path $scriptsDir "cache"
+    if (-not (Test-Path $cacheDir)) { return @() }
+    $seen = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+    foreach ($f in Get-ChildItem -Path $cacheDir -Filter "*.json" -Exclude "_index.json" -ErrorAction SilentlyContinue) {
+        try {
+            $users = ConvertFrom-Json ([System.IO.File]::ReadAllText($f.FullName, [System.Text.Encoding]::UTF8))
+            foreach ($u in $users) {
+                $v = $u.$Field
+                if ($v -and "$v" -ne '') { [void]$seen.Add("$v") }
+            }
+        } catch { }
+    }
+    return @($seen | Sort-Object)
+}
+
+function Get-ReglesPath {
+    $dir = ($global:path."r_settings") -replace '/', '\'
+    return Join-Path $dir "regles.json"
+}
+
+function Read-RequestBody {
+    param($Request)
+    $reader = [System.IO.StreamReader]::new($Request.InputStream, [System.Text.Encoding]::UTF8)
+    return $reader.ReadToEnd()
 }
 
 function Serve-StaticFile {

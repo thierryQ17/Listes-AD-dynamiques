@@ -1,0 +1,31 @@
+[
+  {
+    "id": "default-formateurs",
+    "label": "FORMATEURS",
+    "niveau": 3,
+    "monoNiveau": true,
+    "conditions": {
+      "include": [
+        { "field": "title", "op": "like", "value": "*FORMATEUR*" }
+      ],
+      "exclude": []
+    },
+    "createdAt": "2026-05-13T00:00:00",
+    "updatedAt": "2026-05-13T00:00:00"
+  },
+  {
+    "id": "default-administratif",
+    "label": "ADMINISTRATIF",
+    "niveau": 3,
+    "monoNiveau": true,
+    "conditions": {
+      "include": [
+        { "field": "title", "op": "notlike", "value": "*FORMATEUR*" }
+      ],
+      "exclude": []
+    },
+    "createdAt": "2026-05-13T00:00:00",
+    "updatedAt": "2026-05-13T00:00:00"
+  },
+  {"id":"mp48ytrnrry6i0775b","label":"DIRECTEUR CENTRE FORMATION","niveau":3,"conditions":{"include":[{"field":"title","op":"eq","value":"DIRECTEUR CENTRE FORMATION"},{"field":"title","op":"eq","value":"DIRECTEUR DE CENTRE"}],"exclude":[]},"createdAt":"2026-05-13T16:01:35","updatedAt":"2026-05-13T16:01:35"}
+]

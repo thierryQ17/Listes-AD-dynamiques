@@ -1,5 +1,6 @@
 {
   "ad": {
+    "server":     "",
     "searchBase": "%%_LDAP_SEARCHBASE_%%",
     "groupsOU":   "%%_OU_GROUPES_I2N_%%",
     "regions": [

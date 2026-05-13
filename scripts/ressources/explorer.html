@@ -13,8 +13,8 @@
         <div class="header-left">
             <nav class="header-nav">
                 <a href="/explorer" class="nav-link active">Explorateur AD</a>
-                <a href="/regles" class="nav-link">Règles</a>
-                <a href="/index.html" class="nav-link">Groupes Dynamiques</a>
+                <a href="/regles"    class="nav-link" target="i2n-regles">Règles</a>
+                <a href="/index.html" class="nav-link" target="i2n-groupes">Groupes Dynamiques</a>
             </nav>
         </div>
         <div class="header-right">
@@ -28,7 +28,7 @@
         <!-- Arbre AD (gauche) -->
         <aside class="tree-sidebar">
             <div class="tree-search-wrap">
-                <input type="text" id="tree-search" placeholder="Filtrer les sites..." autocomplete="off">
+                <input type="text" id="tree-search" placeholder="Rechercher par site et par nom" autocomplete="off">
                 <button id="tree-search-clear" class="tree-search-clear" hidden title="Effacer la recherche">×</button>
             </div>
             <div class="tree-actions-bar">
@@ -58,7 +58,10 @@
                         </select>
                     </div>
                     <button id="toggle-all-btn" class="btn-toggle-all" style="display:none">Tout fermer</button>
-                    <input type="text" id="user-filter" placeholder="Filtrer…" autocomplete="off" disabled>
+                    <div class="user-filter-wrap">
+                        <input type="text" id="user-filter" placeholder="Filtrer…" autocomplete="off" disabled>
+                        <button id="user-filter-clear" class="user-filter-clear" hidden title="Vider le filtre">×</button>
+                    </div>
                 </div>
             </div>
 
@@ -106,6 +109,40 @@
             <div id="scan-bar" class="scan-bar"></div>
         </div>
     </footer>
+
+    <!-- Modal Fonction -->
+    <div id="function-modal" class="modal-overlay" hidden>
+        <div class="modal-box">
+            <div class="modal-header">
+                <h3 class="modal-title" id="modal-function-title"></h3>
+                <div class="modal-header-actions">
+                    <button id="btn-create-rule" class="btn-create-rule">↗ Créer une règle</button>
+                    <button id="modal-close" class="modal-close-btn">×</button>
+                </div>
+            </div>
+            <div id="modal-filter-bar" class="modal-filter-bar" hidden></div>
+            <div class="modal-body">
+                <div class="modal-levels-col">
+                    <div class="modal-level active" data-level="1">
+                        <div class="level-name">Niveau 1</div>
+                        <div class="level-desc">Ce centre</div>
+                        <div class="level-count" id="modal-count-1"></div>
+                    </div>
+                    <div class="modal-level" data-level="2">
+                        <div class="level-name">Niveau 2</div>
+                        <div class="level-desc">Cette DO</div>
+                        <div class="level-count" id="modal-count-2"></div>
+                    </div>
+                    <div class="modal-level" data-level="3">
+                        <div class="level-name">Niveau 3</div>
+                        <div class="level-desc">Toutes les DO</div>
+                        <div class="level-count" id="modal-count-3"></div>
+                    </div>
+                </div>
+                <div class="modal-results-col" id="modal-results"></div>
+            </div>
+        </div>
+    </div>
 
     <script src="/explorer.js"></script>
 </body>

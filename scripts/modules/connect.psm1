@@ -19,7 +19,10 @@ function Connect-ADSession {
     }
 
     try {
-        $null = Get-ADDomain -Credential $global:AD_credential -ErrorAction Stop
+        $adServer = $global:parametresJson.ad.server
+        $domainParams = @{ Credential = $global:AD_credential; ErrorAction = 'Stop' }
+        if ($adServer) { $domainParams['Server'] = $adServer }
+        $null = Get-ADDomain @domainParams
         add-msg -msg "Connexion AD réussie pour '$admLogin'." -foregroundColor Green
         return $true
     } catch {

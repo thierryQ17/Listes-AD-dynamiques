@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 
 // ============================================================
 //  État
@@ -26,6 +26,7 @@ const PREFETCH_CONCURRENCY = 3;
 // File de second passage pour les caches obsolètes (manque proxyAddresses)
 const staleQueue    = [];
 let   staleRunning  = 0;
+const staleFetched  = new Set();   // guard : un seul refresh par DN par session
 
 function enqueuePrefetch(dn, onDone) {
     if (prefetchedDns.has(dn)) { onDone?.(); return; }
@@ -46,8 +47,9 @@ function drainPrefetchQueue() {
                 const badge = document.getElementById('count-' + dnToId(dn));
                 if (badge) badge.textContent = users.length;
                 // Détection cache obsolète : proxyAddresses absent ou ancien format scalaire → refresh silencieux
-                if (users.length > 0 && users.some(u =>
+                if (!staleFetched.has(dn) && users.length > 0 && users.some(u =>
                         u.proxyAddresses === undefined || typeof u.proxyAddresses === 'string')) {
+                    staleFetched.add(dn);
                     staleQueue.push(dn);
                     drainStaleQueue();
                 }
@@ -127,6 +129,7 @@ document.addEventListener('DOMContentLoaded', () => {
     setupSort();
     setupGroupBy();
     loadTree();
+    setupFunctionModal();
 
     document.getElementById('toggle-tree-btn').addEventListener('click', () => {
         const anyCollapsed = document.querySelector('.tree-region:not(.expanded)');
@@ -149,6 +152,9 @@ async function loadTree() {
         // Index DN → nom de site pour la recherche cross-site
         allSites.forEach(s => { dnNameMap[s.dn] = s.name; });
 
+        // Lire les compteurs depuis l'index de cache
+        await fetchAndApplyCounts();
+
         const uncached = allSites.filter(s => {
             const badge = document.getElementById('count-' + dnToId(s.dn));
             return !badge || badge.textContent === '';
@@ -156,12 +162,15 @@ async function loadTree() {
 
         if (uncached.length > 0) {
             scanFooter.show('Génération du cache', uncached.length);
-            uncached.forEach(s => enqueuePrefetch(s.dn, () => scanFooter.update(s.name)));
         }
 
-        // Charger aussi les sites déjà en cache pour alimenter allSiteUsers
-        // et détecter les caches obsolètes (manque proxyAddresses)
-        allSites.forEach(s => enqueuePrefetch(s.dn));
+        // Prefetch tous les sites (alimenter allSiteUsers + détecter stale)
+        // Seuls les non-cachés font avancer le footer
+        const uncachedDns = new Set(uncached.map(s => s.dn));
+        allSites.forEach(s => {
+            const cb = uncachedDns.has(s.dn) ? () => scanFooter.update(s.name) : null;
+            enqueuePrefetch(s.dn, cb);
+        });
     } catch (e) {
         document.getElementById('tree-container').innerHTML =
             `<p class="tree-hint" style="color:#dc2626">Erreur : ${esc(e.message)}</p>`;
@@ -699,13 +708,13 @@ function toggleGroupRows(headerTr) {
 let _selectedUserRow = null;
 let _detailUserSam   = null;   // samAccountName de l'utilisateur affiché dans le panneau détail
 
-function createUserRow(u) {
+function createUserRow(u, siteDn) {
     const tr = document.createElement('tr');
     const disabledTag = u.enabled === false ? '<span class="tag-disabled">désactivé</span>' : '';
     tr.innerHTML = `
         <td class="col-name">${esc(u.displayName || u.samAccountName)}${disabledTag}</td>
         <td class="col-desc">${esc(u.description || '')}</td>
-        <td class="col-func">${esc(u.title || '')}</td>
+        <td class="col-func${u.title ? ' func-clickable' : ''}">${esc(u.title || '')}</td>
         <td class="col-mail">${esc(u.mail || '')}</td>
         <td class="col-dept">${esc(u.department || '')}</td>`;
     if (u.enabled === false) tr.classList.add('row-disabled');
@@ -715,6 +724,12 @@ function createUserRow(u) {
         tr.classList.add('row-selected');
         showUserDetail(u);
     });
+    if (u.title) {
+        tr.querySelector('.col-func').addEventListener('click', e => {
+            e.stopPropagation();
+            openFunctionModal(u.title, siteDn || state.selectedSite?.site.dn);
+        });
+    }
     return tr;
 }
 
@@ -754,21 +769,11 @@ function showUserDetail(u) {
         ? '<span class="detail-status detail-disabled">Compte désactivé</span>'
         : '<span class="detail-status detail-enabled">Compte actif</span>';
 
-    // ---- Onglet Détail ----
+    // ---- Onglet Détail (champs d'origine) ----
     const scalarFields = [
         { label: 'Identifiant',  value: u.samAccountName },
-        { label: 'UPN',          value: u.userPrincipalName },
-        { label: 'Type',         value: u.type },
-        { label: 'Matricule',    value: u.employeeNumber },
-        { label: 'Société',      value: u.company },
         { label: 'Fonction',     value: u.title },
         { label: 'Service',      value: u.department },
-        { label: 'Responsable',  value: u.manager },
-        { label: 'Bureau',       value: u.office },
-        { label: 'Adresse',      value: u.streetAddress },
-        { label: 'Code postal',  value: u.postalCode },
-        { label: 'Attribut 1',   value: u.extensionAttribute1 },
-        { label: 'Date de fin',  value: u.dateDeFin },
         { label: 'Description',  value: u.description },
         { label: 'Messagerie',   value: u.mail },
     ];
@@ -788,38 +793,33 @@ function showUserDetail(u) {
             </div>
         </div>`;
 
-    // ---- Onglet MAJ AD ----
+    // ---- Onglet MAJ AD (nouveaux champs AD) ----
     const majFields = [
-        { label: 'Nom affiché (displayName)',        key: 'displayName' },
-        { label: 'Identifiant (sAMAccountName)',      key: 'samAccountName' },
-        { label: 'UPN (userPrincipalName)',           key: 'userPrincipalName' },
-        { label: 'Type',                             key: 'type' },
-        { label: 'Matricule (employeeNumber)',        key: 'employeeNumber' },
-        { label: 'Société (company)',                 key: 'company' },
-        { label: 'Fonction (title)',                  key: 'title' },
-        { label: 'Service (department)',              key: 'department' },
-        { label: 'Responsable (manager)',             key: 'manager' },
-        { label: 'Bureau (office)',                   key: 'office' },
-        { label: 'Adresse (streetAddress)',           key: 'streetAddress' },
-        { label: 'Code postal (postalCode)',          key: 'postalCode' },
-        { label: 'extensionAttribute1',               key: 'extensionAttribute1' },
-        { label: 'Date de fin (dateDeFin)',           key: 'dateDeFin' },
-        { label: 'Description',                       key: 'description' },
-        { label: 'Messagerie (mail)',                 key: 'mail' },
+        { label: 'UPN (userPrincipalName)',      key: 'userPrincipalName' },
+        { label: 'Type',                         key: 'type' },
+        { label: 'Société (company)',             key: 'company' },
+        { label: 'Matricule (employeeNumber)',    key: 'employeeNumber' },
+        { label: 'Fonction (title)',              key: 'title' },
+        { label: 'Responsable (manager)',         key: 'manager' },
+        { label: 'Service (department)',          key: 'department' },
+        { label: 'Bureau (office)',               key: 'office' },
+        { label: 'extensionAttribute1',           key: 'extensionAttribute1' },
+        { label: 'Code postal (postalCode)',      key: 'postalCode' },
+        { label: 'Adresse (streetAddress)',       key: 'streetAddress' },
     ];
 
     const paneMaj = `
-        <div class="maj-form">
-            ${majFields.map(f => `
-                <div class="maj-field">
-                    <label class="maj-label">${esc(f.label)}</label>
-                    <input class="maj-input" type="text" value="${esc(u[f.key] || '')}" readonly>
-                </div>`).join('')}
-            ${buildProxyHtml(u) ? `
-                <div class="maj-field">
-                    <label class="maj-label">Proxy adresses</label>
-                    <div class="maj-proxy">${buildProxyHtml(u)}</div>
-                </div>` : ''}
+        <div class="detail-card">
+            <div class="detail-avatar">${esc(initials)}</div>
+            <div class="detail-name">${esc(u.displayName || u.samAccountName)}</div>
+            ${statusHtml}
+            <div class="detail-fields">
+                ${majFields.filter(f => u[f.key]).map(f => `
+                    <div class="detail-field">
+                        <span class="detail-label">${esc(f.label)}</span>
+                        <span class="detail-value">${esc(u[f.key])}</span>
+                    </div>`).join('')}
+            </div>
         </div>`;
 
     body.innerHTML = `
@@ -879,9 +879,21 @@ function setupSearch() {
         treeInput.focus();
     });
 
+    const userClearBtn = document.getElementById('user-filter-clear');
+
+    userInput.addEventListener('focus', () => userInput.select());
+
     userInput.addEventListener('input', () => {
+        userClearBtn.hidden = userInput.value.trim() === '';
         clearTimeout(userTimer);
         userTimer = setTimeout(() => filterUsers(userInput.value.trim()), 150);
+    });
+
+    userClearBtn.addEventListener('click', () => {
+        userInput.value = '';
+        userClearBtn.hidden = true;
+        filterUsers('');
+        userInput.focus();
     });
 }
 
@@ -976,7 +988,7 @@ function renderCrossSiteResults(q) {
 
         for (const u of users.sort((a, b) =>
                 (a.displayName || '').localeCompare(b.displayName || '', 'fr'))) {
-            const tr = createUserRow(u);
+            const tr = createUserRow(u, dn);
             tr.classList.add('group-member');
             frag.appendChild(tr);
         }
@@ -994,7 +1006,6 @@ function restoreMainPanel() {
     } else {
         document.getElementById('current-site-name').textContent = 'Sélectionner un site';
         document.getElementById('user-count').textContent        = '';
-        document.getElementById('refresh-btn').style.display     = 'none';
         document.getElementById('users-tbody').innerHTML         = '';
     }
 }
@@ -1053,6 +1064,356 @@ function resetSortIcons() {
     document.querySelectorAll('.users-table th.sortable').forEach(th => {
         th.classList.remove('sort-asc', 'sort-desc');
     });
+}
+
+// ============================================================
+//  Modal Fonction
+// ============================================================
+
+let _modalTitle        = '';
+let _modalSiteDn       = '';
+let _modalActiveTitles = new Set();
+
+function setupFunctionModal() {
+    const modal = document.getElementById('function-modal');
+    document.getElementById('modal-close').addEventListener('click', () => { modal.hidden = true; });
+    modal.addEventListener('click', e => { if (e.target === modal) modal.hidden = true; });
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') modal.hidden = true; });
+    document.getElementById('btn-create-rule').addEventListener('click', createRuleFromModal);
+    modal.querySelectorAll('.modal-level').forEach(btn => {
+        btn.addEventListener('click', () => {
+            modal.querySelectorAll('.modal-level').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            const level = parseInt(btn.dataset.level);
+            renderModalResults(getModalGroups(level), level);
+        });
+    });
+}
+
+function createRuleFromModal() {
+    const titles = _modalActiveTitles.size > 0 ? [..._modalActiveTitles] : [_modalTitle];
+    const draft  = {
+        label:      _modalTitle,
+        niveau:     3,
+        conditions: {
+            include: titles.map(t => ({ field: 'title', op: 'eq', value: t })),
+            exclude: [],
+        },
+    };
+    localStorage.setItem('regles_draft', JSON.stringify(draft));
+    window.open('/regles', 'i2n-regles');
+}
+
+function openFunctionModal(title, siteDn) {
+    _modalTitle        = title;
+    _modalSiteDn       = siteDn;
+    _modalActiveTitles = new Set([title]);
+
+    document.getElementById('modal-function-title').textContent = title;
+
+    populateModalFilterBar(title);
+    refreshModalLevelCounts();
+
+    document.querySelectorAll('.modal-level').forEach(b => b.classList.remove('active'));
+    document.querySelector('.modal-level[data-level="1"]').classList.add('active');
+    renderModalResults(getModalGroups(1), 1);
+
+    document.getElementById('function-modal').hidden = false;
+}
+
+// Cherche les fonctions similaires à partir de tous les sites en cache
+function findSimilarTitles(mainTitle) {
+    const stopWords = new Set(['de','du','la','le','les','des','en','et','d','l','au','aux','sur','par','pour','un','une']);
+    const norm      = s => s.toLowerCase().trim();
+    const words     = s => norm(s).split(/[\s\-\/]+/).filter(w => w.length >= 3 && !stopWords.has(w));
+
+    const mainNorm  = norm(mainTitle);
+    const mainWords = words(mainTitle);
+
+    const titleCounts = new Map();
+    for (const users of Object.values(allSiteUsers)) {
+        for (const u of users) {
+            if (u.title) titleCounts.set(u.title, (titleCounts.get(u.title) || 0) + 1);
+        }
+    }
+
+    const scored = [];
+    for (const [title] of titleCounts) {
+        const tNorm  = norm(title);
+        const tWords = words(title);
+        let score;
+        if (tNorm === mainNorm) {
+            score = 3;
+        } else if (tNorm.includes(mainNorm) || mainNorm.includes(tNorm)) {
+            score = 2;
+        } else {
+            const shared = tWords.filter(w => mainWords.some(m => m === w || m.startsWith(w) || w.startsWith(m)));
+            score = shared.length / Math.max(mainWords.length, tWords.length, 1);
+        }
+        if (score > 0) scored.push({ title, score });
+    }
+
+    return scored
+        .sort((a, b) => b.score - a.score || a.title.localeCompare(b.title, 'fr'))
+        .map(s => ({ title: s.title, count: titleCounts.get(s.title) || 0 }));
+}
+
+function populateModalFilterBar(mainTitle) {
+    const bar      = document.getElementById('modal-filter-bar');
+    const similar  = findSimilarTitles(mainTitle);
+
+    bar.innerHTML = '';
+    if (similar.length <= 1) { bar.hidden = true; return; }
+    bar.hidden = false;
+
+    for (const { title: t, count } of similar) {
+        const chip = document.createElement('label');
+        chip.className = 'modal-func-chip' + (t === mainTitle ? ' active' : '');
+
+        const cb = document.createElement('input');
+        cb.type    = 'checkbox';
+        cb.checked = t === mainTitle;
+        cb.value   = t;
+        cb.addEventListener('change', () => {
+            if (cb.checked) { _modalActiveTitles.add(t); chip.classList.add('active'); }
+            else            { _modalActiveTitles.delete(t); chip.classList.remove('active'); }
+            refreshModalLevelCounts();
+            const activeLevel = parseInt(document.querySelector('.modal-level.active')?.dataset.level || '1');
+            renderModalResults(getModalGroups(activeLevel), activeLevel);
+        });
+
+                const lbl = document.createElement('span');
+        lbl.className   = 'chip-label';
+        lbl.textContent = t;
+
+        const badge = document.createElement('span');
+        badge.className   = 'chip-count';
+        badge.textContent = count;
+
+        chip.appendChild(cb);
+        chip.appendChild(lbl);
+        chip.appendChild(badge);
+        bar.appendChild(chip);
+    }
+}
+
+function refreshModalLevelCounts() {
+    [1, 2, 3].forEach(lvl => {
+        const groups = getModalGroups(lvl);
+        const count  = groups.reduce((s, g) => s + g.users.length, 0);
+        document.getElementById('modal-count-' + lvl).textContent = count + ' utilisateur(s)';
+    });
+}
+
+function findRegionForSite(dn) {
+    for (const region of state.treeData) {
+        if ((region.children || []).some(s => s.dn === dn)) return region;
+    }
+    return null;
+}
+
+function getModalGroups(level) {
+    const siteDn = _modalSiteDn;
+
+    // Construire la liste des sites candidats selon le niveau
+    let candidates = [];
+    if (level === 1) {
+        candidates = [{ dn: siteDn, name: dnNameMap[siteDn] || 'Ce centre', region: null }];
+    } else if (level === 2) {
+        const region = findRegionForSite(siteDn);
+        if (!region) return [];
+        candidates = (region.children || []).map(s => ({ dn: s.dn, name: s.name, region: null }));
+    } else if (level === 3) {
+        for (const region of state.treeData) {
+            for (const site of (region.children || [])) {
+                candidates.push({ dn: site.dn, name: site.name, region: region.name });
+            }
+        }
+    }
+
+    // Grouper : fonction → [DO] → centre
+    const result = [];
+    for (const activeTitle of _modalActiveTitles) {
+        const matchTitle = u => (u.title || '').toLowerCase() === activeTitle.toLowerCase();
+        for (const { dn, name, region } of candidates) {
+            const pool  = dn === siteDn && level === 1
+                ? (allSiteUsers[dn] || state.allUsers || [])
+                : (allSiteUsers[dn] || []);
+            const users = pool.filter(matchTitle);
+            if (users.length) result.push({ label: activeTitle, region, sub: name, users });
+        }
+    }
+    return result;
+}
+
+function renderModalResults(groups, level) {
+    const container = document.getElementById('modal-results');
+    if (!groups.length) {
+        container.innerHTML = '<div class="modal-empty">Aucun utilisateur trouvé</div>';
+        return;
+    }
+
+    const frag = document.createDocumentFragment();
+    const needToggleBar = groups.length > 1 || groups.some(g => g.sub || g.region);
+
+    if (needToggleBar) {
+        const bar = document.createElement('div');
+        bar.className = 'modal-toggle-bar';
+        const btn = document.createElement('button');
+        btn.className = 'modal-toggle-all-btn';
+        btn.textContent = 'Tout fermer';
+        btn.dataset.open = '1';
+        btn.addEventListener('click', () => {
+            const closing = btn.dataset.open === '1';
+            container.querySelectorAll('.modal-group-body, .modal-do-body, .modal-sub-body').forEach(b => { b.hidden = closing; });
+            container.querySelectorAll('.modal-caret').forEach(c => { c.textContent = closing ? '▶' : '▼'; });
+            btn.textContent = closing ? 'Tout ouvrir' : 'Tout fermer';
+            btn.dataset.open = closing ? '0' : '1';
+        });
+        bar.appendChild(btn);
+        frag.appendChild(bar);
+    }
+
+    // Regrouper par label (fonction)
+    const byLabel = new Map();
+    for (const g of groups) {
+        if (!byLabel.has(g.label)) byLabel.set(g.label, []);
+        byLabel.get(g.label).push(g);
+    }
+
+    for (const [label, items] of byLabel) {
+        const labelTotal = items.reduce((s, i) => s + i.users.length, 0);
+
+        const groupWrap = document.createElement('div');
+        groupWrap.className = 'modal-group-wrap';
+        const groupBody = document.createElement('div');
+        groupBody.className = 'modal-group-body';
+
+        const groupHdr = document.createElement('div');
+        groupHdr.className = 'modal-group-hdr';
+        groupHdr.innerHTML =
+            `<span class="modal-caret">▼</span>` +
+            `<span class="modal-hdr-label">${esc(label)}</span>` +
+            `<span class="modal-hdr-count">${labelTotal}</span>`;
+        groupHdr.addEventListener('click', () => toggleModalBody(groupHdr, groupBody));
+        groupWrap.appendChild(groupHdr);
+        groupWrap.appendChild(groupBody);
+        frag.appendChild(groupWrap);
+
+        const hasRegion = items.some(i => i.region);
+
+        if (hasRegion) {
+            // Niveau 3 : fonction → DO → centre
+            const byRegion = new Map();
+            for (const item of items) {
+                const r = item.region || '';
+                if (!byRegion.has(r)) byRegion.set(r, []);
+                byRegion.get(r).push(item);
+            }
+
+            for (const [region, regionItems] of byRegion) {
+                const regionTotal = regionItems.reduce((s, i) => s + i.users.length, 0);
+
+                const doWrap = document.createElement('div');
+                doWrap.className = 'modal-do-wrap';
+                const doBody = document.createElement('div');
+                doBody.className = 'modal-do-body';
+
+                const doHdr = document.createElement('div');
+                doHdr.className = 'modal-do-hdr';
+                doHdr.innerHTML =
+                    `<span class="modal-caret">▼</span>` +
+                    `<span class="modal-hdr-label">${esc(region)}</span>` +
+                    `<span class="modal-hdr-count">${regionTotal}</span>`;
+                doHdr.addEventListener('click', () => toggleModalBody(doHdr, doBody));
+                doWrap.appendChild(doHdr);
+                doWrap.appendChild(doBody);
+                groupBody.appendChild(doWrap);
+
+                const sorted = [...regionItems].sort((a, b) => (a.sub || '').localeCompare(b.sub || '', 'fr'));
+                for (const { sub, users } of sorted) {
+                    appendSiteBlock(sub, users, doBody);
+                }
+            }
+        } else {
+            // Niveaux 1 & 2 : fonction → centre
+            const sorted = [...items].sort((a, b) => (a.sub || '').localeCompare(b.sub || '', 'fr'));
+            for (const { sub, users } of sorted) {
+                appendSiteBlock(sub, users, groupBody);
+            }
+        }
+    }
+
+    container.innerHTML = '';
+    container.appendChild(frag);
+}
+
+function appendSiteBlock(sub, users, parentBody) {
+    if (!sub) { appendUsersGrouped(users, parentBody); return; }
+
+    const subWrap = document.createElement('div');
+    subWrap.className = 'modal-sub-wrap';
+    const subBody = document.createElement('div');
+    subBody.className = 'modal-sub-body';
+
+    const subHdr = document.createElement('div');
+    subHdr.className = 'modal-sub-hdr';
+    subHdr.innerHTML =
+        `<span class="modal-caret">▼</span>` +
+        `<span class="modal-hdr-label">${esc(sub)}</span>` +
+        `<span class="modal-hdr-count">${users.length}</span>`;
+    subHdr.addEventListener('click', () => toggleModalBody(subHdr, subBody));
+
+    appendUsersGrouped(users, subBody);
+    subWrap.appendChild(subHdr);
+    subWrap.appendChild(subBody);
+    parentBody.appendChild(subWrap);
+}
+
+function toggleModalBody(hdr, body) {
+    body.hidden = !body.hidden;
+    hdr.querySelector('.modal-caret').textContent = body.hidden ? '▶' : '▼';
+}
+
+const FUNC_COLORS = ['fc0','fc1','fc2','fc3','fc4','fc5','fc6','fc7'];
+
+function funcColorClass(title) {
+    if (!title) return '';
+    let h = 0;
+    for (let i = 0; i < title.length; i++) h = (h * 31 + title.charCodeAt(i)) >>> 0;
+    return FUNC_COLORS[h % FUNC_COLORS.length];
+}
+
+// Trie par titre puis par nom, insère un séparateur quand le titre change (si multi-titres)
+function appendUsersGrouped(users, container) {
+    const sorted = [...users].sort((a, b) =>
+        (a.title || '').localeCompare(b.title || '', 'fr') ||
+        (a.displayName || '').localeCompare(b.displayName || '', 'fr')
+    );
+    const multiTitle = new Set(sorted.map(u => u.title || '')).size > 1;
+    let lastTitle = null;
+
+    for (const u of sorted) {
+        const t = u.title || '';
+        if (multiTitle && t !== lastTitle) {
+            const sep = document.createElement('div');
+            sep.className = 'modal-title-sep ' + funcColorClass(t);
+            sep.textContent = t || '(sans fonction)';
+            container.appendChild(sep);
+            lastTitle = t;
+        }
+        container.appendChild(createModalUserRow(u));
+    }
+}
+
+function createModalUserRow(u) {
+    const row = document.createElement('div');
+    row.className = 'modal-user-row';
+    const cc = funcColorClass(u.title);
+    row.innerHTML =
+        `<span class="modal-user-name">${esc(u.displayName || u.samAccountName)}</span>` +
+        `<span class="modal-user-dept">${esc(u.department || '')}</span>`;
+    return row;
 }
 
 // ============================================================
