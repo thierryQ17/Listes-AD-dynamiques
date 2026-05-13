@@ -74,6 +74,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('btn-view-json').addEventListener('click', openJsonModal);
     setupJsonModal();
     setupHelpModal();
+    setupCsvModal();
     setupTooltip();
 });
 
@@ -383,8 +384,7 @@ async function generateCsv(id) {
             return;
         }
 
-        showToast(`${data.files.length} fichiers générés — ${data.total} utilisateurs`, 'success');
-        showGenerateResult(data);
+        showCsvModal(data, label);
     } catch {
         showToast('Erreur lors de la génération', 'error');
     } finally {
@@ -392,28 +392,57 @@ async function generateCsv(id) {
     }
 }
 
-function showGenerateResult(data) {
-    const existing = document.getElementById('generate-result');
-    if (existing) existing.remove();
+function showCsvModal(data, label) {
+    document.getElementById('csv-modal-title').textContent = `CSV — ${label}`;
+    const n = data.total;
+    const f = data.files?.length || 0;
+    document.getElementById('csv-modal-summary').textContent =
+        `${n} utilisateur${n !== 1 ? 's' : ''} · ${f} fichier${f !== 1 ? 's' : ''}`;
+    document.getElementById('csv-modal-footer').textContent = data.outDir || '';
 
-    const form = document.getElementById('rule-form');
-    if (!form) return;
+    const tabs    = document.getElementById('csv-modal-tabs');
+    const body    = document.getElementById('csv-modal-body');
+    const contents = data.contents || [];
 
-    const el = document.createElement('div');
-    el.id = 'generate-result';
-    el.className = 'generate-result';
-    el.innerHTML =
-        `<div class="gen-result-header">` +
-            `<span class="gen-result-title">Fichiers générés</span>` +
-            `<span class="gen-result-count">${data.total} utilisateurs · ${data.files.length} CSV</span>` +
-        `</div>` +
-        `<div class="gen-result-dir">${esc(data.outDir)}</div>` +
-        `<ul class="gen-result-files">` +
-            data.files.map(f => `<li>${esc(f)}</li>`).join('') +
-        `</ul>`;
+    tabs.innerHTML = '';
+    body.innerHTML = '';
 
-    form.appendChild(el);
-    el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    function showTab(idx) {
+        tabs.querySelectorAll('.csv-tab').forEach((t, i) => t.classList.toggle('active', i === idx));
+        const file = contents[idx];
+        if (!file || !file.rows || !file.rows.length) {
+            body.innerHTML = '<p class="csv-empty">Aucun utilisateur</p>';
+            return;
+        }
+        body.innerHTML =
+            `<table class="csv-table">` +
+                `<thead><tr><th>SAM Account Name</th><th>Mail</th></tr></thead>` +
+                `<tbody>${file.rows.map(r => `<tr><td>${esc(r.sam)}</td><td>${esc(r.mail)}</td></tr>`).join('')}</tbody>` +
+            `</table>`;
+    }
+
+    if (contents.length > 1) {
+        contents.forEach((file, i) => {
+            const btn = document.createElement('button');
+            btn.className = 'csv-tab' + (i === 0 ? ' active' : '');
+            btn.textContent = file.name;
+            btn.addEventListener('click', () => showTab(i));
+            tabs.appendChild(btn);
+        });
+    }
+
+    if (contents.length) showTab(0);
+
+    document.getElementById('csv-modal').removeAttribute('hidden');
+}
+
+function setupCsvModal() {
+    document.getElementById('btn-csv-close').addEventListener('click', () => {
+        document.getElementById('csv-modal').setAttribute('hidden', '');
+    });
+    document.getElementById('csv-modal').addEventListener('click', e => {
+        if (e.target === e.currentTarget) e.currentTarget.setAttribute('hidden', '');
+    });
 }
 
 // ── Value picker ──────────────────────────────────────────────────────

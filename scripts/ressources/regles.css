@@ -927,3 +927,117 @@ body { overflow: hidden; }
 .json-pre .ji { color: #fab387; }   /* nombre    — orange */
 .json-pre .jb { color: #cba6f7; }   /* booléen   — violet */
 .json-pre .jn { color: #f38ba8; }   /* null      — rose  */
+
+/* ============================================================
+   Modale CSV
+   ============================================================ */
+.csv-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,.35);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 200;
+}
+.csv-modal-overlay[hidden] { display: none; }
+
+.csv-modal-box {
+    background: var(--bg);
+    border-radius: var(--radius);
+    box-shadow: 0 8px 40px rgba(0,0,0,.18);
+    width: min(720px, 96vw);
+    max-height: 82vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.csv-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 13px 18px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+}
+.csv-modal-title   { font-size: 14px; font-weight: 700; color: var(--text); }
+.csv-modal-summary { font-size: 12px; color: var(--text-sub); margin-left: 10px; }
+.csv-modal-close   { background: none; border: none; cursor: pointer; color: var(--text-sub); padding: 4px; border-radius: var(--radius-sm); display: flex; }
+.csv-modal-close:hover { background: var(--surface); color: var(--text); }
+
+.csv-modal-tabs {
+    display: flex;
+    gap: 3px;
+    padding: 8px 18px 0;
+    border-bottom: 1px solid var(--border);
+    overflow-x: auto;
+    flex-shrink: 0;
+}
+.csv-modal-tabs:empty { display: none; }
+.csv-tab {
+    font-size: 11px;
+    font-weight: 500;
+    padding: 5px 11px;
+    border: 1px solid var(--border);
+    border-bottom: none;
+    border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+    background: var(--surface);
+    color: var(--text-sub);
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background .1s;
+}
+.csv-tab.active { background: var(--bg); color: var(--accent); font-weight: 600; }
+.csv-tab:hover:not(.active) { background: var(--accent-lt); }
+
+.csv-modal-body {
+    flex: 1;
+    overflow: auto;
+    padding: 0;
+}
+.csv-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12.5px;
+}
+.csv-table th {
+    text-align: left;
+    padding: 7px 14px;
+    background: var(--surface);
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    color: var(--text-sub);
+    border-bottom: 1px solid var(--border);
+    position: sticky;
+    top: 0;
+    z-index: 1;
+}
+.csv-table td {
+    padding: 5px 14px;
+    border-bottom: 1px solid var(--border-lt);
+    color: var(--text);
+}
+.csv-table tr:last-child td { border-bottom: none; }
+.csv-table tbody tr:hover td { background: var(--accent-lt); }
+.csv-empty {
+    color: var(--text-sub);
+    font-size: 13px;
+    text-align: center;
+    padding: 32px 0;
+}
+
+.csv-modal-footer {
+    padding: 7px 18px;
+    border-top: 1px solid var(--border);
+    font-size: 11px;
+    color: var(--text-sub);
+    font-family: monospace;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex-shrink: 0;
+    background: var(--surface);
+}

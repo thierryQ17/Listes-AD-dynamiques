@@ -158,6 +158,26 @@
         </div>
     </div>
 
+    <!-- Modal CSV -->
+    <div id="csv-modal" class="csv-modal-overlay" hidden>
+        <div class="csv-modal-box">
+            <div class="csv-modal-header">
+                <div>
+                    <span class="csv-modal-title" id="csv-modal-title">Résultat CSV</span>
+                    <span class="csv-modal-summary" id="csv-modal-summary"></span>
+                </div>
+                <button id="btn-csv-close" class="csv-modal-close" title="Fermer">
+                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+                        <path d="M1 1l12 12M13 1L1 13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                    </svg>
+                </button>
+            </div>
+            <div class="csv-modal-tabs" id="csv-modal-tabs"></div>
+            <div class="csv-modal-body" id="csv-modal-body"></div>
+            <div class="csv-modal-footer" id="csv-modal-footer"></div>
+        </div>
+    </div>
+
     <script src="/regles.js"></script>
 </body>
 </html>

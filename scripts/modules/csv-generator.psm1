@@ -35,11 +35,29 @@ function Invoke-RuleGeneration {
 
     add-msg -msg "  [CSV] Terminé : $(@($files).Count) fichiers dans '$outDir'." -foregroundColor Green -quelType writeHost
 
+    $contents = [System.Collections.Generic.List[PSCustomObject]]::new()
+    foreach ($fname in @($files)) {
+        $fpath = Join-Path $outDir $fname
+        $rows  = [System.Collections.Generic.List[PSCustomObject]]::new()
+        if (Test-Path $fpath) {
+            $lines = @([System.IO.File]::ReadAllLines($fpath, [System.Text.Encoding]::UTF8))
+            for ($i = 1; $i -lt $lines.Count; $i++) {
+                $parts = @($lines[$i] -split ';' | ForEach-Object { $_ -replace '^"|"$', '' })
+                $rows.Add([PSCustomObject]@{
+                    sam  = if ($parts.Count -gt 0) { $parts[0] } else { '' }
+                    mail = if ($parts.Count -gt 1) { $parts[1] } else { '' }
+                })
+            }
+        }
+        $contents.Add([PSCustomObject]@{ name = $fname; rows = @($rows) })
+    }
+
     return [PSCustomObject]@{
-        ok     = $true
-        outDir = $outDir
-        files  = @($files)
-        total  = $filtered.Count
+        ok       = $true
+        outDir   = $outDir
+        files    = @($files)
+        total    = $filtered.Count
+        contents = @($contents)
     }
 }
 
