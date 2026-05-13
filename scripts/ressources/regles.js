@@ -119,13 +119,9 @@ function buildCard(rule) {
         + (isActive ? '' : ' inactive');
     card.dataset.id = rule.id;
     card.innerHTML =
-        `<div class="rule-card-top">` +
+        `<div class="rule-card-row">` +
             `<span class="rule-card-label">${esc(rule.label || '(sans nom)')}</span>` +
-            `<span class="badge-niveau badge-niveau-${rule.niveau}" data-tooltip="${NIV_LABELS[rule.niveau]} · ${NIV_CSV[rule.niveau]}">Niv.&nbsp;${rule.niveau}</span>` +
             (!isActive ? `<span class="badge-inactive">Inactif</span>` : '') +
-        `</div>` +
-        `<div class="rule-card-bottom">` +
-            `<span class="rule-card-desc">${esc(metaLabel(rule))}</span>` +
             `<button class="btn-card-delete"   data-tooltip="Supprimer cette règle">${CARD_ICONS.trash} Supprimer</button>` +
             `<button class="btn-card-edit"     data-tooltip="Modifier">${CARD_ICONS.edit}</button>` +
             `<button class="btn-card-toggle"   data-tooltip="${isActive ? 'Désactiver' : 'Réactiver'}">${isActive ? CARD_ICONS.pause : CARD_ICONS.play}</button>` +
