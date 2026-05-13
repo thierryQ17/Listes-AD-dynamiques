@@ -408,10 +408,12 @@ async function toggleActive(id) {
 let usersPreloaded = false;
 
 async function preloadUsers() {
-    const bar = document.getElementById('preload-bar');
-    const msg = document.getElementById('preload-msg');
+    const bar  = document.getElementById('preload-bar');
+    const msg  = document.getElementById('preload-msg');
+    const list = document.getElementById('regles-list');
     if (!bar || !msg) return;
 
+    list?.classList.add('users-loading');
     bar.classList.add('loading');
     msg.textContent = 'Chargement des utilisateurs AD…';
 
@@ -431,6 +433,8 @@ async function preloadUsers() {
         bar.classList.remove('loading');
         bar.classList.add('error');
         if (msg) msg.textContent = '⚠ Erreur préchargement';
+    } finally {
+        list?.classList.remove('users-loading');
     }
 }
 
@@ -484,38 +488,19 @@ function showCsvModal(data, label) {
         `${n} utilisateur${n !== 1 ? 's' : ''} · ${f} fichier${f !== 1 ? 's' : ''}`;
     document.getElementById('csv-modal-footer').textContent = data.outDir || '';
 
-    const tabs    = document.getElementById('csv-modal-tabs');
-    const body    = document.getElementById('csv-modal-body');
-    const contents = data.contents || [];
+    const body  = document.getElementById('csv-modal-body');
+    const files = data.files || [];
 
-    tabs.innerHTML = '';
-    body.innerHTML = '';
+    document.getElementById('csv-modal-tabs').innerHTML = '';
 
-    function showTab(idx) {
-        tabs.querySelectorAll('.csv-tab').forEach((t, i) => t.classList.toggle('active', i === idx));
-        const file = contents[idx];
-        if (!file || !file.rows || !file.rows.length) {
-            body.innerHTML = '<p class="csv-empty">Aucun utilisateur</p>';
-            return;
-        }
+    if (!files.length) {
+        body.innerHTML = '<p class="csv-empty">Aucun fichier généré</p>';
+    } else {
         body.innerHTML =
-            `<table class="csv-table">` +
-                `<thead><tr><th>SAM Account Name</th><th>Mail</th></tr></thead>` +
-                `<tbody>${file.rows.map(r => `<tr><td>${esc(r.sam)}</td><td>${esc(r.mail)}</td></tr>`).join('')}</tbody>` +
-            `</table>`;
+            `<ul class="csv-file-list">${
+                files.map(f => `<li class="csv-file-item">${esc(f)}</li>`).join('')
+            }</ul>`;
     }
-
-    if (contents.length > 1) {
-        contents.forEach((file, i) => {
-            const btn = document.createElement('button');
-            btn.className = 'csv-tab' + (i === 0 ? ' active' : '');
-            btn.textContent = file.name;
-            btn.addEventListener('click', () => showTab(i));
-            tabs.appendChild(btn);
-        });
-    }
-
-    if (contents.length) showTab(0);
 
     document.getElementById('csv-modal').removeAttribute('hidden');
 }

@@ -28,40 +28,25 @@ function Invoke-RuleGeneration {
     add-msg -msg "  [CSV] $($filtered.Count) utilisateurs correspondent aux conditions." -foregroundColor Cyan -quelType writeHost
 
     $outDir = Get-RunOutputDir -Label $Rule.label
-    $files  = switch ($Rule.niveau) {
-        3       {
-            if ($Rule.monoNiveau) { Write-CsvNiveau3Mono -Users $filtered -Label $Rule.label -OutDir $outDir }
-            else                  { Write-CsvNiveau3     -Users $filtered -Label $Rule.label -OutDir $outDir }
+    if ($Rule.niveau -eq 3) {
+        if ($Rule.monoNiveau) {
+            $files = Write-CsvNiveau3Mono -Users $filtered -Label $Rule.label -OutDir $outDir
+        } else {
+            $files = Write-CsvNiveau3 -Users $filtered -Label $Rule.label -OutDir $outDir
         }
-        2       { Write-CsvNiveau2 -Users $filtered -Label $Rule.label -OutDir $outDir }
-        default { Write-CsvNiveau1 -Users $filtered -Label $Rule.label -OutDir $outDir }
+    } elseif ($Rule.niveau -eq 2) {
+        $files = Write-CsvNiveau2 -Users $filtered -Label $Rule.label -OutDir $outDir
+    } else {
+        $files = Write-CsvNiveau1 -Users $filtered -Label $Rule.label -OutDir $outDir
     }
 
     add-msg -msg "  [CSV] Terminé : $(@($files).Count) fichiers dans '$outDir'." -foregroundColor Green -quelType writeHost
 
-    $contents = [System.Collections.Generic.List[PSCustomObject]]::new()
-    foreach ($fname in @($files)) {
-        $fpath = Join-Path $outDir $fname
-        $rows  = [System.Collections.Generic.List[PSCustomObject]]::new()
-        if (Test-Path $fpath) {
-            $lines = @([System.IO.File]::ReadAllLines($fpath, [System.Text.Encoding]::UTF8))
-            for ($i = 1; $i -lt $lines.Count; $i++) {
-                $parts = @($lines[$i] -split ';' | ForEach-Object { $_ -replace '^"|"$', '' })
-                $rows.Add([PSCustomObject]@{
-                    sam  = if ($parts.Count -gt 0) { $parts[0] } else { '' }
-                    mail = if ($parts.Count -gt 1) { $parts[1] } else { '' }
-                })
-            }
-        }
-        $contents.Add([PSCustomObject]@{ name = $fname; rows = @($rows) })
-    }
-
     return [PSCustomObject]@{
-        ok       = $true
-        outDir   = $outDir
-        files    = @($files)
-        total    = $filtered.Count
-        contents = @($contents)
+        ok     = $true
+        outDir = $outDir
+        files  = @($files)
+        total  = $filtered.Count
     }
 }
 
@@ -116,11 +101,13 @@ function Write-CsvNiveau3 {
 
     $byDO = $userArray | Group-Object Department
     foreach ($doGrp in $byDO) {
-        $doClean = Clean-ForFileName (if ($doGrp.Name) { $doGrp.Name } else { 'SANS-DO' })
+        $doName  = if ($doGrp.Name) { $doGrp.Name } else { 'SANS-DO' }
+        $doClean = Clean-ForFileName $doName
 
         $byCentre = $doGrp.Group | Group-Object Office
         foreach ($cGrp in $byCentre) {
-            $cClean = Clean-ForFileName (if ($cGrp.Name) { $cGrp.Name } else { 'SANS-CENTRE' })
+            $cName  = if ($cGrp.Name) { $cGrp.Name } else { 'SANS-CENTRE' }
+            $cClean = Clean-ForFileName $cName
             $fname  = "$lbl-$doClean-$cClean.csv"
             Write-UsersCsv -Users $cGrp.Group -Path (Join-Path $OutDir $fname)
             $files.Add($fname)
@@ -150,10 +137,12 @@ function Write-CsvNiveau3Mono {
 
     $byDO = $userArray | Group-Object Department
     foreach ($doGrp in $byDO) {
-        $doClean  = Clean-ForFileName (if ($doGrp.Name) { $doGrp.Name } else { 'SANS-DO' })
+        $doName   = if ($doGrp.Name) { $doGrp.Name } else { 'SANS-DO' }
+        $doClean  = Clean-ForFileName $doName
         $byCentre = $doGrp.Group | Group-Object Office
         foreach ($cGrp in $byCentre) {
-            $cClean = Clean-ForFileName (if ($cGrp.Name) { $cGrp.Name } else { 'SANS-CENTRE' })
+            $cName  = if ($cGrp.Name) { $cGrp.Name } else { 'SANS-CENTRE' }
+            $cClean = Clean-ForFileName $cName
             $fname  = "$lbl-$doClean-$cClean.csv"
             Write-UsersCsv -Users $cGrp.Group -Path (Join-Path $OutDir $fname)
             $files.Add($fname)
@@ -173,7 +162,8 @@ function Write-CsvNiveau2 {
 
     $byDO = $userArray | Group-Object Department
     foreach ($doGrp in $byDO) {
-        $doClean = Clean-ForFileName (if ($doGrp.Name) { $doGrp.Name } else { 'SANS-DO' })
+        $doName  = if ($doGrp.Name) { $doGrp.Name } else { 'SANS-DO' }
+        $doClean = Clean-ForFileName $doName
         $fname   = "$lbl-$doClean.csv"
         Write-UsersCsv -Users $doGrp.Group -Path (Join-Path $OutDir $fname)
         $files.Add($fname)

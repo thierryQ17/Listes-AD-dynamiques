@@ -9,7 +9,7 @@ Date de création     = 2026-05-13
 ----------------------------------------------------------------------------
 
 DÉMARRAGE
-  > powershell -ExecutionPolicy Bypass -File "Start.ps1"
+  > pwsh -ExecutionPolicy Bypass -File "Start.ps1"
 
   Au premier lancement, le mot de passe admin AD est demandé une seule fois.
   Il est stocké chiffré dans scripts/xmlConnect/AD/<login>-credential.xml.

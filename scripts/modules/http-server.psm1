@@ -206,7 +206,8 @@ function Invoke-RouteHandler {
                         $resultJson = ConvertTo-Json -InputObject $result -Depth 5 -Compress
                         Send-JsonResponse -Response $Response -Body $resultJson
                     } catch {
-                        $errMsg = $_.Exception.Message -replace '"', "'"
+                        add-msg -msg "  [CSV] ERREUR : $($_.Exception.Message)" -foregroundColor Red -quelType writeHost
+                        $errMsg = ($_.Exception.Message -replace '[\r\n\t]', ' ' -replace '"', "'")
                         Send-JsonResponse -Response $Response -Body "{`"ok`":false,`"error`":`"$errMsg`"}"
                     }
                 }
