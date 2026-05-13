@@ -236,7 +236,7 @@ body { overflow: hidden; }
     flex: none;
 }
 .form-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-lt); }
-.form-input-auto { background: var(--surface); color: var(--text-sub); cursor: default; }
+.form-input-auto { background: var(--surface); color: var(--text-sub); cursor: default; width: 100%; }
 .form-input-auto:focus { border-color: var(--border); box-shadow: none; }
 
 /* ── Niveau ── */
