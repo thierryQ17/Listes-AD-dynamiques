@@ -23,6 +23,14 @@ const NIV_CSV    = { 1: '1 CSV global', 2: '2 CSV (DO + global)', 3: '3 CSV (cen
 
 const adValuesCache = {};
 
+const CARD_ICONS = {
+    edit:  `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>`,
+    pause: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>`,
+    play:  `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="5 3 19 12 5 21 5 3"/></svg>`,
+    trash: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>`,
+    csv:   `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>`,
+};
+
 // ── Init ─────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
     await loadRules();
@@ -84,10 +92,10 @@ function buildCard(rule) {
         `</div>` +
         `<div class="rule-card-meta">${meta}</div>` +
         `<div class="rule-card-actions">` +
-            `<button class="btn-card-edit">Modifier</button>` +
-            `<button class="btn-card-toggle">${isActive ? 'Désactiver' : 'Réactiver'}</button>` +
-            `<button class="btn-card-delete">Supprimer</button>` +
-            `<button class="btn-card-generate"${!isActive ? ' disabled' : ''}>Générer CSV</button>` +
+            `<button class="btn-card-edit"     title="Modifier">${CARD_ICONS.edit}</button>` +
+            `<button class="btn-card-toggle"   title="${isActive ? 'Désactiver' : 'Réactiver'}">${isActive ? CARD_ICONS.pause : CARD_ICONS.play}</button>` +
+            `<button class="btn-card-delete"   title="Supprimer">${CARD_ICONS.trash}</button>` +
+            `<button class="btn-card-generate" title="Générer CSV"${!isActive ? ' disabled' : ''}>${CARD_ICONS.csv}</button>` +
         `</div>`;
 
     card.querySelector('.btn-card-edit').addEventListener('click',     e => { e.stopPropagation(); openEditForm(rule.id); });
