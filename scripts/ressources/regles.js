@@ -388,7 +388,7 @@ async function generateCsv(id) {
     } catch {
         showToast('Erreur lors de la génération', 'error');
     } finally {
-        if (btn) { btn.disabled = false; btn.textContent = 'Générer les CSV'; }
+        if (btn) { btn.disabled = false; btn.textContent = 'Générer le CSV'; }
     }
 }
 
