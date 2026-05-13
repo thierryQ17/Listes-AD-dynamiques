@@ -202,9 +202,8 @@ function renderForm(rule) {
     document.getElementById('f-label').focus();
 }
 
-function addCondRow(listId, cond = null) {
-    const list = document.getElementById(listId);
-    const row  = document.createElement('div');
+function createCondRow(cond = null) {
+    const row = document.createElement('div');
     row.className = 'cond-row';
 
     const selField = `<select class="cond-field">` +
@@ -227,13 +226,12 @@ function addCondRow(listId, cond = null) {
         `</button>`;
 
     row.querySelector('.btn-remove-cond').addEventListener('click', () => row.remove());
+    initPicker(row.querySelector('.cond-val'), row.querySelector('.cond-field'), row.querySelector('.cond-val-wrap'));
+    return row;
+}
 
-    const fieldSel = row.querySelector('.cond-field');
-    const valInput = row.querySelector('.cond-val');
-    const wrap     = row.querySelector('.cond-val-wrap');
-    initPicker(valInput, fieldSel, wrap);
-
-    list.appendChild(row);
+function addCondRow(listId, cond = null) {
+    document.getElementById(listId).appendChild(createCondRow(cond));
 }
 
 function readCondList(listId) {
@@ -372,8 +370,9 @@ function showGenerateResult(data) {
 
 // ── Value picker ──────────────────────────────────────────────────────
 function initPicker(valInput, fieldSel, wrap) {
-    const panel = wrap.querySelector('.val-picker-panel');
-    let allValues = [];
+    const panel    = wrap.querySelector('.val-picker-panel');
+    let allValues  = [];
+    const selected = new Set();
 
     async function loadValues() {
         const field = fieldSel.value;
@@ -389,28 +388,76 @@ function initPicker(valInput, fieldSel, wrap) {
                 allValues = [];
             }
         }
-        renderPickerItems(panel, allValues, valInput.value);
+        renderPickerItems(panel, allValues, valInput.value, selected);
     }
 
-    valInput.addEventListener('focus', () => {
-        panel.hidden = false;
-        loadValues();
-    });
-    valInput.addEventListener('blur', () => {
-        setTimeout(() => { panel.hidden = true; }, 150);
-    });
-    valInput.addEventListener('input', () => {
-        panel.hidden = false;
-        renderPickerItems(panel, allValues, valInput.value);
-    });
-    fieldSel.addEventListener('change', () => {
-        if (!panel.hidden) loadValues();
+    function updateFooter() {
+        const footer = panel.querySelector('.picker-footer');
+        if (!footer) return;
+        footer.hidden = selected.size === 0;
+        const btn = footer.querySelector('.btn-picker-validate');
+        if (btn) btn.textContent = selected.size > 1 ? `Valider (${selected.size} valeurs)` : 'Valider';
+    }
+
+    function handleValidate() {
+        if (!selected.size) return;
+        const vals   = [...selected];
+        valInput.value = vals[0];
+        selected.clear();
+        panel.hidden = true;
+
+        if (vals.length > 1) {
+            const currentRow = wrap.closest('.cond-row');
+            const currentOp  = currentRow.querySelector('.cond-op').value;
+            let   ref        = currentRow;
+            for (let i = 1; i < vals.length; i++) {
+                const newRow = createCondRow({ field: fieldSel.value, op: currentOp, value: vals[i] });
+                ref.insertAdjacentElement('afterend', newRow);
+                ref = newRow;
+            }
+        }
+    }
+
+    panel.addEventListener('click', e => {
+        if (e.target.closest('.btn-picker-validate')) { handleValidate(); return; }
+
+        const item = e.target.closest('.picker-item');
+        if (!item) return;
+
+        const val       = item.dataset.val;
+        const chk       = item.querySelector('.picker-chk');
+        const isChkClick = e.target === chk;
+
+        if (!isChkClick && selected.size === 0) {
+            valInput.value = val;
+            panel.hidden   = true;
+            return;
+        }
+
+        if (selected.has(val)) {
+            selected.delete(val);
+            chk.checked = false;
+            item.classList.remove('checked');
+        } else {
+            selected.add(val);
+            chk.checked = true;
+            item.classList.add('checked');
+        }
+        updateFooter();
     });
 
     panel.addEventListener('mousedown', e => e.preventDefault());
+
+    valInput.addEventListener('focus', () => { panel.hidden = false; loadValues(); });
+    valInput.addEventListener('blur',  () => { setTimeout(() => { panel.hidden = true; }, 150); });
+    valInput.addEventListener('input', () => {
+        panel.hidden = false;
+        renderPickerItems(panel, allValues, valInput.value, selected);
+    });
+    fieldSel.addEventListener('change', () => { if (!panel.hidden) loadValues(); });
 }
 
-function renderPickerItems(panel, allValues, query) {
+function renderPickerItems(panel, allValues, query, selected = new Set()) {
     const q = (query || '').trim().toLowerCase();
     const filtered = q
         ? allValues.filter(v => v.toLowerCase().includes(q))
@@ -435,18 +482,20 @@ function renderPickerItems(panel, allValues, query) {
             html += `<div class="picker-group-hdr">${esc(key)}<span class="picker-group-count">${vals.length}</span></div>`;
         }
         for (const v of vals) {
-            html += `<div class="picker-item" data-val="${esc(v)}">${esc(v)}</div>`;
+            const chk = selected.has(v);
+            html += `<div class="picker-item${chk ? ' checked' : ''}" data-val="${esc(v)}">` +
+                `<input type="checkbox" class="picker-chk"${chk ? ' checked' : ''}>` +
+                `<span class="picker-item-text">${esc(v)}</span>` +
+            `</div>`;
         }
     }
-    panel.innerHTML = html;
 
-    panel.querySelectorAll('.picker-item').forEach(item => {
-        item.addEventListener('click', () => {
-            const input = item.closest('.cond-val-wrap').querySelector('.cond-val');
-            input.value = item.dataset.val;
-            item.closest('.val-picker-panel').hidden = true;
-        });
-    });
+    const nSel = selected.size;
+    html += `<div class="picker-footer"${nSel === 0 ? ' hidden' : ''}>` +
+        `<button class="btn-picker-validate">${nSel > 1 ? `Valider (${nSel} valeurs)` : 'Valider'}</button>` +
+    `</div>`;
+
+    panel.innerHTML = html;
 }
 
 // ── Modal JSON ────────────────────────────────────────────────────────
