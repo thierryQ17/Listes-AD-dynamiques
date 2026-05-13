@@ -65,6 +65,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     await loadRules();
+    preloadUsers();
     const raw = localStorage.getItem('regles_draft');
     if (raw) {
         localStorage.removeItem('regles_draft');
@@ -403,11 +404,41 @@ async function toggleActive(id) {
 }
 
 // ── Génération CSV ────────────────────────────────────────────────────
-const GEN_STEPS = [
-    'Chargement des utilisateurs AD…',
-    'Filtrage selon les conditions…',
-    'Écriture des fichiers CSV…',
-];
+// ── Préchargement utilisateurs AD ─────────────────────────────────────
+let usersPreloaded = false;
+
+async function preloadUsers() {
+    const bar = document.getElementById('preload-bar');
+    const msg = document.getElementById('preload-msg');
+    if (!bar || !msg) return;
+
+    bar.classList.add('loading');
+    msg.textContent = 'Chargement des utilisateurs AD…';
+
+    try {
+        const r    = await fetch('/api/users/preload', { method: 'POST' });
+        const data = await r.json();
+        bar.classList.remove('loading');
+        if (data.ok) {
+            usersPreloaded = true;
+            bar.classList.add('done');
+            msg.textContent = `✓ ${data.count.toLocaleString('fr-FR')} utilisateurs en cache`;
+        } else {
+            bar.classList.add('error');
+            msg.textContent = `⚠ Erreur préchargement`;
+        }
+    } catch {
+        bar.classList.remove('loading');
+        bar.classList.add('error');
+        if (msg) msg.textContent = '⚠ Erreur préchargement';
+    }
+}
+
+function getGenSteps() {
+    return usersPreloaded
+        ? ['Filtrage selon les conditions…', 'Écriture des fichiers CSV…']
+        : ['Chargement des utilisateurs AD…', 'Filtrage selon les conditions…', 'Écriture des fichiers CSV…'];
+}
 
 async function generateCsv(id) {
     const rule  = rules.find(r => r.id === id);
@@ -420,8 +451,9 @@ async function generateCsv(id) {
     if (btn) { btn.disabled = true; btn.textContent = 'Génération…'; }
     if (progress) progress.removeAttribute('hidden');
 
+    const steps = getGenSteps();
     let stepIdx = 0;
-    function showStep() { if (msg) msg.textContent = GEN_STEPS[stepIdx % GEN_STEPS.length]; }
+    function showStep() { if (msg) msg.textContent = steps[stepIdx % steps.length]; }
     showStep();
     const ticker = setInterval(() => { stepIdx++; showStep(); }, 2500);
 

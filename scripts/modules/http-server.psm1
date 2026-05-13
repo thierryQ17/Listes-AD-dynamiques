@@ -157,6 +157,40 @@ function Invoke-RouteHandler {
                 Send-JsonResponse -Response $Response -Body '{"ok":true}'
             }
         }
+        '^/api/users/preload$' {
+            if ($Method -eq 'POST') {
+                try {
+                    if (-not $global:AD_usersCache -or $global:AD_usersCache.Count -eq 0) {
+                        add-msg -msg "  [PRELOAD] Chargement de tous les utilisateurs AD…" -foregroundColor Cyan -quelType writeHost
+                        $adParams = @{
+                            Filter      = { Enabled -eq $true }
+                            SearchBase  = $global:parametresJson.ad.searchBase
+                            Credential  = $global:AD_credential
+                            Properties  = @('SamAccountName','Mail','Title','Department','Office','extensionAttribute1','Description')
+                            ErrorAction = 'Stop'
+                        }
+                        $global:AD_usersCache = @(Get-ADUser @adParams)
+                        add-msg -msg "  [PRELOAD] $($global:AD_usersCache.Count) utilisateurs mis en cache." -foregroundColor Green -quelType writeHost
+                    } else {
+                        add-msg -msg "  [PRELOAD] Cache déjà chaud ($($global:AD_usersCache.Count) utilisateurs)." -foregroundColor DarkGray -quelType writeHost
+                    }
+                    Send-JsonResponse -Response $Response -Body "{`"ok`":true,`"count`":$($global:AD_usersCache.Count)}"
+                } catch {
+                    $errMsg = $_.Exception.Message -replace '"', "'"
+                    Send-JsonResponse -Response $Response -Body "{`"ok`":false,`"error`":`"$errMsg`"}"
+                }
+            }
+            if ($Method -eq 'DELETE') {
+                $global:AD_usersCache = $null
+                add-msg -msg "  [PRELOAD] Cache utilisateurs vidé." -foregroundColor Yellow -quelType writeHost
+                Send-JsonResponse -Response $Response -Body '{"ok":true}'
+            }
+        }
+        '^/api/users/preload/status$' {
+            $cached = ($null -ne $global:AD_usersCache -and $global:AD_usersCache.Count -gt 0)
+            $count  = if ($cached) { $global:AD_usersCache.Count } else { 0 }
+            Send-JsonResponse -Response $Response -Body "{`"cached`":$(if($cached){'true'}else{'false'}),`"count`":$count}"
+        }
         '^/api/regles/([^/]+)/generate$' {
             $id    = [uri]::UnescapeDataString($Matches[1])
             $rPath = Get-ReglesPath

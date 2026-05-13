@@ -1133,3 +1133,52 @@ body { overflow: hidden; }
     justify-content: flex-end;
     gap: 8px;
 }
+
+/* ============================================================
+   Barre de préchargement utilisateurs (bas de sidebar)
+   ============================================================ */
+.preload-bar {
+    flex-shrink: 0;
+    padding: 6px 14px;
+    border-top: 1px solid var(--border-lt);
+    background: var(--surface-alt);
+    min-height: 28px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    overflow: hidden;
+}
+.preload-bar.loading::before {
+    content: '';
+    display: block;
+    width: 100%;
+    height: 2px;
+    position: absolute;
+    left: 0;
+    bottom: 0;
+    background: var(--border);
+}
+.preload-bar { position: relative; }
+.preload-bar.loading .preload-msg::before {
+    content: '';
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border: 2px solid var(--accent-dim);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin .7s linear infinite;
+    margin-right: 6px;
+    vertical-align: middle;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.preload-msg {
+    font-size: 11px;
+    color: var(--text-sub);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.preload-bar.done  .preload-msg { color: #15803d; }
+.preload-bar.error .preload-msg { color: var(--danger); }

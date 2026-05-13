@@ -7,18 +7,22 @@ function Invoke-RuleGeneration {
         throw "La règle n'a pas de conditions 'include'."
     }
 
-    $searchBase = $global:parametresJson.ad.searchBase
-    add-msg -msg "  [CSV] Chargement des utilisateurs (searchBase: $searchBase)…" -foregroundColor Cyan -quelType writeHost
-
-    $adParams = @{
-        Filter      = { Enabled -eq $true }
-        SearchBase  = $searchBase
-        Credential  = $global:AD_credential
-        Properties  = @('SamAccountName','Mail','Title','Department','Office','extensionAttribute1','Description')
-        ErrorAction = 'Stop'
+    if ($global:AD_usersCache -and $global:AD_usersCache.Count -gt 0) {
+        $allUsers = $global:AD_usersCache
+        add-msg -msg "  [CSV] Cache utilisateurs utilisé ($($allUsers.Count) utilisateurs)." -foregroundColor DarkGray -quelType writeHost
+    } else {
+        $searchBase = $global:parametresJson.ad.searchBase
+        add-msg -msg "  [CSV] Chargement des utilisateurs (searchBase: $searchBase)…" -foregroundColor Cyan -quelType writeHost
+        $adParams = @{
+            Filter      = { Enabled -eq $true }
+            SearchBase  = $searchBase
+            Credential  = $global:AD_credential
+            Properties  = @('SamAccountName','Mail','Title','Department','Office','extensionAttribute1','Description')
+            ErrorAction = 'Stop'
+        }
+        $allUsers = @(Get-ADUser @adParams)
+        add-msg -msg "  [CSV] $($allUsers.Count) utilisateurs actifs chargés." -foregroundColor Cyan -quelType writeHost
     }
-    $allUsers = @(Get-ADUser @adParams)
-    add-msg -msg "  [CSV] $($allUsers.Count) utilisateurs actifs chargés." -foregroundColor Cyan -quelType writeHost
 
     $filtered = @($allUsers | Where-Object { Test-UserMatchesRule -User $_ -Conditions $Rule.conditions })
     add-msg -msg "  [CSV] $($filtered.Count) utilisateurs correspondent aux conditions." -foregroundColor Cyan -quelType writeHost
