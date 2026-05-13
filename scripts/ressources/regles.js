@@ -220,7 +220,11 @@ function addCondRow(listId, cond = null) {
             `<input type="text" class="cond-val" placeholder="valeur…" value="${esc(cond?.value || '')}" autocomplete="off">` +
             `<div class="val-picker-panel" hidden></div>` +
         `</div>` +
-        `<button class="btn-remove-cond" title="Supprimer">×</button>`;
+        `<button class="btn-remove-cond" title="Supprimer">` +
+            `<svg width="11" height="11" viewBox="0 0 11 11" fill="none" aria-hidden="true">` +
+                `<path d="M1 1l9 9M10 1L1 10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>` +
+            `</svg>` +
+        `</button>`;
 
     row.querySelector('.btn-remove-cond').addEventListener('click', () => row.remove());
 

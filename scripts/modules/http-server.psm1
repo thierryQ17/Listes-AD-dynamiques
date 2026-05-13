@@ -314,7 +314,7 @@ function Get-ADFieldValues {
     $cacheDir   = Join-Path $scriptsDir "cache"
     if (-not (Test-Path $cacheDir)) { return @() }
     $seen = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
-    foreach ($f in Get-ChildItem -Path $cacheDir -Filter "*.json" -Exclude "_index.json" -ErrorAction SilentlyContinue) {
+    foreach ($f in @(Get-ChildItem -Path $cacheDir -Filter "*.json" -ErrorAction SilentlyContinue | Where-Object { $_.Name -ne '_index.json' })) {
         try {
             $users = ConvertFrom-Json ([System.IO.File]::ReadAllText($f.FullName, [System.Text.Encoding]::UTF8))
             foreach ($u in $users) {
