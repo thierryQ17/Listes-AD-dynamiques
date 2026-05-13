@@ -1,7 +1,7 @@
 {
   "ad": {
     "server":     "",
-    "searchBase": "%%_LDAP_SEARCHBASE_%%",
+    "searchBase": "DC=aft-iftim,DC=france",
     "groupsOU":   "%%_OU_GROUPES_I2N_%%",
     "regions": [
       {
