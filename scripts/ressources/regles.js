@@ -213,7 +213,6 @@ function renderForm(rule) {
         `</div>` +
         `<div class="form-footer">` +
             `<button class="btn-secondary" id="btn-cancel">Annuler</button>` +
-            (editingId ? `<button class="btn-generate-form" id="btn-generate-form">Générer les CSV</button>` : '') +
             `<button class="btn-primary" id="btn-save">Enregistrer</button>` +
         `</div>`;
 
@@ -233,8 +232,6 @@ function renderForm(rule) {
     document.getElementById('btn-add-exclude').addEventListener('click', () => { addCondRow('cond-exclude'); autoUpdateDesc(); });
     document.getElementById('btn-save').addEventListener('click', saveRule);
     document.getElementById('btn-cancel').addEventListener('click', closeForm);
-    const genFormBtn = document.getElementById('btn-generate-form');
-    if (genFormBtn) genFormBtn.addEventListener('click', () => generateCsv(editingId));
 
     document.getElementById('f-active').addEventListener('change', e => {
         const label  = document.getElementById('f-label')?.value.trim() || 'cette règle';
