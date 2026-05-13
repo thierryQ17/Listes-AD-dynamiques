@@ -374,21 +374,36 @@ function initPicker(valInput, fieldSel, wrap) {
     let allValues  = [];
     const selected = new Set();
 
+    function getUsedValues() {
+        const row  = wrap.closest('.cond-row');
+        const list = row?.closest('.cond-list');
+        if (!list) return new Set();
+        return new Set(
+            [...list.querySelectorAll('.cond-row')]
+                .filter(r => r !== row)
+                .map(r => r.querySelector('.cond-val')?.value.trim())
+                .filter(v => v)
+        );
+    }
+
+    function available() {
+        const used = getUsedValues();
+        return used.size ? allValues.filter(v => !used.has(v)) : allValues;
+    }
+
     async function loadValues() {
         const field = fieldSel.value;
-        if (adValuesCache[field]) {
-            allValues = adValuesCache[field];
-        } else {
+        if (!adValuesCache[field]) {
             panel.innerHTML = `<div class="picker-empty">Chargement…</div>`;
             try {
                 const r = await fetch(`/api/ad/values?field=${encodeURIComponent(field)}`);
-                allValues = await r.json();
-                adValuesCache[field] = allValues;
+                adValuesCache[field] = await r.json();
             } catch {
-                allValues = [];
+                adValuesCache[field] = [];
             }
         }
-        renderPickerItems(panel, allValues, valInput.value, selected);
+        allValues = adValuesCache[field];
+        renderPickerItems(panel, available(), valInput.value, selected);
     }
 
     function updateFooter() {
@@ -452,7 +467,7 @@ function initPicker(valInput, fieldSel, wrap) {
     valInput.addEventListener('blur',  () => { setTimeout(() => { panel.hidden = true; }, 150); });
     valInput.addEventListener('input', () => {
         panel.hidden = false;
-        renderPickerItems(panel, allValues, valInput.value, selected);
+        renderPickerItems(panel, available(), valInput.value, selected);
     });
     fieldSel.addEventListener('change', () => { if (!panel.hidden) loadValues(); });
 }
