@@ -213,10 +213,16 @@ function renderForm(rule) {
             `</div>` +
         `</div>` +
         `<div class="form-footer">` +
-            `<button class="btn-secondary" id="btn-cancel">Annuler</button>` +
-            (editingId ? `<button class="btn-danger" id="btn-delete-rule">Supprimer</button>` : '') +
-            (editingId ? `<button class="btn-generate-form" id="btn-generate-form">Générer le CSV</button>` : '') +
-            `<button class="btn-primary" id="btn-save">Enregistrer</button>` +
+            `<div class="gen-progress" id="gen-progress" hidden>` +
+                `<div class="gen-progress-bar"></div>` +
+                `<span class="gen-progress-msg" id="gen-progress-msg"></span>` +
+            `</div>` +
+            `<div class="form-footer-buttons">` +
+                `<button class="btn-secondary" id="btn-cancel">Annuler</button>` +
+                (editingId ? `<button class="btn-danger" id="btn-delete-rule">Supprimer</button>` : '') +
+                (editingId ? `<button class="btn-generate-form" id="btn-generate-form">Générer le CSV</button>` : '') +
+                `<button class="btn-primary" id="btn-save">Enregistrer</button>` +
+            `</div>` +
         `</div>`;
 
     for (const c of inc) addCondRow('cond-include', c);
@@ -397,14 +403,27 @@ async function toggleActive(id) {
 }
 
 // ── Génération CSV ────────────────────────────────────────────────────
+const GEN_STEPS = [
+    'Chargement des utilisateurs AD…',
+    'Filtrage selon les conditions…',
+    'Écriture des fichiers CSV…',
+];
+
 async function generateCsv(id) {
     const rule  = rules.find(r => r.id === id);
     const label = rule?.label || id;
 
-    const btn = document.getElementById('btn-generate-form');
-    if (btn) { btn.disabled = true; btn.textContent = 'Génération…'; }
+    const btn      = document.getElementById('btn-generate-form');
+    const progress = document.getElementById('gen-progress');
+    const msg      = document.getElementById('gen-progress-msg');
 
-    showToast(`Génération en cours pour « ${label} »…`, 'info');
+    if (btn) { btn.disabled = true; btn.textContent = 'Génération…'; }
+    if (progress) progress.removeAttribute('hidden');
+
+    let stepIdx = 0;
+    function showStep() { if (msg) msg.textContent = GEN_STEPS[stepIdx % GEN_STEPS.length]; }
+    showStep();
+    const ticker = setInterval(() => { stepIdx++; showStep(); }, 2500);
 
     try {
         const r    = await fetch(`/api/regles/${encodeURIComponent(id)}/generate`, { method: 'POST' });
@@ -419,7 +438,9 @@ async function generateCsv(id) {
     } catch {
         showToast('Erreur lors de la génération', 'error');
     } finally {
-        if (btn) { btn.disabled = false; btn.textContent = 'Générer le CSV'; }
+        clearInterval(ticker);
+        if (btn)      { btn.disabled = false; btn.textContent = 'Générer le CSV'; }
+        if (progress) progress.setAttribute('hidden', '');
     }
 }
 

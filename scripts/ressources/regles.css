@@ -327,11 +327,50 @@ body { overflow: hidden; }
 .form-footer {
     flex-shrink: 0;
     display: flex;
+    flex-direction: column;
+    gap: 0;
+    border-top: 1px solid var(--border-lt);
+    background: var(--surface-alt);
+}
+
+.form-footer-buttons {
+    display: flex;
     justify-content: flex-end;
     gap: 8px;
     padding: 14px 28px;
-    border-top: 1px solid var(--border-lt);
-    background: var(--surface-alt);
+}
+
+.gen-progress {
+    padding: 0 28px 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+.gen-progress[hidden] { display: none; }
+
+.gen-progress-bar {
+    height: 3px;
+    background: var(--border);
+    border-radius: 2px;
+    overflow: hidden;
+}
+.gen-progress-bar::after {
+    content: '';
+    display: block;
+    height: 100%;
+    width: 35%;
+    background: var(--accent);
+    border-radius: 2px;
+    animation: gen-slide 1.4s ease-in-out infinite;
+}
+@keyframes gen-slide {
+    0%   { transform: translateX(-100%); }
+    100% { transform: translateX(320%); }
+}
+
+.gen-progress-msg {
+    font-size: 11px;
+    color: var(--text-sub);
 }
 
 .btn-primary {
