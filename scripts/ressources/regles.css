@@ -1056,3 +1056,41 @@ body { overflow: hidden; }
     flex-shrink: 0;
     background: var(--surface);
 }
+
+/* ============================================================
+   Modale Confirmation
+   ============================================================ */
+.confirm-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,.35);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 300;
+}
+.confirm-modal-overlay[hidden] { display: none; }
+
+.confirm-modal-box {
+    background: var(--bg);
+    border-radius: var(--radius);
+    box-shadow: 0 8px 40px rgba(0,0,0,.18);
+    padding: 24px 28px 20px;
+    width: min(380px, 92vw);
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.confirm-modal-msg {
+    font-size: 14px;
+    color: var(--text);
+    margin: 0;
+    line-height: 1.5;
+}
+
+.confirm-modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+}

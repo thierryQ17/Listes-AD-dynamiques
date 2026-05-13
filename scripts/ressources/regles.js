@@ -240,11 +240,13 @@ function renderForm(rule) {
     const delRuleBtn = document.getElementById('btn-delete-rule');
     if (delRuleBtn) delRuleBtn.addEventListener('click', () => confirmDelete(editingId, document.getElementById('f-label')?.value.trim() || editingId));
 
-    document.getElementById('f-active').addEventListener('change', e => {
+    document.getElementById('f-active').addEventListener('change', async e => {
+        const newVal = e.target.checked;
+        e.target.checked = !newVal;
         const label  = document.getElementById('f-label')?.value.trim() || 'cette règle';
-        const action = e.target.checked ? 'Réactiver' : 'Désactiver';
-        if (!confirm(`${action} la règle "${label}" ?`)) {
-            e.target.checked = !e.target.checked;
+        const action = newVal ? 'Réactiver' : 'Désactiver';
+        if (await showConfirm(`${action} la règle "${label}" ?`)) {
+            e.target.checked = newVal;
         }
     });
 
@@ -335,8 +337,34 @@ async function saveRule() {
     }
 }
 
+function showConfirm(message, { danger = false } = {}) {
+    return new Promise(resolve => {
+        const modal     = document.getElementById('confirm-modal');
+        const okBtn     = document.getElementById('confirm-ok');
+        const cancelBtn = document.getElementById('confirm-cancel');
+
+        document.getElementById('confirm-modal-msg').textContent = message;
+        okBtn.className = danger ? 'btn-danger' : 'btn-primary';
+        modal.removeAttribute('hidden');
+
+        function cleanup() {
+            modal.setAttribute('hidden', '');
+            okBtn.removeEventListener('click', onOk);
+            cancelBtn.removeEventListener('click', onCancel);
+            modal.removeEventListener('click', onOverlay);
+        }
+        function onOk()      { cleanup(); resolve(true);  }
+        function onCancel()  { cleanup(); resolve(false); }
+        function onOverlay(e){ if (e.target === modal) { cleanup(); resolve(false); } }
+
+        okBtn.addEventListener('click',     onOk);
+        cancelBtn.addEventListener('click', onCancel);
+        modal.addEventListener('click',     onOverlay);
+    });
+}
+
 async function confirmDelete(id, label) {
-    if (!confirm(`Supprimer la règle "${label}" ?`)) return;
+    if (!await showConfirm(`Supprimer la règle "${label}" ?`, { danger: true })) return;
     try {
         await fetch(`/api/regles/${encodeURIComponent(id)}`, { method: 'DELETE' });
         if (editingId === id) closeForm();
@@ -352,7 +380,7 @@ async function toggleActive(id) {
     if (!rule) return;
     const willActivate = rule.active === false;
     const action = willActivate ? 'Réactiver' : 'Désactiver';
-    if (!confirm(`${action} la règle "${rule.label}" ?`)) return;
+    if (!await showConfirm(`${action} la règle "${rule.label}" ?`)) return;
     const updated = { ...rule, active: willActivate, updatedAt: now() };
     try {
         await fetch('/api/regles', {
