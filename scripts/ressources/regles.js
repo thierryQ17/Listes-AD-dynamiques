@@ -122,16 +122,8 @@ function buildCard(rule) {
         `<div class="rule-card-row">` +
             `<span class="rule-card-label">${esc(rule.label || '(sans nom)')}</span>` +
             (!isActive ? `<span class="badge-inactive">Inactif</span>` : '') +
-            `<button class="btn-card-delete"   data-tooltip="Supprimer cette règle">${CARD_ICONS.trash} Supprimer</button>` +
-            `<button class="btn-card-edit"     data-tooltip="Modifier">${CARD_ICONS.edit}</button>` +
-            `<button class="btn-card-toggle"   data-tooltip="${isActive ? 'Désactiver' : 'Réactiver'}">${isActive ? CARD_ICONS.pause : CARD_ICONS.play}</button>` +
-            `<button class="btn-card-generate" data-tooltip="Générer CSV"${!isActive ? ' disabled' : ''}>${CARD_ICONS.csv}</button>` +
         `</div>`;
 
-    card.querySelector('.btn-card-edit').addEventListener('click',     e => { e.stopPropagation(); openEditForm(rule.id); });
-    card.querySelector('.btn-card-toggle').addEventListener('click',   e => { e.stopPropagation(); toggleActive(rule.id); });
-    card.querySelector('.btn-card-delete').addEventListener('click',   e => { e.stopPropagation(); confirmDelete(rule.id, rule.label); });
-    card.querySelector('.btn-card-generate').addEventListener('click', e => { e.stopPropagation(); if (!e.currentTarget.disabled) generateCsv(rule.id); });
     card.addEventListener('click', () => openEditForm(rule.id));
     return card;
 }
