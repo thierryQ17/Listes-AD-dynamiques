@@ -21,6 +21,32 @@ const OPS = [
 const NIV_LABELS = { 1: 'Global', 2: 'Par DO', 3: 'Par centre' };
 const NIV_CSV    = { 1: '1 CSV global', 2: '2 CSV (DO + global)', 3: '3 CSV (centre + DO + global)' };
 
+function metaLabel(rule) {
+    const nInc  = rule?.conditions?.include?.length || 0;
+    const nExc  = rule?.conditions?.exclude?.length || 0;
+    const total = nInc + nExc;
+    return [
+        NIV_LABELS[rule?.niveau] || `Niv. ${rule?.niveau ?? '?'}`,
+        NIV_CSV[rule?.niveau]    || '',
+        `${total} condition${total !== 1 ? 's' : ''}`,
+    ].filter(Boolean).join(' · ');
+}
+
+function autoUpdateDesc() {
+    const fDesc = document.getElementById('f-desc');
+    if (!fDesc) return;
+    const nInc  = document.querySelectorAll('#cond-include .cond-row').length;
+    const nExc  = document.querySelectorAll('#cond-exclude .cond-row').length;
+    const total = nInc + nExc;
+    const radio = document.querySelector('input[name="f-niveau"]:checked');
+    const niveau = radio ? parseInt(radio.value) : 3;
+    fDesc.value = [
+        NIV_LABELS[niveau] || `Niv. ${niveau}`,
+        NIV_CSV[niveau]    || '',
+        `${total} condition${total !== 1 ? 's' : ''}`,
+    ].filter(Boolean).join(' · ');
+}
+
 const adValuesCache = {};
 
 const CARD_ICONS = {
@@ -98,14 +124,12 @@ function buildCard(rule) {
             `<span class="badge-niveau badge-niveau-${rule.niveau}" data-tooltip="${NIV_LABELS[rule.niveau]} · ${NIV_CSV[rule.niveau]}">Niv.&nbsp;${rule.niveau}</span>` +
             (!isActive ? `<span class="badge-inactive">Inactif</span>` : '') +
         `</div>` +
-        `<div class="rule-card-body">` +
-            (rule.description ? `<span class="rule-card-desc">${esc(rule.description)}</span>` : `<span></span>`) +
-            `<button class="btn-card-delete" data-tooltip="Supprimer cette règle">${CARD_ICONS.trash} Supprimer</button>` +
-        `</div>` +
-        `<div class="rule-card-actions">` +
-            `<button class="btn-card-edit"     title="Modifier"   data-tooltip="Modifier">${CARD_ICONS.edit}</button>` +
-            `<button class="btn-card-toggle"   title="${isActive ? 'Désactiver' : 'Réactiver'}" data-tooltip="${isActive ? 'Désactiver' : 'Réactiver'}">${isActive ? CARD_ICONS.pause : CARD_ICONS.play}</button>` +
-            `<button class="btn-card-generate" title="Générer CSV" data-tooltip="Générer CSV"${!isActive ? ' disabled' : ''}>${CARD_ICONS.csv}</button>` +
+        `<div class="rule-card-bottom">` +
+            `<span class="rule-card-desc">${esc(metaLabel(rule))}</span>` +
+            `<button class="btn-card-delete"   data-tooltip="Supprimer cette règle">${CARD_ICONS.trash} Supprimer</button>` +
+            `<button class="btn-card-edit"     data-tooltip="Modifier">${CARD_ICONS.edit}</button>` +
+            `<button class="btn-card-toggle"   data-tooltip="${isActive ? 'Désactiver' : 'Réactiver'}">${isActive ? CARD_ICONS.pause : CARD_ICONS.play}</button>` +
+            `<button class="btn-card-generate" data-tooltip="Générer CSV"${!isActive ? ' disabled' : ''}>${CARD_ICONS.csv}</button>` +
         `</div>`;
 
     card.querySelector('.btn-card-edit').addEventListener('click',     e => { e.stopPropagation(); openEditForm(rule.id); });
@@ -154,8 +178,8 @@ function renderForm(rule) {
             `</div>` +
 
             `<div class="form-group">` +
-                `<label class="form-label" for="f-desc">Description <span class="form-label-opt">(optionnel)</span></label>` +
-                `<input id="f-desc" class="form-input" type="text" placeholder="ex. Liste des formateurs permanents" value="${esc(rule?.description || '')}">` +
+                `<label class="form-label" for="f-desc">Description</label>` +
+                `<input id="f-desc" class="form-input form-input-auto" type="text" value="${esc(metaLabel(rule || {}))}" readonly>` +
             `</div>` +
 
             `<div class="form-group form-group-inline">` +
@@ -213,11 +237,12 @@ function renderForm(rule) {
             main.querySelectorAll('.niveau-option').forEach(o => o.classList.remove('selected'));
             opt.classList.add('selected');
             opt.querySelector('input').checked = true;
+            autoUpdateDesc();
         });
     });
 
-    document.getElementById('btn-add-include').addEventListener('click', () => addCondRow('cond-include'));
-    document.getElementById('btn-add-exclude').addEventListener('click', () => addCondRow('cond-exclude'));
+    document.getElementById('btn-add-include').addEventListener('click', () => { addCondRow('cond-include'); autoUpdateDesc(); });
+    document.getElementById('btn-add-exclude').addEventListener('click', () => { addCondRow('cond-exclude'); autoUpdateDesc(); });
     document.getElementById('btn-save').addEventListener('click', saveRule);
     document.getElementById('btn-cancel').addEventListener('click', closeForm);
     const genFormBtn = document.getElementById('btn-generate-form');
@@ -257,7 +282,7 @@ function createCondRow(cond = null) {
             `</svg>` +
         `</button>`;
 
-    row.querySelector('.btn-remove-cond').addEventListener('click', () => row.remove());
+    row.querySelector('.btn-remove-cond').addEventListener('click', () => { row.remove(); autoUpdateDesc(); });
     initPicker(row.querySelector('.cond-val'), row.querySelector('.cond-field'), row.querySelector('.cond-val-wrap'));
     return row;
 }
@@ -288,18 +313,15 @@ function readForm() {
     const existing   = editingId ? rules.find(r => r.id === editingId) : null;
     const activeChk  = document.getElementById('f-active');
 
-    const desc = document.getElementById('f-desc')?.value.trim() || '';
-
     return {
-        id:          editingId || uid(),
+        id:         editingId || uid(),
         label,
-        description: desc || undefined,
         niveau,
-        monoNiveau:  existing?.monoNiveau ?? false,
-        conditions:  { include, exclude },
-        active:      activeChk ? activeChk.checked : (existing?.active !== false),
-        createdAt:   existing?.createdAt || now(),
-        updatedAt:   now(),
+        monoNiveau: existing?.monoNiveau ?? false,
+        conditions: { include, exclude },
+        active:     activeChk ? activeChk.checked : (existing?.active !== false),
+        createdAt:  existing?.createdAt || now(),
+        updatedAt:  now(),
     };
 }
 

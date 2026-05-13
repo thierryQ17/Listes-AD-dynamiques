@@ -94,8 +94,8 @@ body { overflow: hidden; }
     background: var(--bg);
     border: 1px solid var(--border);
     border-radius: var(--radius);
-    padding: 10px 12px;
-    margin-bottom: 6px;
+    padding: 7px 10px;
+    margin-bottom: 5px;
     cursor: pointer;
     transition: border-color .12s, box-shadow .12s;
 }
@@ -107,7 +107,7 @@ body { overflow: hidden; }
     display: flex;
     align-items: center;
     gap: 8px;
-    margin-bottom: 4px;
+    margin-bottom: 3px;
 }
 
 .rule-card-label {
@@ -139,12 +139,10 @@ body { overflow: hidden; }
     margin-bottom: 8px;
 }
 
-.rule-card-body {
+.rule-card-bottom {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    margin-bottom: 8px;
-    min-height: 18px;
+    gap: 4px;
 }
 
 .rule-card-desc {
@@ -154,16 +152,14 @@ body { overflow: hidden; }
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    margin-right: 6px;
+    margin-right: 4px;
 }
-
-.rule-card-actions { display: flex; gap: 5px; }
 
 .btn-card-edit,
 .btn-card-generate,
 .btn-card-toggle {
-    width: 28px;
-    height: 26px;
+    width: 24px;
+    height: 22px;
     padding: 0;
     border-radius: var(--radius-sm);
     cursor: pointer;
@@ -275,6 +271,8 @@ body { overflow: hidden; }
     flex: none;
 }
 .form-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-lt); }
+.form-input-auto { background: var(--surface); color: var(--text-sub); cursor: default; }
+.form-input-auto:focus { border-color: var(--border); box-shadow: none; }
 
 /* ── Niveau ── */
 .niveau-options {
