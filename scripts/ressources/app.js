@@ -16,6 +16,12 @@ const state = {
 //  Init
 // ============================================================
 document.addEventListener('DOMContentLoaded', async () => {
+    if (window !== window.top) {
+        document.querySelector('header').style.display = 'none';
+        const main = document.querySelector('main');
+        if (main) main.style.height = '100vh';
+    }
+
     await loadGroups();
     setupSearch();
 });

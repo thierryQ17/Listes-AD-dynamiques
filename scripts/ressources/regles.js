@@ -33,6 +33,11 @@ const CARD_ICONS = {
 
 // ── Init ─────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
+    if (window !== window.top) {
+        document.querySelector('header').style.display = 'none';
+        document.querySelector('.regles-layout').style.height = '100vh';
+    }
+
     await loadRules();
     const raw = localStorage.getItem('regles_draft');
     if (raw) {
@@ -42,6 +47,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('btn-new-rule').addEventListener('click', openNewForm);
     document.getElementById('btn-view-json').addEventListener('click', openJsonModal);
     setupJsonModal();
+    setupHelpModal();
+    setupTooltip();
 });
 
 async function loadRules() {
@@ -64,20 +71,21 @@ function renderList() {
         el.innerHTML = '<p class="hint">Aucune règle définie</p>';
         return;
     }
+    const active   = rules.filter(r => r.active !== false);
+    const inactive = rules.filter(r => r.active === false);
     el.innerHTML = '';
-    for (const rule of rules) el.appendChild(buildCard(rule));
+    for (const rule of active)   el.appendChild(buildCard(rule));
+    if (inactive.length) {
+        const sep = document.createElement('div');
+        sep.className = 'rules-section-sep';
+        sep.innerHTML = '<span>Inactives</span>';
+        el.appendChild(sep);
+        for (const rule of inactive) el.appendChild(buildCard(rule));
+    }
 }
 
 function buildCard(rule) {
-    const nInc   = rule.conditions?.include?.length || 0;
-    const nExc   = rule.conditions?.exclude?.length || 0;
-    const total  = nInc + nExc;
     const isActive = rule.active !== false;
-    const meta   = [
-        NIV_LABELS[rule.niveau] || `Niv. ${rule.niveau}`,
-        NIV_CSV[rule.niveau]    || '',
-        `${total} condition${total !== 1 ? 's' : ''}`,
-    ].filter(Boolean).join(' · ');
 
     const card = document.createElement('div');
     card.className = 'rule-card'
@@ -87,15 +95,17 @@ function buildCard(rule) {
     card.innerHTML =
         `<div class="rule-card-top">` +
             `<span class="rule-card-label">${esc(rule.label || '(sans nom)')}</span>` +
-            `<span class="badge-niveau badge-niveau-${rule.niveau}">Niv.&nbsp;${rule.niveau}</span>` +
+            `<span class="badge-niveau badge-niveau-${rule.niveau}" data-tooltip="${NIV_LABELS[rule.niveau]} · ${NIV_CSV[rule.niveau]}">Niv.&nbsp;${rule.niveau}</span>` +
             (!isActive ? `<span class="badge-inactive">Inactif</span>` : '') +
         `</div>` +
-        `<div class="rule-card-meta">${meta}</div>` +
+        `<div class="rule-card-body">` +
+            (rule.description ? `<span class="rule-card-desc">${esc(rule.description)}</span>` : `<span></span>`) +
+            `<button class="btn-card-delete" data-tooltip="Supprimer cette règle">${CARD_ICONS.trash} Supprimer</button>` +
+        `</div>` +
         `<div class="rule-card-actions">` +
-            `<button class="btn-card-edit"     title="Modifier">${CARD_ICONS.edit}</button>` +
-            `<button class="btn-card-toggle"   title="${isActive ? 'Désactiver' : 'Réactiver'}">${isActive ? CARD_ICONS.pause : CARD_ICONS.play}</button>` +
-            `<button class="btn-card-delete"   title="Supprimer">${CARD_ICONS.trash}</button>` +
-            `<button class="btn-card-generate" title="Générer CSV"${!isActive ? ' disabled' : ''}>${CARD_ICONS.csv}</button>` +
+            `<button class="btn-card-edit"     title="Modifier"   data-tooltip="Modifier">${CARD_ICONS.edit}</button>` +
+            `<button class="btn-card-toggle"   title="${isActive ? 'Désactiver' : 'Réactiver'}" data-tooltip="${isActive ? 'Désactiver' : 'Réactiver'}">${isActive ? CARD_ICONS.pause : CARD_ICONS.play}</button>` +
+            `<button class="btn-card-generate" title="Générer CSV" data-tooltip="Générer CSV"${!isActive ? ' disabled' : ''}>${CARD_ICONS.csv}</button>` +
         `</div>`;
 
     card.querySelector('.btn-card-edit').addEventListener('click',     e => { e.stopPropagation(); openEditForm(rule.id); });
@@ -141,6 +151,11 @@ function renderForm(rule) {
             `<div class="form-group">` +
                 `<label class="form-label" for="f-label">Nom de la règle</label>` +
                 `<input id="f-label" class="form-input" type="text" placeholder="ex. Administratif" value="${esc(rule?.label || '')}">` +
+            `</div>` +
+
+            `<div class="form-group">` +
+                `<label class="form-label" for="f-desc">Description <span class="form-label-opt">(optionnel)</span></label>` +
+                `<input id="f-desc" class="form-input" type="text" placeholder="ex. Liste des formateurs permanents" value="${esc(rule?.description || '')}">` +
             `</div>` +
 
             `<div class="form-group form-group-inline">` +
@@ -207,6 +222,15 @@ function renderForm(rule) {
     document.getElementById('btn-cancel').addEventListener('click', closeForm);
     const genFormBtn = document.getElementById('btn-generate-form');
     if (genFormBtn) genFormBtn.addEventListener('click', () => generateCsv(editingId));
+
+    document.getElementById('f-active').addEventListener('change', e => {
+        const label  = document.getElementById('f-label')?.value.trim() || 'cette règle';
+        const action = e.target.checked ? 'Réactiver' : 'Désactiver';
+        if (!confirm(`${action} la règle "${label}" ?`)) {
+            e.target.checked = !e.target.checked;
+        }
+    });
+
     document.getElementById('f-label').focus();
 }
 
@@ -264,15 +288,18 @@ function readForm() {
     const existing   = editingId ? rules.find(r => r.id === editingId) : null;
     const activeChk  = document.getElementById('f-active');
 
+    const desc = document.getElementById('f-desc')?.value.trim() || '';
+
     return {
-        id:         editingId || uid(),
+        id:          editingId || uid(),
         label,
+        description: desc || undefined,
         niveau,
-        monoNiveau: existing?.monoNiveau ?? false,
-        conditions: { include, exclude },
-        active:     activeChk ? activeChk.checked : (existing?.active !== false),
-        createdAt:  existing?.createdAt || now(),
-        updatedAt:  now(),
+        monoNiveau:  existing?.monoNiveau ?? false,
+        conditions:  { include, exclude },
+        active:      activeChk ? activeChk.checked : (existing?.active !== false),
+        createdAt:   existing?.createdAt || now(),
+        updatedAt:   now(),
     };
 }
 
@@ -309,7 +336,10 @@ async function confirmDelete(id, label) {
 async function toggleActive(id) {
     const rule = rules.find(r => r.id === id);
     if (!rule) return;
-    const updated = { ...rule, active: rule.active === false, updatedAt: now() };
+    const willActivate = rule.active === false;
+    const action = willActivate ? 'Réactiver' : 'Désactiver';
+    if (!confirm(`${action} la règle "${rule.label}" ?`)) return;
+    const updated = { ...rule, active: willActivate, updatedAt: now() };
     try {
         await fetch('/api/regles', {
             method:  'POST',
@@ -538,6 +568,58 @@ function setupJsonModal() {
     });
 }
 
+// ── Modal Aide ────────────────────────────────────────────────────────
+function setupHelpModal() {
+    const modal = document.getElementById('help-modal');
+    document.getElementById('btn-help').addEventListener('click',       () => { modal.hidden = false; });
+    document.getElementById('btn-help-close').addEventListener('click', () => { modal.hidden = true; });
+    modal.addEventListener('click', e => { if (e.target === modal) modal.hidden = true; });
+    document.addEventListener('keydown', e => {
+        if (e.key === 'Escape' && !modal.hidden) modal.hidden = true;
+    });
+}
+
+// ── Tooltip ───────────────────────────────────────────────────────────
+function setupTooltip() {
+    const tip = document.createElement('div');
+    tip.className = 'custom-tooltip';
+    tip.hidden = true;
+    document.body.appendChild(tip);
+
+    let activeEl = null;
+
+    document.addEventListener('mouseover', e => {
+        const el = e.target.closest('[data-tooltip]');
+        if (!el || el === activeEl) return;
+        activeEl = el;
+        tip.textContent = el.dataset.tooltip;
+        tip.hidden = false;
+        positionTip(el);
+    });
+
+    document.addEventListener('mouseout', e => {
+        const el = e.target.closest('[data-tooltip]');
+        if (!el) return;
+        if (el.contains(e.relatedTarget)) return;
+        tip.hidden = true;
+        activeEl = null;
+    });
+
+    function positionTip(el) {
+        const rect = el.getBoundingClientRect();
+        tip.style.cssText = 'left:0;top:0;transform:none';
+        tip.hidden = false;
+        const tw = tip.offsetWidth;
+        const th = tip.offsetHeight;
+        let left = rect.left + rect.width / 2 - tw / 2;
+        left = Math.max(6, Math.min(left, window.innerWidth - tw - 6));
+        const above = rect.top - th - 8;
+        const below = rect.bottom + 6;
+        tip.style.left = left + 'px';
+        tip.style.top  = (above >= 6 ? above : below) + 'px';
+    }
+}
+
 function openJsonModal() {
     const modal    = document.getElementById('json-modal');
     const pre      = document.getElementById('json-content');
@@ -582,6 +664,15 @@ function uid()  { return Date.now().toString(36) + Math.random().toString(36).sl
 function now()  { return new Date().toISOString().slice(0, 19); }
 
 let _toastTimer;
+window.addEventListener('message', e => {
+    if (e.data?.type !== 'tab-activated') return;
+    const raw = localStorage.getItem('regles_draft');
+    if (raw) {
+        localStorage.removeItem('regles_draft');
+        try { renderForm(JSON.parse(raw)); } catch {}
+    }
+});
+
 function showToast(msg, type = '') {
     const el = document.getElementById('toast');
     el.textContent = msg;

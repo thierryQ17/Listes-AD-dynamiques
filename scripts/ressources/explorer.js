@@ -122,14 +122,130 @@ const scanFooter = {
 
 
 // ============================================================
+//  Snapshot sessionStorage — persistance entre navigations
+// ============================================================
+const SNAPSHOT_KEY = 'explorer_snapshot';
+const SNAPSHOT_TTL = 30 * 60 * 1000;  // 30 min
+
+function saveSnapshot() {
+    if (!state.treeData.length) return;
+    try {
+        const expandedNames = [...document.querySelectorAll('.tree-region.expanded')]
+            .map(el => el.querySelector('.region-name')?.textContent)
+            .filter(Boolean);
+        sessionStorage.setItem(SNAPSHOT_KEY, JSON.stringify({
+            ts:           Date.now(),
+            treeData:     state.treeData,
+            selectedDn:   state.selectedSite?.site.dn   ?? null,
+            selectedSite: state.selectedSite?.site       ?? null,
+            allUsers:     state.allUsers,
+            sortCol:      state.sortCol,
+            sortDir:      state.sortDir,
+            groupBy:      state.groupBy,
+            expandedNames,
+        }));
+    } catch { /* sessionStorage plein */ }
+}
+
+function tryRestoreSnapshot() {
+    try {
+        const raw = sessionStorage.getItem(SNAPSHOT_KEY);
+        if (!raw) return false;
+        const snap = JSON.parse(raw);
+        if (!snap?.treeData?.length || Date.now() - snap.ts > SNAPSHOT_TTL) return false;
+
+        // État en mémoire
+        state.treeData = snap.treeData;
+        state.sortCol  = snap.sortCol || 'displayName';
+        state.sortDir  = snap.sortDir || 'asc';
+        state.groupBy  = snap.groupBy || 'none';
+
+        // Index DN → nom de site
+        state.treeData.flatMap(r => r.children || [])
+            .forEach(s => { dnNameMap[s.dn] = s.name; });
+
+        // Rendu de l'arbre
+        renderTree(snap.treeData);
+
+        // Régions ouvertes
+        if (snap.expandedNames?.length) {
+            document.querySelectorAll('.tree-region').forEach(el => {
+                const name = el.querySelector('.region-name')?.textContent;
+                if (snap.expandedNames.includes(name)) el.classList.add('expanded');
+            });
+        }
+        updateToggleTreeBtn();
+
+        // Site sélectionné + tableau
+        if (snap.selectedDn && snap.selectedSite && snap.allUsers?.length) {
+            allSiteUsers[snap.selectedDn] = snap.allUsers;
+            state.allUsers = snap.allUsers;
+
+            let siteEl = null;
+            document.querySelectorAll('.tree-site').forEach(el => {
+                if (el.dataset.dn === snap.selectedDn) siteEl = el;
+            });
+
+            if (siteEl) {
+                state.selectedSite = { site: snap.selectedSite, el: siteEl };
+                siteEl.classList.add('selected');
+                // Ouvrir la région parente si nécessaire
+                const regionEl = siteEl.closest('.tree-region');
+                if (regionEl && !regionEl.classList.contains('expanded')) {
+                    regionEl.classList.add('expanded');
+                    updateToggleTreeBtn();
+                }
+                updateSiteHeader(snap.selectedSite, snap.allUsers.length, false);
+                document.getElementById('group-by').value    = state.groupBy;
+                document.getElementById('group-by').disabled = false;
+                document.getElementById('user-filter').disabled = false;
+                // Icônes de tri
+                resetSortIcons();
+                const thSort = document.querySelector(`.users-table th[data-col="${state.sortCol}"]`);
+                if (thSort) thSort.classList.add(`sort-${state.sortDir}`);
+                renderUsers(state.allUsers);
+            }
+        }
+
+        // Actualisation silencieuse en arrière-plan
+        fetchAndApplyCounts().catch(() => {});
+        const allSites = snap.treeData.flatMap(r => r.children || []);
+        const uncached = allSites.filter(s => {
+            const badge = document.getElementById('count-' + dnToId(s.dn));
+            return !badge || badge.textContent === '';
+        });
+        if (uncached.length > 0) scanFooter.show('Génération du cache', uncached.length);
+        const uncachedDns = new Set(uncached.map(s => s.dn));
+        allSites.forEach(s => {
+            const cb = uncachedDns.has(s.dn) ? () => scanFooter.update(s.name) : null;
+            enqueuePrefetch(s.dn, cb);
+        });
+
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+// ============================================================
 //  Init
 // ============================================================
 document.addEventListener('DOMContentLoaded', () => {
+    if (window !== window.top) {
+        document.querySelector('header').style.display = 'none';
+        document.querySelector('.explorer-layout').style.height = '100vh';
+    }
+
     setupSearch();
     setupSort();
     setupGroupBy();
-    loadTree();
+
+    if (!tryRestoreSnapshot()) {
+        loadTree();
+    }
+
     setupFunctionModal();
+    window.addEventListener('beforeunload', saveSnapshot);
 
     document.getElementById('toggle-tree-btn').addEventListener('click', () => {
         const anyCollapsed = document.querySelector('.tree-region:not(.expanded)');
@@ -1101,7 +1217,11 @@ function createRuleFromModal() {
         },
     };
     localStorage.setItem('regles_draft', JSON.stringify(draft));
-    window.open('/regles', 'i2n-regles');
+    if (window !== window.top) {
+        window.top.switchTab('regles');
+    } else {
+        window.open('/regles', 'i2n-regles');
+    }
 }
 
 function openFunctionModal(title, siteDn) {

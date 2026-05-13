@@ -12,7 +12,7 @@
     <header>
         <div class="header-left">
             <nav class="header-nav">
-                <a href="/explorer" class="nav-link">Explorateur AD</a>
+                <a href="/explorer" class="nav-link" target="i2n-explorer">Explorateur AD</a>
                 <a href="/regles" class="nav-link active">Règles</a>
                 <a href="/index.html" class="nav-link">Groupes Dynamiques</a>
             </nav>
@@ -29,7 +29,12 @@
             <div class="regles-sidebar-hdr">
                 <span class="regles-sidebar-title">Règles définies</span>
                 <div class="sidebar-hdr-actions">
-                    <button id="btn-view-json" class="btn-json" title="Voir le fichier JSON brut">
+                    <button id="btn-help" class="btn-json" title="Aide — comment créer une règle" data-tooltip="Aide — comment créer une règle">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><circle cx="12" cy="17" r=".5" fill="currentColor"/>
+                        </svg>
+                    </button>
+                    <button id="btn-view-json" class="btn-json" title="Voir le fichier JSON brut" data-tooltip="Voir le fichier JSON brut">
                         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                             <path d="M8 3H6a2 2 0 0 0-2 2v4a2 2 0 0 1-2 2 2 2 0 0 1 2 2v4c0 1.1.9 2 2 2h2"/>
                             <path d="M16 3h2a2 2 0 0 1 2 2v4a2 2 0 0 0 2 2 2 2 0 0 0-2 2v4a2 2 0 0 1-2 2h-2"/>
@@ -74,6 +79,81 @@
             </div>
             <div class="json-modal-body">
                 <pre id="json-content" class="json-pre"></pre>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Aide -->
+    <div id="help-modal" class="help-modal-overlay" hidden>
+        <div class="help-modal-box">
+            <div class="help-modal-header">
+                <span class="help-modal-title">Comment créer une règle</span>
+                <button id="btn-help-close" class="help-modal-close" title="Fermer">
+                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+                        <path d="M1 1l12 12M13 1L1 13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                    </svg>
+                </button>
+            </div>
+            <div class="help-modal-body">
+                <div class="help-section">
+                    <div class="help-section-title"><span class="help-step">1</span> Nom de la règle</div>
+                    <p class="help-text">Donnez un nom court et descriptif (ex. <em>Administratif</em>, <em>Enseignants CDI</em>). Ce nom sera utilisé comme préfixe dans les noms de fichiers CSV générés.</p>
+                </div>
+                <div class="help-section">
+                    <div class="help-section-title"><span class="help-step">2</span> Règle active / inactive</div>
+                    <p class="help-text">Une règle inactive ne peut pas générer de CSV. Elle reste visible dans la liste (section séparée, grisée) mais est suspendue. Utilisez ce toggle pour désactiver temporairement sans supprimer.</p>
+                </div>
+                <div class="help-section">
+                    <div class="help-section-title"><span class="help-step">3</span> Niveau de groupement</div>
+                    <div class="help-niveau-grid">
+                        <div class="help-niveau-card">
+                            <span class="help-niveau-num">1</span>
+                            <span class="help-niveau-lbl">Global</span>
+                            <span class="help-niveau-desc">1 fichier CSV contenant tous les utilisateurs correspondants.</span>
+                        </div>
+                        <div class="help-niveau-card">
+                            <span class="help-niveau-num">2</span>
+                            <span class="help-niveau-lbl">Par DO</span>
+                            <span class="help-niveau-desc">1 CSV par direction (Department) + 1 CSV global. Idéal pour des listes par service.</span>
+                        </div>
+                        <div class="help-niveau-card">
+                            <span class="help-niveau-num">3</span>
+                            <span class="help-niveau-lbl">Par centre</span>
+                            <span class="help-niveau-desc">1 CSV par centre (Office) dans chaque DO + 1 CSV par DO + 1 CSV global.</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="help-section">
+                    <div class="help-section-title"><span class="help-step">4</span> Conditions d'inclusion</div>
+                    <p class="help-text">Définissez les critères que les utilisateurs doivent satisfaire pour être inclus. Si plusieurs conditions sont ajoutées, elles fonctionnent en <strong>OU</strong> : un utilisateur est inclus s'il correspond à <em>au moins une</em> condition.</p>
+                </div>
+                <div class="help-section">
+                    <div class="help-section-title"><span class="help-step">5</span> Conditions d'exclusion</div>
+                    <p class="help-text">Parmi les utilisateurs inclus, retirez ceux qui correspondent à l'une des conditions d'exclusion. Comme pour l'inclusion, les exclusions fonctionnent en <strong>OU</strong>.</p>
+                </div>
+                <div class="help-section">
+                    <div class="help-section-title"><span class="help-step">6</span> Opérateurs disponibles</div>
+                    <div class="help-ops-grid">
+                        <div class="help-op"><code>est exactement</code> — correspondance exacte (insensible à la casse)</div>
+                        <div class="help-op"><code>n'est pas</code> — différent de la valeur</div>
+                        <div class="help-op"><code>contient</code> — utilise un joker <code>*valeur*</code></div>
+                        <div class="help-op"><code>ne contient pas</code> — exclut si la valeur est contenue</div>
+                    </div>
+                </div>
+                <div class="help-section">
+                    <div class="help-section-title"><span class="help-step">7</span> Sélecteur de valeurs</div>
+                    <p class="help-text">En cliquant sur le champ valeur, une liste déroulante affiche les valeurs réelles présentes dans le cache AD. Vous pouvez :</p>
+                    <ul class="help-list">
+                        <li>Saisir du texte pour filtrer la liste</li>
+                        <li>Cliquer directement sur une valeur pour la sélectionner en un clic</li>
+                        <li>Cocher plusieurs valeurs pour créer plusieurs conditions d'un coup</li>
+                        <li>Cliquer sur <strong>Valider</strong> pour insérer toutes les valeurs cochées comme autant de lignes</li>
+                    </ul>
+                </div>
+                <div class="help-section">
+                    <div class="help-section-title"><span class="help-step">8</span> Générer les CSV</div>
+                    <p class="help-text">Une fois la règle enregistrée, utilisez le bouton <strong>Générer les CSV</strong> (ou l'icône téléchargement dans la carte) pour lancer la génération. Les fichiers sont créés dans <code>application/output/</code>, dans un sous-dossier horodaté.</p>
+                </div>
             </div>
         </div>
     </div>

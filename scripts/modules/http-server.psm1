@@ -50,9 +50,15 @@ function Invoke-RouteHandler {
     add-msg -msg "$Method $Url" -foregroundColor DarkGray -quelType writeHost
 
     switch -Regex ($Url) {
-        '^(/|/index\.html)$' {
+        '^(/|/shell(\.html)?)$' {
+            Serve-StaticFile -Response $Response -Key "f_shell.html" -ContentType "text/html"
+        }
+        '^/groupes(\.html)?$' {
+            Serve-StaticFile -Response $Response -Key "f_index.html" -ContentType "text/html"
+        }
+        '^/index\.html$' {
             $Response.StatusCode = 302
-            $Response.Headers.Add("Location", "/explorer")
+            $Response.Headers.Add("Location", "/groupes")
         }
         '^/app\.js$' {
             Serve-StaticFile -Response $Response -Key "f_app.js" -ContentType "application/javascript"
