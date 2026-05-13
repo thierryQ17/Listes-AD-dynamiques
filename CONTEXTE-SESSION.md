@@ -114,12 +114,15 @@ CONTEXTE-SESSION.md         ← ce fichier
 - ✅ Exclusion des valeurs déjà utilisées dans la même liste
 - ✅ Toggle actif/inactif avec confirmation
 - ✅ Règles inactives dans une section séparée en bas de la liste
-- ✅ Génération CSV (bouton dans formulaire + icône dans carte)
-- ✅ Boutons icônes uniquement sur les cartes (crayon, pause/play, poubelle, CSV)
+- ✅ Bouton "Générer le CSV" dans le formulaire (règle en cours uniquement, visible en mode édition)
+- ✅ Modale CSV : tableau `SAM Account Name | Mail` avec onglets par fichier, chemin en footer
+- ✅ Cartes : label seul, clic pour ouvrir le formulaire (aucun bouton visible)
 - ✅ Modal JSON (visualiseur brut avec coloration syntaxique)
 - ✅ Modal Aide (8 étapes expliquées)
 - ✅ Tooltips JS `position:fixed` au survol (badges niveau + boutons cartes)
 - ✅ Confirmation avant suppression et avant toggle
+- ✅ Description auto-calculée : `"Par centre · 3 CSV (centre + DO + global) · 2 conditions"` — lecture seule, mise à jour live quand on change le niveau ou les conditions (`metaLabel` + `autoUpdateDesc`)
+- ✅ Cards : une seule ligne `.rule-card-row` (label + badge Inactif si besoin)
 
 ### Modèle de données — Règle
 ```json
@@ -138,15 +141,17 @@ CONTEXTE-SESSION.md         ← ce fichier
 }
 ```
 
+> `description` n'est **pas** persisté dans le JSON — il est calculé dynamiquement par `metaLabel(rule)` dans `regles.js` et affiché en lecture seule dans le formulaire et les cartes.
+
 **Champs** : `title`, `department`, `office`, `extensionAttribute1`, `description`  
 **Opérateurs** : `eq`, `ne`, `like`, `notlike`
 
 ### Niveaux de groupement CSV
-| Niveau | Fichiers produits |
-|--------|-------------------|
-| 1 | 1 CSV global |
-| 2 | 1 CSV par DO (Department) + 1 global |
-| 3 | 1 CSV par centre (Office) par DO + 1 par DO + 1 global |
+| Niveau | Label | Fichiers produits |
+|--------|-------|-------------------|
+| 1 | Par centre | 3 CSV (centre + DO + global) |
+| 2 | Par DO | 2 CSV (DO + global) |
+| 3 | Global | 1 CSV global |
 
 `monoNiveau: true` (niveau 3 uniquement) = centre par DO seulement, pas de CSV DO ni global.
 
@@ -164,6 +169,7 @@ CONTEXTE-SESSION.md         ← ce fichier
 - `display: flex` sur une overlay écrase `[hidden]` → toujours ajouter `.overlay[hidden] { display: none; }`
 - Tooltips dans des conteneurs `overflow: hidden` : utiliser `position: fixed` côté JS (système `data-tooltip` + `setupTooltip()`)
 - Dans les iframes, `100vh` = hauteur de l'iframe (pas de la fenêtre parente) → header masqué = layout doit passer à `height: 100vh`
+- Structure d'une carte règle : `.rule-card-row` (label seul, clic = ouvre formulaire)
 
 ### Variables globales
 - `$global:parametresJson` → config depuis `parametres.json`

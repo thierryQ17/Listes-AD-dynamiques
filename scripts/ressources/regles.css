@@ -349,6 +349,21 @@ body { overflow: hidden; }
 }
 .btn-primary:hover { background: #1d4ed8; }
 
+.btn-danger {
+    height: 32px;
+    padding: 0 14px;
+    background: #fff1f2;
+    color: var(--danger);
+    border: 1px solid #fca5a5;
+    border-radius: var(--radius-sm);
+    font-size: 13px;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    transition: background .12s, border-color .12s;
+}
+.btn-danger:hover { background: #fee2e2; border-color: #f87171; }
+
 .btn-generate-form {
     height: 32px;
     padding: 0 14px;

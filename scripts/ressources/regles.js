@@ -214,6 +214,7 @@ function renderForm(rule) {
         `</div>` +
         `<div class="form-footer">` +
             `<button class="btn-secondary" id="btn-cancel">Annuler</button>` +
+            (editingId ? `<button class="btn-danger" id="btn-delete-rule">Supprimer</button>` : '') +
             (editingId ? `<button class="btn-generate-form" id="btn-generate-form">Générer le CSV</button>` : '') +
             `<button class="btn-primary" id="btn-save">Enregistrer</button>` +
         `</div>`;
@@ -236,6 +237,8 @@ function renderForm(rule) {
     document.getElementById('btn-cancel').addEventListener('click', closeForm);
     const genFormBtn = document.getElementById('btn-generate-form');
     if (genFormBtn) genFormBtn.addEventListener('click', () => generateCsv(editingId));
+    const delRuleBtn = document.getElementById('btn-delete-rule');
+    if (delRuleBtn) delRuleBtn.addEventListener('click', () => confirmDelete(editingId, document.getElementById('f-label')?.value.trim() || editingId));
 
     document.getElementById('f-active').addEventListener('change', e => {
         const label  = document.getElementById('f-label')?.value.trim() || 'cette règle';
