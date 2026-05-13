@@ -1,0 +1,4 @@
+Ce dossier contient les fichiers XML de credentials AD (chiffrés par le compte Windows courant).
+Format : <login>.adm-credential.xml
+Ces fichiers sont générés automatiquement au premier lancement de Start.ps1.
+Ne pas versionner ce dossier (ajouter scripts/xmlConnect/AD/ dans .gitignore).

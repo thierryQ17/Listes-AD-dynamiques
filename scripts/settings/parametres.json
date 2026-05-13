@@ -1,0 +1,43 @@
+{
+  "ad": {
+    "searchBase": "%%_LDAP_SEARCHBASE_%%",
+    "groupsOU":   "%%_OU_GROUPES_I2N_%%",
+    "regions": [
+      {
+        "label": "I2N",
+        "bases": [
+          "OU=NORD,OU=administratif,DC=aft-iftim,DC=france",
+          "OU=IDF,OU=administratif,DC=aft-iftim,DC=france"
+        ]
+      },
+      {
+        "label": "OUEST",
+        "bases": [
+          "OU=OUEST,OU=administratif,DC=aft-iftim,DC=france"
+        ]
+      },
+      {
+        "label": "EST",
+        "bases": [
+          "OU=EST,OU=administratif,DC=aft-iftim,DC=france"
+        ]
+      },
+      {
+        "label": "SUD",
+        "bases": [
+          "OU=SUD,OU=administratif,DC=aft-iftim,DC=france",
+          "OU=SUD-EST,OU=administratif,DC=aft-iftim,DC=france"
+        ]
+      },
+      {
+        "label": "MONCHY",
+        "bases": [
+          "OU=MONCHY,OU=administratif,DC=aft-iftim,DC=france"
+        ]
+      }
+    ]
+  },
+  "server": {
+    "port": 8888
+  }
+}

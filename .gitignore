@@ -1,0 +1,19 @@
+# Caches générés automatiquement
+scripts/cache/
+
+# Logs
+scripts/log/
+scripts/_transcriptLog/
+
+# Credentials AD — NE JAMAIS COMMITER
+scripts/xmlConnect/AD/*.xml
+
+# Fichiers générés au démarrage
+scripts/settings/variablesGlobales.json
+
+# Sorties applicatives
+application/out/
+
+# Divers
+*.tmp
+Thumbs.db

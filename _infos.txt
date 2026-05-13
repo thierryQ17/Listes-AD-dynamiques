@@ -1,0 +1,50 @@
+Nom de l'application = Groupes Dynamiques I2N
+Description          = Interface HTML (drag & drop) pour visualiser et composer des groupes AD de l'I2N
+                       Lecture seule — aucune écriture dans l'Active Directory
+Version              = 2.0
+Auteur               = thgadre
+Email                = thierry.gadre@aftral.com
+Date de création     = 2026-05-13
+
+----------------------------------------------------------------------------
+
+DÉMARRAGE
+  > powershell -ExecutionPolicy Bypass -File "Start.ps1"
+
+  Au premier lancement, le mot de passe admin AD est demandé une seule fois.
+  Il est stocké chiffré dans scripts/xmlConnect/AD/<login>-credential.xml.
+  Le navigateur s'ouvre automatiquement sur http://localhost:8080
+
+CONFIGURATION OBLIGATOIRE (avant le premier lancement)
+  Éditer scripts/settings/parametres.json :
+    - ad.searchBase  : base LDAP de recherche globale   (ex: OU=I2N,DC=aft-iftim,DC=fr)
+    - ad.groupsOU    : base LDAP des groupes I2N        (ex: OU=Groupes,OU=I2N,DC=aft-iftim,DC=fr)
+    - server.port    : port HTTP local (défaut 8080)
+
+STRUCTURE
+  Start.ps1                        ← point d'entrée
+  _initGlobalVariables.psm1        ← auto-découverte des chemins ($global:path)
+  scripts/
+    modules/
+      connect.psm1                 ← connexion AD (credentials XML chiffrés)
+      ad-reader.psm1               ← lecture AD uniquement (Get-ADGroup, Get-ADUser...)
+      http-server.psm1             ← serveur HTTP local (System.Net.HttpListener)
+    settings/
+      parametres.json              ← configuration (à remplir)
+    ressources/
+      index.html                   ← interface drag & drop
+      app.js                       ← logique JavaScript
+      style.css                    ← styles
+    xmlConnect/AD/                 ← credentials XML (ne pas versionner)
+    log/                           ← fichiers de log
+
+API HTTP (localhost uniquement)
+  GET /                              → interface HTML
+  GET /api/groups                    → liste des groupes I2N (JSON)
+  GET /api/group/members?dn=<DN>     → membres d'un groupe (JSON)
+  GET /api/search?q=<query>&type=... → recherche AD (JSON)
+
+SECURITE
+  - Serveur HTTP sur localhost uniquement (non exposé réseau)
+  - Aucune commande Set-AD* / New-AD* / Remove-AD* dans le code
+  - Credentials AD stockés chiffrés par le compte Windows courant (Export-CliXml)

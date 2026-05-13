@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Explorateur AD — I2N</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%232563eb'/%3E%3Ctext x='16' y='22' text-anchor='middle' font-family='system-ui,sans-serif' font-size='13' font-weight='700' fill='white'%3EAD%3C/text%3E%3C/svg%3E">
+    <link rel="stylesheet" href="/style.css">
+    <link rel="stylesheet" href="/explorer.css">
+</head>
+<body>
+    <header>
+        <div class="header-left">
+            <nav class="header-nav">
+                <a href="/explorer" class="nav-link active">Explorateur AD</a>
+                <a href="/regles" class="nav-link">Règles</a>
+                <a href="/index.html" class="nav-link">Groupes Dynamiques</a>
+            </nav>
+        </div>
+        <div class="header-right">
+            <span class="badge-readonly">Lecture seule</span>
+            <div id="conn-status" class="conn-status connected">● Connecté AD</div>
+        </div>
+    </header>
+
+    <div class="explorer-layout">
+
+        <!-- Arbre AD (gauche) -->
+        <aside class="tree-sidebar">
+            <div class="tree-search-wrap">
+                <input type="text" id="tree-search" placeholder="Filtrer les sites..." autocomplete="off">
+                <button id="tree-search-clear" class="tree-search-clear" hidden title="Effacer la recherche">×</button>
+            </div>
+            <div class="tree-actions-bar">
+                <button id="toggle-tree-btn" class="btn-tree-toggle">Tout ouvrir</button>
+            </div>
+            <div class="tree-container" id="tree-container">
+                <p class="tree-hint">Chargement de l'arbre AD…</p>
+            </div>
+        </aside>
+
+        <!-- Utilisateurs (centre) -->
+        <main class="users-panel">
+            <div class="users-header">
+                <div class="users-title-row">
+                    <h2 id="current-site-name">Sélectionner un site</h2>
+                    <span id="user-count" class="user-count-badge"></span>
+                </div>
+                <div class="users-controls">
+                    <div class="group-by-wrap">
+                        <label class="ctrl-label">Regrouper par :</label>
+                        <select id="group-by" disabled>
+                            <option value="none">Aucun</option>
+                            <option value="category">Formateurs / Administratif</option>
+                            <option value="letter">Lettre (A–Z)</option>
+                            <option value="title">Fonction</option>
+                            <option value="department">Service</option>
+                        </select>
+                    </div>
+                    <button id="toggle-all-btn" class="btn-toggle-all" style="display:none">Tout fermer</button>
+                    <input type="text" id="user-filter" placeholder="Filtrer…" autocomplete="off" disabled>
+                </div>
+            </div>
+
+            <div class="table-wrapper">
+                <table class="users-table">
+                    <thead>
+                        <tr>
+                            <th class="sortable" data-col="displayName">Nom <span class="sort-icon">↕</span></th>
+                            <th class="sortable" data-col="description">Description <span class="sort-icon">↕</span></th>
+                            <th class="sortable" data-col="title">Fonction <span class="sort-icon">↕</span></th>
+                            <th class="sortable" data-col="mail">Adresse de messagerie <span class="sort-icon">↕</span></th>
+                            <th class="sortable" data-col="department">Service <span class="sort-icon">↕</span></th>
+                        </tr>
+                    </thead>
+                    <tbody id="users-tbody">
+                        <tr>
+                            <td colspan="5" class="td-hint">Cliquer sur un site dans l'arbre</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </main>
+
+        <!-- Panneau droit (vide pour l'instant) -->
+        <aside class="explorer-right-panel">
+            <div class="panel-header">
+                <h2>Détail</h2>
+            </div>
+            <div class="explorer-right-body">
+                <p class="hint">Sélectionner un utilisateur</p>
+            </div>
+        </aside>
+
+    </div>
+
+    <div id="toast" class="toast" aria-live="polite"></div>
+
+    <footer id="scan-footer" class="scan-footer" hidden>
+        <div class="scan-info">
+            <span id="scan-label-text" class="scan-label"></span>
+            <span id="scan-current-ou" class="scan-ou"></span>
+            <span id="scan-progress-text" class="scan-progress-text"></span>
+        </div>
+        <div class="scan-bar-wrap">
+            <div id="scan-bar" class="scan-bar"></div>
+        </div>
+    </footer>
+
+    <script src="/explorer.js"></script>
+</body>
+</html>

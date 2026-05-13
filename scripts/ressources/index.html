@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Groupes Dynamiques I2N</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%232563eb'/%3E%3Ctext x='16' y='22' text-anchor='middle' font-family='system-ui,sans-serif' font-size='13' font-weight='700' fill='white'%3EAD%3C/text%3E%3C/svg%3E">
+    <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+    <header>
+        <div class="header-left">
+            <nav class="header-nav">
+                <a href="/explorer" class="nav-link">Explorateur AD</a>
+                <a href="/regles" class="nav-link">Règles</a>
+                <a href="/index.html" class="nav-link active">Groupes Dynamiques</a>
+            </nav>
+        </div>
+        <div class="header-right">
+            <span class="badge-readonly">Lecture seule</span>
+            <div id="conn-status" class="conn-status loading">○ Connexion...</div>
+        </div>
+    </header>
+
+    <main>
+        <!-- Panneau Source AD -->
+        <section class="panel" id="panel-source">
+            <div class="panel-header">
+                <h2>Active Directory</h2>
+                <div class="controls">
+                    <div class="row">
+                        <input type="text" id="search-input" placeholder="Rechercher un utilisateur ou groupe..." autocomplete="off">
+                        <select id="search-type">
+                            <option value="both">Tous</option>
+                            <option value="user">Utilisateurs</option>
+                            <option value="group">Groupes</option>
+                        </select>
+                    </div>
+                    <div class="row">
+                        <label class="row-label">Membres du groupe :</label>
+                        <select id="source-group-select">
+                            <option value="">-- Sélectionner --</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <div class="list-container" id="source-list"
+                 ondragover="handleDragOver(event)"
+                 ondragleave="handleDragLeave(event)"
+                 ondrop="handleDrop(event, 'source')">
+                <p class="hint">Chargement des groupes AD...</p>
+            </div>
+        </section>
+
+        <!-- Boutons de transfert -->
+        <div class="transfer-controls">
+            <button class="btn-transfer" onclick="transferSelected('toTarget')" title="Ajouter au groupe (→)">▶</button>
+            <button class="btn-transfer" onclick="transferSelected('toSource')"  title="Retirer du groupe (←)">◀</button>
+        </div>
+
+        <!-- Panneau Cible -->
+        <section class="panel" id="panel-target">
+            <div class="panel-header">
+                <h2>Composition du groupe</h2>
+                <div class="controls">
+                    <div class="row">
+                        <label class="row-label">Groupe cible :</label>
+                        <select id="target-group-select">
+                            <option value="">-- Choisir --</option>
+                        </select>
+                    </div>
+                    <div class="row stats-row">
+                        <span id="member-count" class="member-count">0 membre(s)</span>
+                        <button class="btn-clear" onclick="clearTarget()">Vider</button>
+                    </div>
+                </div>
+            </div>
+            <div class="list-container" id="target-list"
+                 ondragover="handleDragOver(event)"
+                 ondragleave="handleDragLeave(event)"
+                 ondrop="handleDrop(event, 'target')">
+                <p class="hint">Glisser des membres ici ou utiliser ▶</p>
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <span class="footer-warning">⚠ Lecture seule — aucune écriture dans l'AD</span>
+        <div class="footer-actions">
+            <button onclick="exportJSON()">Exporter JSON</button>
+            <button onclick="copyLDAPFilter()">Copier filtre LDAP</button>
+        </div>
+    </footer>
+
+    <div id="toast" class="toast" aria-live="polite"></div>
+
+    <script src="/app.js"></script>
+</body>
+</html>

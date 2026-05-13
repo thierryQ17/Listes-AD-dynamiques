@@ -1,0 +1,1079 @@
+'use strict';
+
+// ============================================================
+//  État
+// ============================================================
+const state = {
+    treeData:       [],
+    allUsers:       [],
+    sortCol:        'displayName',
+    sortDir:        'asc',
+    groupBy:        'none',
+    groupsExpanded: true,
+    selectedSite:   null
+};
+
+const warmupDone    = new Set();
+const prefetchedDns = new Set();
+const allSiteUsers  = {};   // { dn: [users] }  — index cross-site pour la recherche
+const dnNameMap     = {};   // { dn: siteName }
+
+// File d'attente de prefetch — max 3 requêtes simultanées
+const prefetchQueue    = [];
+let   prefetchRunning  = 0;
+const PREFETCH_CONCURRENCY = 3;
+
+// File de second passage pour les caches obsolètes (manque proxyAddresses)
+const staleQueue    = [];
+let   staleRunning  = 0;
+
+function enqueuePrefetch(dn, onDone) {
+    if (prefetchedDns.has(dn)) { onDone?.(); return; }
+    prefetchedDns.add(dn);
+    prefetchQueue.push({ dn, onDone });
+    drainPrefetchQueue();
+}
+
+function drainPrefetchQueue() {
+    while (prefetchRunning < PREFETCH_CONCURRENCY && prefetchQueue.length > 0) {
+        const { dn, onDone } = prefetchQueue.shift();
+        prefetchRunning++;
+        fetch('/api/ou/users?dn=' + encodeURIComponent(dn))
+            .then(r => r.json())
+            .then(users => {
+                if (!Array.isArray(users)) return;
+                allSiteUsers[dn] = users;
+                const badge = document.getElementById('count-' + dnToId(dn));
+                if (badge) badge.textContent = users.length;
+                // Détection cache obsolète : proxyAddresses absent ou ancien format scalaire → refresh silencieux
+                if (users.length > 0 && users.some(u =>
+                        u.proxyAddresses === undefined || typeof u.proxyAddresses === 'string')) {
+                    staleQueue.push(dn);
+                    drainStaleQueue();
+                }
+            })
+            .catch(() => {})
+            .finally(() => { onDone?.(); prefetchRunning--; drainPrefetchQueue(); });
+    }
+}
+
+function drainStaleQueue() {
+    while (staleRunning < 2 && staleQueue.length > 0) {
+        const dn = staleQueue.shift();
+        staleRunning++;
+        fetch('/api/ou/users?dn=' + encodeURIComponent(dn) + '&fresh=1')
+            .then(r => r.json())
+            .then(users => {
+                if (!Array.isArray(users)) return;
+                allSiteUsers[dn] = users;
+                const badge = document.getElementById('count-' + dnToId(dn));
+                if (badge) badge.textContent = users.length;
+                if (state.selectedSite?.site.dn === dn) {
+                    state.allUsers = users;
+                    renderUsers(users);
+                    updateSiteHeader(state.selectedSite.site, users.length, false);
+                }
+                // Rafraîchir le panneau détail si l'utilisateur affiché vient de ce site
+                if (_detailUserSam) {
+                    const fresh = users.find(u => u.samAccountName === _detailUserSam);
+                    if (fresh) showUserDetail(fresh);
+                }
+                // Rafraîchir la recherche cross-site active
+                const q = document.getElementById('tree-search').value.trim();
+                if (q) renderCrossSiteResults(q, true);
+            })
+            .catch(() => {})
+            .finally(() => { staleRunning--; drainStaleQueue(); });
+    }
+}
+
+// ============================================================
+//  Footer de progression (scan)
+// ============================================================
+const scanFooter = {
+    _total: 0,
+    _done:  0,
+
+    show(label, total) {
+        this._total = total;
+        this._done  = 0;
+        document.getElementById('scan-label-text').textContent = label + ' —';
+        document.getElementById('scan-current-ou').textContent = '';
+        document.getElementById('scan-progress-text').textContent = `0 / ${total}`;
+        document.getElementById('scan-bar').style.width = '0%';
+        document.getElementById('scan-footer').hidden = false;
+    },
+
+    update(siteName) {
+        this._done++;
+        const pct = Math.round((this._done / this._total) * 100);
+        document.getElementById('scan-current-ou').textContent = siteName;
+        document.getElementById('scan-progress-text').textContent = `${this._done} / ${this._total}`;
+        document.getElementById('scan-bar').style.width = pct + '%';
+        if (this._done >= this._total) setTimeout(() => this.hide(), 1000);
+    },
+
+    hide() {
+        document.getElementById('scan-footer').hidden = true;
+    }
+};
+
+
+// ============================================================
+//  Init
+// ============================================================
+document.addEventListener('DOMContentLoaded', () => {
+    setupSearch();
+    setupSort();
+    setupGroupBy();
+    loadTree();
+
+    document.getElementById('toggle-tree-btn').addEventListener('click', () => {
+        const anyCollapsed = document.querySelector('.tree-region:not(.expanded)');
+        setAllRegions(!!anyCollapsed);
+    });
+});
+
+// ============================================================
+//  Chargement de l'arbre
+// ============================================================
+async function loadTree() {
+    try {
+        const data = await fetchJSON('/api/tree');
+        state.treeData = data;
+        renderTree(data);
+        await fetchAndApplyCounts();
+
+        const allSites = data.flatMap(r => r.children || []);
+
+        // Index DN → nom de site pour la recherche cross-site
+        allSites.forEach(s => { dnNameMap[s.dn] = s.name; });
+
+        const uncached = allSites.filter(s => {
+            const badge = document.getElementById('count-' + dnToId(s.dn));
+            return !badge || badge.textContent === '';
+        });
+
+        if (uncached.length > 0) {
+            scanFooter.show('Génération du cache', uncached.length);
+            uncached.forEach(s => enqueuePrefetch(s.dn, () => scanFooter.update(s.name)));
+        }
+
+        // Charger aussi les sites déjà en cache pour alimenter allSiteUsers
+        // et détecter les caches obsolètes (manque proxyAddresses)
+        allSites.forEach(s => enqueuePrefetch(s.dn));
+    } catch (e) {
+        document.getElementById('tree-container').innerHTML =
+            `<p class="tree-hint" style="color:#dc2626">Erreur : ${esc(e.message)}</p>`;
+        showToast('Impossible de charger l\'arbre AD', 'error');
+    }
+}
+
+async function fetchAndApplyCounts() {
+    try {
+        const counts = await fetchJSON('/api/cache/counts');
+        document.querySelectorAll('.tree-site').forEach(siteEl => {
+            const dn = siteEl.dataset.dn;
+            if (counts[dn] !== undefined) {
+                const badge = document.getElementById('count-' + dnToId(dn));
+                if (badge && badge.textContent !== String(counts[dn])) {
+                    badge.textContent = counts[dn];
+                }
+            }
+        });
+    } catch (e) {}
+}
+
+function renderTree(regions) {
+    const container = document.getElementById('tree-container');
+    container.innerHTML = '';
+
+    if (!regions || regions.length === 0) {
+        container.innerHTML = '<p class="tree-hint">Aucune OU trouvée</p>';
+        return;
+    }
+
+    for (const region of regions) {
+        container.appendChild(createRegionNode(region));
+    }
+}
+
+function createRegionNode(region) {
+    const wrap = document.createElement('div');
+    wrap.className = 'tree-region';
+
+    const header = document.createElement('div');
+    header.className = 'tree-region-header';
+
+    const arrow = document.createElement('span');
+    arrow.className = 'tree-arrow';
+    arrow.textContent = '▶';
+
+    const nameSpan = document.createElement('span');
+    nameSpan.className = 'region-name';
+    nameSpan.textContent = region.name;
+
+    const nbSites = (region.children || []).length;
+    const refreshBtn = document.createElement('button');
+    refreshBtn.className = 'region-refresh-btn';
+    refreshBtn.textContent = '↻';
+    refreshBtn.title = `Actualiser le cache de "${region.name}" — ${nbSites} site(s)`;
+    refreshBtn.addEventListener('click', e => { e.stopPropagation(); refreshRegionCache(region, wrap); });
+
+    header.appendChild(arrow);
+    header.appendChild(nameSpan);
+    header.appendChild(refreshBtn);
+    header.addEventListener('click', () => toggleRegion(wrap));
+
+    const children = document.createElement('div');
+    children.className = 'tree-children';
+
+    const sites = region.children || [];
+    if (region.multiBase) {
+        // Grouper par baseLabel (sous-catégorie)
+        const groups = {};
+        for (const site of sites) {
+            const lbl = site.baseLabel || '';
+            if (!groups[lbl]) groups[lbl] = [];
+            groups[lbl].push(site);
+        }
+        for (const lbl of Object.keys(groups).sort()) {
+            const subHeader = document.createElement('div');
+            subHeader.className = 'tree-subgroup';
+            subHeader.textContent = lbl;
+            children.appendChild(subHeader);
+            for (const site of groups[lbl]) {
+                children.appendChild(createSiteNode(site));
+            }
+        }
+    } else {
+        for (const site of sites) {
+            children.appendChild(createSiteNode(site));
+        }
+    }
+
+    wrap.appendChild(header);
+    wrap.appendChild(children);
+    return wrap;
+}
+
+function createSiteNode(site) {
+    const div = document.createElement('div');
+    div.className = 'tree-site';
+    div.dataset.dn   = site.dn;
+    div.dataset.name = site.name;
+    const safeId = dnToId(site.dn);
+
+    const label  = document.createElement('span');
+    label.className   = 'site-label';
+    label.textContent = site.name;
+
+    const badge  = document.createElement('span');
+    badge.className = 'site-count';
+    badge.id        = 'count-' + safeId;
+
+    const btn = document.createElement('button');
+    btn.className = 'site-refresh-btn';
+    btn.textContent = '↻';
+    btn.title = `Actualiser le cache de "${site.name}"`;
+    btn.addEventListener('click', e => { e.stopPropagation(); refreshSiteCache(site, btn); });
+
+    div.appendChild(label);
+    div.appendChild(badge);
+    div.appendChild(btn);
+    div.addEventListener('click', () => selectSite(site, div));
+    return div;
+}
+
+async function refreshSiteCache(site, btn) {
+    const ok = confirm(`Actualiser le cache de "${site.name}" ?\n\nLes données seront rechargées depuis l'AD.`);
+    if (!ok) return;
+
+    btn.classList.add('spinning');
+    btn.disabled = true;
+    scanFooter.show(`Actualisation`, 1);
+    document.getElementById('scan-current-ou').textContent = site.name;
+
+    try {
+        const res   = await fetch('/api/ou/users?dn=' + encodeURIComponent(site.dn) + '&fresh=1');
+        const users = await res.json();
+        if (Array.isArray(users)) {
+            allSiteUsers[site.dn] = users;
+            const badge = document.getElementById('count-' + dnToId(site.dn));
+            if (badge) badge.textContent = users.length;
+            if (state.selectedSite?.site.dn === site.dn) {
+                state.allUsers = users;
+                renderUsers(users);
+                updateSiteHeader(site, users.length, false);
+            }
+        }
+        scanFooter.update(site.name);
+        showToast(`Cache "${site.name}" actualisé`, 'info');
+    } catch (e) {
+        showToast('Erreur : ' + e.message, 'error');
+        scanFooter.hide();
+    } finally {
+        btn.classList.remove('spinning');
+        btn.disabled = false;
+    }
+}
+
+function dnToId(dn) {
+    let hash = 0;
+    for (let i = 0; i < dn.length; i++) {
+        hash = (hash * 31 + dn.charCodeAt(i)) >>> 0;
+    }
+    return 'dn' + hash.toString(36);
+}
+
+function toggleRegion(regionEl) {
+    regionEl.classList.toggle('expanded');
+
+    if (regionEl.classList.contains('expanded')) {
+        const regionId = regionEl.querySelector('.region-name')?.textContent;
+        if (regionId && !warmupDone.has(regionId)) {
+            warmupDone.add(regionId);
+            regionEl.querySelectorAll('.tree-site').forEach(siteEl => {
+                const badge = document.getElementById('count-' + dnToId(siteEl.dataset.dn));
+                if (!badge || badge.textContent === '') enqueuePrefetch(siteEl.dataset.dn);
+            });
+        }
+    }
+
+    updateToggleTreeBtn();
+}
+
+
+async function refreshRegionCache(region, regionEl) {
+    const sites = region.children || [];
+    const ok = confirm(`Actualiser le cache de "${region.name}" ?\n\n${sites.length} site(s) rechargé(s) depuis l'AD.\nCette opération peut prendre quelques secondes.`);
+    if (!ok) return;
+
+    const btn = regionEl.querySelector('.region-refresh-btn');
+    btn.classList.add('spinning');
+    btn.disabled = true;
+
+    scanFooter.show(`Actualisation — ${region.name}`, sites.length);
+
+    try {
+        await Promise.all(sites.map(s =>
+            fetch('/api/ou/users?dn=' + encodeURIComponent(s.dn) + '&fresh=1')
+                .then(r => r.json())
+                .then(users => {
+                    if (!Array.isArray(users)) return;
+                    allSiteUsers[s.dn] = users;
+                    const badge = document.getElementById('count-' + dnToId(s.dn));
+                    if (badge) badge.textContent = users.length;
+                })
+                .catch(() => {})
+                .finally(() => scanFooter.update(s.name))
+        ));
+        showToast(`Cache "${region.name}" actualisé (${sites.length} site(s))`, 'info');
+    } catch (e) {
+        showToast('Erreur actualisation : ' + e.message, 'error');
+        scanFooter.hide();
+    } finally {
+        btn.classList.remove('spinning');
+        btn.disabled = false;
+    }
+}
+
+function setAllRegions(expand) {
+    document.querySelectorAll('.tree-region').forEach(regionEl => {
+        const isOpen = regionEl.classList.contains('expanded');
+        if (expand && !isOpen) {
+            regionEl.classList.add('expanded');
+            const regionId = regionEl.querySelector('.region-name')?.textContent;
+            if (regionId && !warmupDone.has(regionId)) {
+                warmupDone.add(regionId);
+                regionEl.querySelectorAll('.tree-site').forEach(siteEl => {
+                    const badge = document.getElementById('count-' + dnToId(siteEl.dataset.dn));
+                    if (!badge || badge.textContent === '') enqueuePrefetch(siteEl.dataset.dn);
+                });
+            }
+        } else if (!expand) {
+            regionEl.classList.remove('expanded');
+        }
+    });
+    updateToggleTreeBtn();
+}
+
+function updateToggleTreeBtn() {
+    const total    = document.querySelectorAll('.tree-region').length;
+    const expanded = document.querySelectorAll('.tree-region.expanded').length;
+    const btn = document.getElementById('toggle-tree-btn');
+    if (btn) btn.textContent = (total > 0 && expanded >= total) ? 'Tout fermer' : 'Tout ouvrir';
+}
+
+// ============================================================
+//  Sélection d'un site → chargement des utilisateurs
+// ============================================================
+async function selectSite(site, el, forceRefresh = false) {
+    document.querySelectorAll('.tree-site.selected').forEach(e => e.classList.remove('selected'));
+    el.classList.add('selected');
+    state.selectedSite = { site, el };
+    clearDetailPanel();
+
+    document.getElementById('user-filter').disabled = true;
+    document.getElementById('user-filter').value = '';
+    updateSiteHeader(site, null, false);
+    setTableLoading();
+
+    try {
+        const url = `/api/ou/users?dn=${encodeURIComponent(site.dn)}${forceRefresh ? '&fresh=1' : ''}`;
+        const res = await fetch(url);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const users = await res.json();
+        const fromCache = res.headers.get('X-Cache') === 'HIT';
+
+        state.allUsers = users || [];
+        allSiteUsers[site.dn] = state.allUsers;
+        state.sortCol  = 'displayName';
+        state.sortDir  = 'asc';
+        resetSortIcons();
+        renderUsers(state.allUsers);
+        updateSiteHeader(site, state.allUsers.length, fromCache);
+        document.getElementById('user-filter').disabled = false;
+        document.getElementById('group-by').disabled = false;
+
+        if (fromCache) showToast('Données depuis le cache', 'info');
+
+        const badge = document.getElementById('count-' + dnToId(site.dn));
+        if (badge) badge.textContent = state.allUsers.length;
+    } catch (e) {
+        setTableError(e.message);
+        showToast('Erreur chargement utilisateurs : ' + e.message, 'error');
+    }
+}
+
+function updateSiteHeader(site, count, fromCache) {
+    document.getElementById('current-site-name').textContent = site.name;
+
+    const countEl = document.getElementById('user-count');
+    countEl.textContent = count !== null ? `${count} utilisateur(s)` : '';
+    document.title = count !== null
+        ? `${site.name} (${count}) — Explorateur AD`
+        : 'Explorateur AD — I2N';
+}
+
+// ============================================================
+//  Regroupement
+// ============================================================
+function setupGroupBy() {
+    document.getElementById('group-by').addEventListener('change', e => {
+        state.groupBy = e.target.value;
+        const q = document.getElementById('user-filter').value.trim().toLowerCase();
+        const source = q ? state.allUsers.filter(u => matchesFilter(u, q)) : state.allUsers;
+        displayUsers(source);
+    });
+
+    document.getElementById('toggle-all-btn').addEventListener('click', () => {
+        setAllGroups(!state.groupsExpanded);
+    });
+}
+
+function updateToggleBtn() {
+    const btn = document.getElementById('toggle-all-btn');
+    if (state.groupBy === 'none') {
+        btn.style.display = 'none';
+    } else {
+        btn.style.display = '';
+        btn.textContent = state.groupsExpanded ? 'Tout fermer' : 'Tout ouvrir';
+    }
+}
+
+function setAllGroups(expand) {
+    state.groupsExpanded = expand;
+
+    // Mettre à jour toutes les flèches
+    document.querySelectorAll('.group-header .group-toggle').forEach(t => {
+        t.classList.toggle('expanded', expand);
+        t.textContent = expand ? '▼' : '▶';
+    });
+
+    if (state.groupBy === 'category') {
+        // Sous-en-têtes + lignes utilisateurs : tout montrer ou tout cacher
+        document.querySelectorAll('.group-sub, .group-member').forEach(row => {
+            row.style.display = expand ? '' : 'none';
+        });
+    } else {
+        document.querySelectorAll('.group-header').forEach(hdr => {
+            let row = hdr.nextElementSibling;
+            while (row && row.classList.contains('group-member')) {
+                row.style.display = expand ? '' : 'none';
+                row = row.nextElementSibling;
+            }
+        });
+    }
+
+    updateToggleBtn();
+}
+
+function displayUsers(users) {
+    if (state.groupBy === 'none') {
+        renderFlat(getSortedUsers(users));
+    } else if (state.groupBy === 'category') {
+        state.groupsExpanded = true;
+        renderCategoryGrouped(users);
+    } else {
+        state.groupsExpanded = true;
+        renderGrouped(users, state.groupBy);
+    }
+    updateToggleBtn();
+}
+
+// ============================================================
+//  Rendu plat (sans regroupement)
+// ============================================================
+function renderFlat(users) {
+    const tbody = document.getElementById('users-tbody');
+    tbody.innerHTML = '';
+
+    if (!users || users.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" class="td-hint">Aucun utilisateur dans ce site</td></tr>';
+        return;
+    }
+
+    const frag = document.createDocumentFragment();
+    for (const u of users) {
+        frag.appendChild(createUserRow(u));
+    }
+    tbody.appendChild(frag);
+}
+
+// ============================================================
+//  Rendu groupé
+// ============================================================
+function renderGrouped(users, groupBy) {
+    const tbody = document.getElementById('users-tbody');
+    tbody.innerHTML = '';
+
+    if (!users || users.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" class="td-hint">Aucun utilisateur dans ce site</td></tr>';
+        return;
+    }
+
+    const groups = {};
+    for (const u of users) {
+        let key;
+        if (groupBy === 'letter') {
+            key = (u.displayName || u.samAccountName || '?')[0].toUpperCase();
+        } else if (groupBy === 'title') {
+            key = u.title || '(sans fonction)';
+        } else if (groupBy === 'department') {
+            key = u.department || '(sans service)';
+        }
+        if (!groups[key]) groups[key] = [];
+        groups[key].push(u);
+    }
+
+    const sortedKeys = Object.keys(groups).sort((a, b) => a.localeCompare(b, 'fr'));
+    const frag = document.createDocumentFragment();
+
+    for (const key of sortedKeys) {
+        const groupUsers = groups[key].sort((a, b) =>
+            (a.displayName || '').localeCompare(b.displayName || '', 'fr'));
+
+        const isFormateur = key === 'FORMATEURS' || key.toLowerCase().includes('formateur');
+        const isCategory  = groupBy === 'category';
+        const headerTr = document.createElement('tr');
+        headerTr.className = 'group-header'
+            + (isFormateur ? ' group-formateur' : '')
+            + (isCategory  ? ' group-category'  : '');
+        headerTr.innerHTML = `
+            <td colspan="5">
+                <span class="group-toggle expanded">▼</span>
+                <span class="group-label">${esc(key)}</span>
+                <span class="group-count">${groupUsers.length}</span>
+            </td>`;
+        headerTr.addEventListener('click', () => toggleGroupRows(headerTr));
+        frag.appendChild(headerTr);
+
+        for (const u of groupUsers) {
+            const tr = createUserRow(u);
+            tr.classList.add('group-member');
+            frag.appendChild(tr);
+        }
+    }
+    tbody.appendChild(frag);
+}
+
+// ============================================================
+//  Rendu catégorie deux niveaux (Formateurs / Administratif → Fonction)
+// ============================================================
+function renderCategoryGrouped(users) {
+    const tbody = document.getElementById('users-tbody');
+    tbody.innerHTML = '';
+
+    if (!users || users.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" class="td-hint">Aucun utilisateur dans ce site</td></tr>';
+        return;
+    }
+
+    const buckets = [
+        { key: 'FORMATEURS',    list: users.filter(u =>  (u.title || '').toLowerCase().includes('formateur')) },
+        { key: 'ADMINISTRATIF', list: users.filter(u => !(u.title || '').toLowerCase().includes('formateur')) }
+    ];
+
+    const frag = document.createDocumentFragment();
+
+    for (const { key: catKey, list: catUsers } of buckets) {
+        if (catUsers.length === 0) continue;
+
+        const isFormateur = catKey === 'FORMATEURS';
+
+        const mainTr = document.createElement('tr');
+        mainTr.className = 'group-header group-category' + (isFormateur ? ' group-formateur' : '');
+        mainTr.innerHTML = `<td colspan="5">
+            <span class="group-toggle expanded">▼</span>
+            <span class="group-label">${esc(catKey)}</span>
+            <span class="group-count">${catUsers.length}</span>
+        </td>`;
+        mainTr.addEventListener('click', () => toggleMainCategory(mainTr));
+        frag.appendChild(mainTr);
+
+        const titleGroups = {};
+        for (const u of catUsers) {
+            const k = u.title || '(sans fonction)';
+            if (!titleGroups[k]) titleGroups[k] = [];
+            titleGroups[k].push(u);
+        }
+
+        for (const title of Object.keys(titleGroups).sort((a, b) => a.localeCompare(b, 'fr'))) {
+            const titleUsers = titleGroups[title].sort((a, b) =>
+                (a.displayName || '').localeCompare(b.displayName || '', 'fr'));
+
+            const subTr = document.createElement('tr');
+            subTr.className = 'group-header group-sub' + (isFormateur ? ' group-formateur' : '');
+            subTr.innerHTML = `<td colspan="5">
+                <span class="group-toggle expanded">▼</span>
+                <span class="group-label">${esc(title)}</span>
+                <span class="group-count">${titleUsers.length}</span>
+            </td>`;
+            subTr.addEventListener('click', e => { e.stopPropagation(); toggleGroupRows(subTr); });
+            frag.appendChild(subTr);
+
+            for (const u of titleUsers) {
+                const tr = createUserRow(u);
+                tr.classList.add('group-member');
+                frag.appendChild(tr);
+            }
+        }
+    }
+
+    tbody.appendChild(frag);
+}
+
+function toggleMainCategory(mainTr) {
+    const toggle = mainTr.querySelector('.group-toggle');
+    const expand = !toggle.classList.contains('expanded');
+    toggle.classList.toggle('expanded', expand);
+    toggle.textContent = expand ? '▼' : '▶';
+
+    let subExpanded = false;
+    let row = mainTr.nextElementSibling;
+    while (row && !row.classList.contains('group-category')) {
+        if (row.classList.contains('group-sub')) {
+            row.style.display = expand ? '' : 'none';
+            // On conserve l'état ouvert/fermé du sous-groupe
+            subExpanded = expand && row.querySelector('.group-toggle')?.classList.contains('expanded');
+        } else if (row.classList.contains('group-member')) {
+            row.style.display = (expand && subExpanded) ? '' : 'none';
+        }
+        row = row.nextElementSibling;
+    }
+}
+
+function toggleGroupRows(headerTr) {
+    const toggle = headerTr.querySelector('.group-toggle');
+    const isExpanded = toggle.classList.toggle('expanded');
+    toggle.textContent = isExpanded ? '▼' : '▶';
+
+    let row = headerTr.nextElementSibling;
+    while (row && row.classList.contains('group-member')) {
+        row.style.display = isExpanded ? '' : 'none';
+        row = row.nextElementSibling;
+    }
+}
+
+let _selectedUserRow = null;
+let _detailUserSam   = null;   // samAccountName de l'utilisateur affiché dans le panneau détail
+
+function createUserRow(u) {
+    const tr = document.createElement('tr');
+    const disabledTag = u.enabled === false ? '<span class="tag-disabled">désactivé</span>' : '';
+    tr.innerHTML = `
+        <td class="col-name">${esc(u.displayName || u.samAccountName)}${disabledTag}</td>
+        <td class="col-desc">${esc(u.description || '')}</td>
+        <td class="col-func">${esc(u.title || '')}</td>
+        <td class="col-mail">${esc(u.mail || '')}</td>
+        <td class="col-dept">${esc(u.department || '')}</td>`;
+    if (u.enabled === false) tr.classList.add('row-disabled');
+    tr.addEventListener('click', () => {
+        if (_selectedUserRow) _selectedUserRow.classList.remove('row-selected');
+        _selectedUserRow = tr;
+        tr.classList.add('row-selected');
+        showUserDetail(u);
+    });
+    return tr;
+}
+
+function buildProxyHtml(u) {
+    const _raw    = u.proxyAddresses;
+    const proxies = Array.isArray(_raw) ? _raw
+                  : (typeof _raw === 'string' && _raw ? [_raw] : []);
+    if (proxies.length === 0) return '';
+    return `<div class="detail-field">
+        <span class="detail-label">Proxy adresses</span>
+        <span class="detail-value proxy-list">${proxies.map(p => {
+            const col    = p.indexOf(':');
+            const prefix = col >= 0 ? p.slice(0, col)  : p;
+            const addr   = col >= 0 ? p.slice(col + 1) : '';
+            const primary = prefix === 'SMTP';
+            return `<span class="proxy-entry${primary ? ' proxy-entry-primary' : ''}">` +
+                   `<span class="proxy-pfx">${esc(prefix)}</span>` +
+                   `<span class="proxy-sep"> : </span>` +
+                   `<span class="proxy-addr">${esc(addr)}</span>` +
+                   `</span>`;
+        }).join('')}</span>
+    </div>`;
+}
+
+function showUserDetail(u) {
+    _detailUserSam = u.samAccountName || null;
+    const body = document.querySelector('.explorer-right-body');
+
+    const initials = (() => {
+        const parts = (u.displayName || u.samAccountName || '?').trim().split(/\s+/);
+        return parts.length >= 2
+            ? (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+            : (parts[0][0] || '?').toUpperCase();
+    })();
+
+    const statusHtml = u.enabled === false
+        ? '<span class="detail-status detail-disabled">Compte désactivé</span>'
+        : '<span class="detail-status detail-enabled">Compte actif</span>';
+
+    // ---- Onglet Détail ----
+    const scalarFields = [
+        { label: 'Identifiant',  value: u.samAccountName },
+        { label: 'UPN',          value: u.userPrincipalName },
+        { label: 'Type',         value: u.type },
+        { label: 'Matricule',    value: u.employeeNumber },
+        { label: 'Société',      value: u.company },
+        { label: 'Fonction',     value: u.title },
+        { label: 'Service',      value: u.department },
+        { label: 'Responsable',  value: u.manager },
+        { label: 'Bureau',       value: u.office },
+        { label: 'Adresse',      value: u.streetAddress },
+        { label: 'Code postal',  value: u.postalCode },
+        { label: 'Attribut 1',   value: u.extensionAttribute1 },
+        { label: 'Date de fin',  value: u.dateDeFin },
+        { label: 'Description',  value: u.description },
+        { label: 'Messagerie',   value: u.mail },
+    ];
+
+    const paneInfo = `
+        <div class="detail-card">
+            <div class="detail-avatar">${esc(initials)}</div>
+            <div class="detail-name">${esc(u.displayName || u.samAccountName)}</div>
+            ${statusHtml}
+            <div class="detail-fields">
+                ${scalarFields.filter(f => f.value).map(f => `
+                    <div class="detail-field">
+                        <span class="detail-label">${esc(f.label)}</span>
+                        <span class="detail-value">${esc(f.value)}</span>
+                    </div>`).join('')}
+                ${buildProxyHtml(u)}
+            </div>
+        </div>`;
+
+    // ---- Onglet MAJ AD ----
+    const majFields = [
+        { label: 'Nom affiché (displayName)',        key: 'displayName' },
+        { label: 'Identifiant (sAMAccountName)',      key: 'samAccountName' },
+        { label: 'UPN (userPrincipalName)',           key: 'userPrincipalName' },
+        { label: 'Type',                             key: 'type' },
+        { label: 'Matricule (employeeNumber)',        key: 'employeeNumber' },
+        { label: 'Société (company)',                 key: 'company' },
+        { label: 'Fonction (title)',                  key: 'title' },
+        { label: 'Service (department)',              key: 'department' },
+        { label: 'Responsable (manager)',             key: 'manager' },
+        { label: 'Bureau (office)',                   key: 'office' },
+        { label: 'Adresse (streetAddress)',           key: 'streetAddress' },
+        { label: 'Code postal (postalCode)',          key: 'postalCode' },
+        { label: 'extensionAttribute1',               key: 'extensionAttribute1' },
+        { label: 'Date de fin (dateDeFin)',           key: 'dateDeFin' },
+        { label: 'Description',                       key: 'description' },
+        { label: 'Messagerie (mail)',                 key: 'mail' },
+    ];
+
+    const paneMaj = `
+        <div class="maj-form">
+            ${majFields.map(f => `
+                <div class="maj-field">
+                    <label class="maj-label">${esc(f.label)}</label>
+                    <input class="maj-input" type="text" value="${esc(u[f.key] || '')}" readonly>
+                </div>`).join('')}
+            ${buildProxyHtml(u) ? `
+                <div class="maj-field">
+                    <label class="maj-label">Proxy adresses</label>
+                    <div class="maj-proxy">${buildProxyHtml(u)}</div>
+                </div>` : ''}
+        </div>`;
+
+    body.innerHTML = `
+        <div class="detail-tabs">
+            <span class="detail-tab active" data-tab="info">Détail</span>
+            <span class="detail-tab" data-tab="maj">MAJ AD</span>
+        </div>
+        <div class="detail-tab-pane active" data-pane="info">${paneInfo}</div>
+        <div class="detail-tab-pane" data-pane="maj">${paneMaj}</div>`;
+
+    body.querySelectorAll('.detail-tab').forEach(tab => {
+        tab.addEventListener('click', () => {
+            body.querySelectorAll('.detail-tab').forEach(t => t.classList.remove('active'));
+            body.querySelectorAll('.detail-tab-pane').forEach(p => p.classList.remove('active'));
+            tab.classList.add('active');
+            body.querySelector(`.detail-tab-pane[data-pane="${tab.dataset.tab}"]`).classList.add('active');
+        });
+    });
+}
+
+function renderUsers(users) { displayUsers(users); }
+
+function setTableLoading() {
+    document.getElementById('users-tbody').innerHTML =
+        '<tr><td colspan="5" class="td-loading">Chargement…</td></tr>';
+}
+
+function setTableError(msg) {
+    document.getElementById('users-tbody').innerHTML =
+        `<tr><td colspan="5" class="td-hint" style="color:#dc2626">Erreur : ${esc(msg)}</td></tr>`;
+}
+
+// ============================================================
+//  Filtrage des utilisateurs (saisie temps réel)
+// ============================================================
+function setupSearch() {
+    const treeInput = document.getElementById('tree-search');
+    const userInput = document.getElementById('user-filter');
+
+    let treeTimer, userTimer;
+
+    const clearBtn = document.getElementById('tree-search-clear');
+
+    treeInput.addEventListener('focus', () => treeInput.select());
+
+    treeInput.addEventListener('input', () => {
+        clearBtn.hidden = treeInput.value.trim() === '';
+        clearTimeout(treeTimer);
+        treeTimer = setTimeout(() => filterTree(treeInput.value.trim()), 150);
+    });
+
+    clearBtn.addEventListener('click', () => {
+        treeInput.value = '';
+        clearBtn.hidden = true;
+        filterTree('');
+        clearDetailPanel();
+        treeInput.focus();
+    });
+
+    userInput.addEventListener('input', () => {
+        clearTimeout(userTimer);
+        userTimer = setTimeout(() => filterUsers(userInput.value.trim()), 150);
+    });
+}
+
+function filterTree(q) {
+    if (q) {
+        renderCrossSiteResults(q);
+    } else {
+        // Restaurer la sidebar : tout afficher, tout replier
+        document.querySelectorAll('.tree-region').forEach(regionEl => {
+            regionEl.style.display = '';
+            regionEl.classList.remove('expanded');
+            regionEl.querySelectorAll('.tree-site').forEach(siteEl => {
+                siteEl.classList.remove('hidden', 'search-match');
+            });
+        });
+        updateToggleTreeBtn();
+        restoreMainPanel();
+    }
+}
+
+function clearDetailPanel() {
+    if (_selectedUserRow) { _selectedUserRow.classList.remove('row-selected'); _selectedUserRow = null; }
+    _detailUserSam = null;
+    document.querySelector('.explorer-right-body').innerHTML = '<p class="hint">Sélectionner un utilisateur</p>';
+}
+
+function renderCrossSiteResults(q) {
+    clearDetailPanel();
+    const lq      = q.toLowerCase();
+    const results = [];
+
+    for (const [dn, users] of Object.entries(allSiteUsers)) {
+        const matching = users.filter(u => matchesFilter(u, lq));
+        if (matching.length > 0) {
+            results.push({ dn, siteName: dnNameMap[dn] || dn, users: matching });
+        }
+    }
+
+    results.sort((a, b) => a.siteName.localeCompare(b.siteName, 'fr'));
+
+    // Sidebar : afficher uniquement les sites avec des résultats
+    const matchingDns = new Set(results.map(r => r.dn));
+    document.querySelectorAll('.tree-region').forEach(regionEl => {
+        let regionVisible = false;
+        regionEl.querySelectorAll('.tree-site').forEach(siteEl => {
+            const match = matchingDns.has(siteEl.dataset.dn);
+            siteEl.classList.toggle('hidden', !match);
+            siteEl.classList.toggle('search-match', match);
+            if (match) regionVisible = true;
+        });
+        regionEl.style.display = regionVisible ? '' : 'none';
+        if (regionVisible) regionEl.classList.add('expanded');
+    });
+    updateToggleTreeBtn();
+
+    const totalCached = Object.keys(allSiteUsers).length;
+    const totalSites  = Object.keys(dnNameMap).length;
+    const totalUsers  = results.reduce((s, r) => s + r.users.length, 0);
+
+    document.getElementById('current-site-name').textContent = `Recherche : "${q}"`;
+    document.getElementById('user-filter').disabled          = true;
+    document.getElementById('group-by').disabled             = true;
+
+    const cachedLabel = totalCached < totalSites
+        ? ` <span class="search-cache-hint">(${totalCached}/${totalSites} sites en cache)</span>`
+        : '';
+    document.getElementById('user-count').innerHTML = results.length
+        ? `${totalUsers} résultat(s) dans ${results.length} site(s)${cachedLabel}`
+        : `Aucun résultat${cachedLabel}`;
+
+    const tbody = document.getElementById('users-tbody');
+    tbody.innerHTML = '';
+
+    if (results.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" class="td-hint">Aucun utilisateur trouvé dans les caches chargés</td></tr>';
+        return;
+    }
+
+    const frag = document.createDocumentFragment();
+    for (const { siteName, dn, users } of results) {
+        const headerTr = document.createElement('tr');
+        headerTr.className = 'group-header';
+        headerTr.dataset.dn = dn;
+        headerTr.innerHTML = `
+            <td colspan="5">
+                <span class="group-toggle expanded">▼</span>
+                <span class="group-label">${esc(siteName)}</span>
+                <span class="group-count">${users.length}</span>
+            </td>`;
+        headerTr.addEventListener('click', () => toggleGroupRows(headerTr));
+        frag.appendChild(headerTr);
+
+        for (const u of users.sort((a, b) =>
+                (a.displayName || '').localeCompare(b.displayName || '', 'fr'))) {
+            const tr = createUserRow(u);
+            tr.classList.add('group-member');
+            frag.appendChild(tr);
+        }
+    }
+    tbody.appendChild(frag);
+}
+
+function restoreMainPanel() {
+    if (state.selectedSite) {
+        const { site } = state.selectedSite;
+        document.getElementById('user-filter').disabled = false;
+        document.getElementById('group-by').disabled    = false;
+        renderUsers(state.allUsers);
+        updateSiteHeader(site, state.allUsers.length, false);
+    } else {
+        document.getElementById('current-site-name').textContent = 'Sélectionner un site';
+        document.getElementById('user-count').textContent        = '';
+        document.getElementById('refresh-btn').style.display     = 'none';
+        document.getElementById('users-tbody').innerHTML         = '';
+    }
+}
+
+function matchesFilter(u, lq) {
+    return (u.displayName  || '').toLowerCase().includes(lq) ||
+           (u.mail         || '').toLowerCase().includes(lq) ||
+           (u.department   || '').toLowerCase().includes(lq) ||
+           (u.title        || '').toLowerCase().includes(lq) ||
+           (u.description  || '').toLowerCase().includes(lq);
+}
+
+function filterUsers(q) {
+    const filtered = q ? state.allUsers.filter(u => matchesFilter(u, q.toLowerCase())) : state.allUsers;
+    displayUsers(filtered);
+    document.getElementById('user-count').textContent = q
+        ? `${filtered.length} / ${state.allUsers.length} utilisateur(s)`
+        : `${state.allUsers.length} utilisateur(s)`;
+}
+
+// ============================================================
+//  Tri des colonnes
+// ============================================================
+function setupSort() {
+    document.querySelectorAll('.users-table th.sortable').forEach(th => {
+        th.addEventListener('click', () => {
+            const col = th.dataset.col;
+            if (state.sortCol === col) {
+                state.sortDir = state.sortDir === 'asc' ? 'desc' : 'asc';
+            } else {
+                state.sortCol = col;
+                state.sortDir = 'asc';
+            }
+            resetSortIcons();
+            th.classList.add(`sort-${state.sortDir}`);
+
+            const q = document.getElementById('user-filter').value.trim().toLowerCase();
+            const source = q
+                ? state.allUsers.filter(u => matchesFilter(u, q))
+                : state.allUsers;
+            displayUsers(getSortedUsers(source));
+        });
+    });
+}
+
+function getSortedUsers(users) {
+    return [...users].sort((a, b) => {
+        const va = (a[state.sortCol] || '').toLowerCase();
+        const vb = (b[state.sortCol] || '').toLowerCase();
+        const cmp = va.localeCompare(vb, 'fr');
+        return state.sortDir === 'asc' ? cmp : -cmp;
+    });
+}
+
+function resetSortIcons() {
+    document.querySelectorAll('.users-table th.sortable').forEach(th => {
+        th.classList.remove('sort-asc', 'sort-desc');
+    });
+}
+
+// ============================================================
+//  Utilitaires
+// ============================================================
+async function fetchJSON(url) {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return res.json();
+}
+
+function esc(str) {
+    if (!str) return '';
+    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+let toastTimer;
+function showToast(message, type = 'info') {
+    const toast = document.getElementById('toast');
+    clearTimeout(toastTimer);
+    toast.textContent = message;
+    toast.className = `toast ${type} show`;
+    toastTimer = setTimeout(() => { toast.className = 'toast'; }, 3500);
+}
