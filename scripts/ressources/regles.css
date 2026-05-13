@@ -39,18 +39,17 @@ body { overflow: hidden; }
 }
 
 .btn-json {
+    width: 28px;
     height: 28px;
-    padding: 0 9px;
+    padding: 0;
     border: 1px solid var(--border);
     border-radius: var(--radius-sm);
     background: var(--surface);
     color: var(--text-sub);
-    font-size: 12px;
-    font-weight: 700;
-    font-family: 'Consolas', monospace;
     cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
     transition: background .1s, color .1s, border-color .1s;
-    letter-spacing: -.01em;
+    flex-shrink: 0;
 }
 .btn-json:hover { background: #f0ede8; color: var(--text); border-color: var(--accent-dim); }
 
@@ -657,16 +656,19 @@ body { overflow: hidden; }
 .btn-json-copy:hover { background: #3d3d52; color: #e2e8f0; }
 
 .json-modal-close {
+    width: 28px;
+    height: 28px;
     background: none;
     border: none;
-    font-size: 22px;
-    line-height: 1;
     cursor: pointer;
     color: #4a5568;
-    padding: 0 2px;
-    transition: color .1s;
+    padding: 0;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: var(--radius-sm);
+    transition: color .1s, background .1s;
+    flex-shrink: 0;
 }
-.json-modal-close:hover { color: #e2e8f0; }
+.json-modal-close:hover { color: #e2e8f0; background: rgba(255,255,255,.08); }
 
 .json-modal-body {
     flex: 1;
