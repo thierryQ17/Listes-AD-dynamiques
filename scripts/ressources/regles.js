@@ -18,8 +18,8 @@ const OPS = [
     ['notlike', 'ne contient pas'],
 ];
 
-const NIV_LABELS = { 1: 'Global', 2: 'Par DO', 3: 'Par centre' };
-const NIV_CSV    = { 1: '1 CSV global', 2: '2 CSV (DO + global)', 3: '3 CSV (centre + DO + global)' };
+const NIV_LABELS = { 1: 'Par centre', 2: 'Par DO', 3: 'Global' };
+const NIV_CSV    = { 1: '3 CSV (centre + DO + global)', 2: '2 CSV (DO + global)', 3: '1 CSV global' };
 
 function metaLabel(rule) {
     const nInc  = rule?.conditions?.include?.length || 0;
