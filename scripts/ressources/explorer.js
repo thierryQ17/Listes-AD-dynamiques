@@ -23,11 +23,6 @@ const prefetchQueue    = [];
 let   prefetchRunning  = 0;
 const PREFETCH_CONCURRENCY = 3;
 
-// File de second passage pour les caches obsolètes (manque proxyAddresses)
-const staleQueue    = [];
-let   staleRunning  = 0;
-const staleFetched  = new Set();   // guard : un seul refresh par DN par session
-
 function enqueuePrefetch(dn, onDone) {
     if (prefetchedDns.has(dn)) { onDone?.(); return; }
     prefetchedDns.add(dn);
@@ -46,46 +41,9 @@ function drainPrefetchQueue() {
                 allSiteUsers[dn] = users;
                 const badge = document.getElementById('count-' + dnToId(dn));
                 if (badge) badge.textContent = users.length;
-                // Détection cache obsolète : proxyAddresses absent ou ancien format scalaire → refresh silencieux
-                if (!staleFetched.has(dn) && users.length > 0 && users.some(u =>
-                        u.proxyAddresses === undefined || typeof u.proxyAddresses === 'string')) {
-                    staleFetched.add(dn);
-                    staleQueue.push(dn);
-                    drainStaleQueue();
-                }
             })
             .catch(() => {})
             .finally(() => { onDone?.(); prefetchRunning--; drainPrefetchQueue(); });
-    }
-}
-
-function drainStaleQueue() {
-    while (staleRunning < 2 && staleQueue.length > 0) {
-        const dn = staleQueue.shift();
-        staleRunning++;
-        fetch('/api/ou/users?dn=' + encodeURIComponent(dn) + '&fresh=1')
-            .then(r => r.json())
-            .then(users => {
-                if (!Array.isArray(users)) return;
-                allSiteUsers[dn] = users;
-                const badge = document.getElementById('count-' + dnToId(dn));
-                if (badge) badge.textContent = users.length;
-                if (state.selectedSite?.site.dn === dn) {
-                    state.allUsers = users;
-                    renderUsers(users);
-                    updateSiteHeader(state.selectedSite.site, users.length, false);
-                }
-                // Rafraîchir le panneau détail si l'utilisateur affiché vient de ce site
-                if (_detailUserSam) {
-                    const fresh = users.find(u => u.samAccountName === _detailUserSam);
-                    if (fresh) showUserDetail(fresh);
-                }
-                // Rafraîchir la recherche cross-site active
-                const q = document.getElementById('tree-search').value.trim();
-                if (q) renderCrossSiteResults(q, true);
-            })
-            .catch(() => {})
-            .finally(() => { staleRunning--; drainStaleQueue(); });
     }
 }
 
@@ -246,6 +204,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     setupFunctionModal();
     window.addEventListener('beforeunload', saveSnapshot);
+
+    document.getElementById('refresh-all-btn').addEventListener('click', refreshAllCache);
 
     document.getElementById('toggle-tree-btn').addEventListener('click', () => {
         const anyCollapsed = document.querySelector('.tree-region:not(.expanded)');
@@ -468,6 +428,49 @@ function toggleRegion(regionEl) {
     updateToggleTreeBtn();
 }
 
+
+async function refreshAllCache() {
+    const allSites = state.treeData.flatMap(r => r.children || []);
+    if (!allSites.length) return;
+
+    const ok = confirm(`Vider et reconstruire tout le cache ?\n\n${allSites.length} site(s) rechargé(s) depuis l'AD.\nCette opération peut prendre plusieurs minutes.`);
+    if (!ok) return;
+
+    const btn = document.getElementById('refresh-all-btn');
+    btn.disabled = true;
+    btn.classList.add('spinning');
+
+    try {
+        const res  = await fetch('/api/cache/refresh-all', { method: 'POST' });
+        const data = await res.json();
+
+        // Vider l'index client
+        for (const dn of Object.keys(allSiteUsers)) delete allSiteUsers[dn];
+        prefetchedDns.clear();
+
+        // Réinitialiser les badges
+        document.querySelectorAll('.site-count').forEach(b => { b.textContent = ''; });
+
+        // Vider le tableau si un site était sélectionné
+        if (state.selectedSite) {
+            state.allUsers = [];
+            renderUsers([]);
+            updateSiteHeader(state.selectedSite.site, null, false);
+        }
+        clearDetailPanel();
+
+        // Relancer le prefetch de tous les sites
+        scanFooter.show('Reconstruction du cache', allSites.length);
+        allSites.forEach(s => enqueuePrefetch(s.dn, () => scanFooter.update(s.name)));
+
+        showToast(`Cache vidé (${data.deleted} fichier(s)) — reconstruction en cours`, 'info');
+    } catch (e) {
+        showToast('Erreur : ' + e.message, 'error');
+    } finally {
+        btn.disabled = false;
+        btn.classList.remove('spinning');
+    }
+}
 
 async function refreshRegionCache(region, regionEl) {
     const sites = region.children || [];
@@ -892,6 +895,7 @@ function showUserDetail(u) {
         { label: 'Service',      value: u.department },
         { label: 'Description',  value: u.description },
         { label: 'Messagerie',   value: u.mail },
+        { label: 'OU',           value: u.ouDn },
     ];
 
     const paneInfo = `
@@ -1036,15 +1040,27 @@ function clearDetailPanel() {
     document.querySelector('.explorer-right-body').innerHTML = '<p class="hint">Sélectionner un utilisateur</p>';
 }
 
-function renderCrossSiteResults(q) {
+function renderCrossSiteResults(q, preserveScroll) {
     clearDetailPanel();
     const lq      = q.toLowerCase();
     const results = [];
+    const seenDns = new Set();
 
+    // Sites cachés : match par utilisateur OU par nom de site
     for (const [dn, users] of Object.entries(allSiteUsers)) {
-        const matching = users.filter(u => matchesFilter(u, lq));
-        if (matching.length > 0) {
-            results.push({ dn, siteName: dnNameMap[dn] || dn, users: matching });
+        const siteName    = dnNameMap[dn] || dn;
+        const siteMatches = siteName.toLowerCase().includes(lq);
+        const matchUsers  = siteMatches ? users : users.filter(u => matchesFilter(u, lq));
+        if (siteMatches || matchUsers.length > 0) {
+            results.push({ dn, siteName, users: matchUsers, uncached: false });
+            seenDns.add(dn);
+        }
+    }
+
+    // Sites non cachés : match par nom de site uniquement
+    for (const [dn, siteName] of Object.entries(dnNameMap)) {
+        if (!seenDns.has(dn) && siteName.toLowerCase().includes(lq)) {
+            results.push({ dn, siteName, users: [], uncached: true });
         }
     }
 
@@ -1065,9 +1081,10 @@ function renderCrossSiteResults(q) {
     });
     updateToggleTreeBtn();
 
-    const totalCached = Object.keys(allSiteUsers).length;
-    const totalSites  = Object.keys(dnNameMap).length;
-    const totalUsers  = results.reduce((s, r) => s + r.users.length, 0);
+    const totalCached  = Object.keys(allSiteUsers).length;
+    const totalSites   = Object.keys(dnNameMap).length;
+    const totalUsers   = results.filter(r => !r.uncached).reduce((s, r) => s + r.users.length, 0);
+    const uncachedHits = results.filter(r => r.uncached).length;
 
     document.getElementById('current-site-name').textContent = `Recherche : "${q}"`;
     document.getElementById('user-filter').disabled          = true;
@@ -1076,37 +1093,62 @@ function renderCrossSiteResults(q) {
     const cachedLabel = totalCached < totalSites
         ? ` <span class="search-cache-hint">(${totalCached}/${totalSites} sites en cache)</span>`
         : '';
+    const uncachedLabel = uncachedHits > 0
+        ? ` · <span class="search-cache-hint">${uncachedHits} site(s) non chargé(s)</span>`
+        : '';
     document.getElementById('user-count').innerHTML = results.length
-        ? `${totalUsers} résultat(s) dans ${results.length} site(s)${cachedLabel}`
+        ? `${totalUsers} résultat(s) dans ${results.length} site(s)${cachedLabel}${uncachedLabel}`
         : `Aucun résultat${cachedLabel}`;
 
     const tbody = document.getElementById('users-tbody');
     tbody.innerHTML = '';
 
     if (results.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="5" class="td-hint">Aucun utilisateur trouvé dans les caches chargés</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="5" class="td-hint">Aucun résultat trouvé</td></tr>';
         return;
     }
 
     const frag = document.createDocumentFragment();
-    for (const { siteName, dn, users } of results) {
+    for (const { siteName, dn, users, uncached } of results) {
         const headerTr = document.createElement('tr');
         headerTr.className = 'group-header';
         headerTr.dataset.dn = dn;
         headerTr.innerHTML = `
             <td colspan="5">
-                <span class="group-toggle expanded">▼</span>
-                <span class="group-label">${esc(siteName)}</span>
-                <span class="group-count">${users.length}</span>
+                <span class="group-toggle ${uncached ? '' : 'expanded'}">▼</span>
+                <span class="group-label">${hlText(siteName, lq)}</span>
+                <span class="group-count">${uncached ? '?' : users.length}</span>
+                ${uncached ? '<span class="search-uncached-badge">non chargé — cliquer pour ouvrir</span>' : ''}
             </td>`;
-        headerTr.addEventListener('click', () => toggleGroupRows(headerTr));
+        if (uncached) {
+            headerTr.addEventListener('click', () => {
+                const siteEl = document.querySelector(`.tree-site[data-dn="${CSS.escape(dn)}"]`);
+                if (siteEl) siteEl.click();
+            });
+        } else {
+            headerTr.addEventListener('click', () => toggleGroupRows(headerTr));
+        }
         frag.appendChild(headerTr);
 
-        for (const u of users.sort((a, b) =>
-                (a.displayName || '').localeCompare(b.displayName || '', 'fr'))) {
-            const tr = createUserRow(u, dn);
-            tr.classList.add('group-member');
+        if (uncached) {
+            const tr = document.createElement('tr');
+            tr.className = 'group-member';
+            tr.innerHTML = `<td colspan="5" class="td-hint search-uncached-hint">Cache non disponible · cliquer sur le nom du site ci-dessus pour charger</td>`;
             frag.appendChild(tr);
+        } else {
+            for (const u of users.sort((a, b) =>
+                    (a.displayName || '').localeCompare(b.displayName || '', 'fr'))) {
+                const tr = createUserRow(u, dn);
+                tr.classList.add('group-member');
+                tr.querySelector('.col-name').innerHTML =
+                    hlText(u.displayName || u.samAccountName || '', lq) +
+                    (u.enabled === false ? '<span class="tag-disabled">désactivé</span>' : '');
+                tr.querySelector('.col-desc').innerHTML = hlText(u.description || '', lq);
+                tr.querySelector('.col-func').innerHTML = hlText(u.title       || '', lq);
+                tr.querySelector('.col-mail').innerHTML = hlText(u.mail        || '', lq);
+                tr.querySelector('.col-dept').innerHTML = hlText(u.department  || '', lq);
+                frag.appendChild(tr);
+            }
         }
     }
     tbody.appendChild(frag);
@@ -1124,6 +1166,16 @@ function restoreMainPanel() {
         document.getElementById('user-count').textContent        = '';
         document.getElementById('users-tbody').innerHTML         = '';
     }
+}
+
+function hlText(text, q) {
+    if (!text) return '';
+    if (!q)    return esc(text);
+    const safeQ = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const re    = new RegExp(`(${safeQ})`, 'gi');
+    return text.split(re).map((part, i) =>
+        i % 2 === 1 ? `<mark class="hl">${esc(part)}</mark>` : esc(part)
+    ).join('');
 }
 
 function matchesFilter(u, lq) {

@@ -58,7 +58,7 @@ scripts/
     regles.html / regles.js / regles.css        ← Règles (/regles)
     index.html / app.js / style.css             ← Groupes Dynamiques (/groupes)
   settings/
-    parametres.json         ← config (searchBase AD, etc.)
+    parametres.json         ← config (searchBase AD, régions avec aliases)
     regles.json             ← règles de filtrage (CRUD)
   cache/
     *.json                  ← cache AD par site
@@ -83,6 +83,9 @@ CONTEXTE-SESSION.md         ← ce fichier
 | `/api/regles` | GET liste / POST upsert |
 | `/api/regles/:id` | DELETE |
 | `/api/regles/:id/generate` | POST → génération CSV |
+| `/api/csv/read` | POST `{ path }` → contenu d'un fichier CSV (4 colonnes : nom, sam, mail, fonction) |
+| `/api/regles/preview-groups` | POST règle → groupes AD simulés (type global/do/centre + membres) |
+| `/api/regles/check-mail` | POST `{ address }` → `{ available: bool }` — vérifie `mail` ET `proxyAddresses` dans l'AD |
 | `/api/ad/values?field=xxx` | Valeurs AD distinctes depuis le cache |
 | `/api/tree` | Arbre AD (régions + sites) |
 | `/api/ou/users?dn=xxx[&fresh=1]` | Utilisateurs d'un site (cache ou AD) |
@@ -102,6 +105,8 @@ CONTEXTE-SESSION.md         ← ce fichier
 - ✅ Arbre AD par régions/sites (prefetch de tous les sites en arrière-plan)
 - ✅ Sélection d'un site → tableau d'utilisateurs avec tri + regroupement
 - ✅ Recherche cross-site (filtre arbre + tableau simultanément)
+- ✅ **Recherche étendue** : cherche aussi par **nom de site** (ex. `%rungis%`) en plus des champs utilisateur — sites non cachés affichés avec badge amber "non chargé — cliquer pour ouvrir"
+- ✅ **Surlignage des occurrences** : fonction `hlText(text, q)` → `<mark class="hl">` (fond jaune) appliquée sur nom de site (en-têtes groupes) + toutes les cellules du tableau (nom, description, fonction, mail, service)
 - ✅ Panneau détail utilisateur (onglets Détail / MAJ AD)
 - ✅ Modal Fonction (analyse d'une fonction sur 1 site / région / toute la structure)
 - ✅ Actualisation de cache site par site ou par région entière
@@ -115,14 +120,50 @@ CONTEXTE-SESSION.md         ← ce fichier
 - ✅ Toggle actif/inactif avec confirmation
 - ✅ Règles inactives dans une section séparée en bas de la liste
 - ✅ Bouton "Générer le CSV" dans le formulaire (règle en cours uniquement, visible en mode édition)
-- ✅ Modale CSV : tableau `SAM Account Name | Mail` avec onglets par fichier, chemin en footer
-- ✅ Cartes : label seul, clic pour ouvrir le formulaire (aucun bouton visible)
+- ✅ Bouton "Supprimer" dans le footer **gauche** ; Annuler/Générer/Enregistrer dans le footer **droit**
+- ✅ Modale CSV — arbre hiérarchique de fichiers (global → DO → centre) avec styles distincts :
+  - Fichier global : dégradé gris foncé, texte blanc
+  - Fichier DO : dégradé gris clair, texte sombre
+  - Fichier centre (feuille) : style item classique
+- ✅ Modale CSV — en-tête avec critères de sélection (pills verts = include, rouges = exclude)
+- ✅ Sous-modale CSV — tableau Nom + Fonction uniquement (SAM/Mail masqués en prévisualisation)
+- ✅ Sous-modale CSV — lignes alternées gris clair/gris moyen + hover accent
+- ✅ Message en filigrane dans la zone principale vide (texte grand, gradient gris, opacité 55%)
+- ✅ Cartes : une seule ligne `.rule-card-row` (label + badge Inactif si besoin)
 - ✅ Modal JSON (visualiseur brut avec coloration syntaxique)
 - ✅ Modal Aide (8 étapes expliquées)
 - ✅ Tooltips JS `position:fixed` au survol (badges niveau + boutons cartes)
 - ✅ Confirmation avant suppression et avant toggle
 - ✅ Description auto-calculée : `"Par centre · 3 CSV (centre + DO + global) · 2 conditions"` — lecture seule, mise à jour live quand on change le niveau ou les conditions (`metaLabel` + `autoUpdateDesc`)
-- ✅ Cards : une seule ligne `.rule-card-row` (label + badge Inactif si besoin)
+- ✅ Description du niveau (bandeau sous le sélecteur 1/2/3, mise à jour au clic)
+- ✅ Préchargement utilisateurs AD en arrière-plan au chargement (barre de statut dans le footer sidebar)
+- ✅ Barre de progression animée dans le footer pendant la génération CSV
+- ✅ **Fix cache** : suppression de la stale-detection (`proxyAddresses`) qui déclenchait 179 re-fetch AD à chaque chargement de page + vidage du cache ancien format
+- ✅ **Fix filtre ADMINISTRATIF** : `Test-UserMatchesRule` — conditions positives (`eq`/`like`) en OR, conditions négatives (`ne`/`notlike`) en AND (auparavant tout en OR → les Formateurs passaient le filtre)
+- ✅ **Modale "Prévisualiser les groupes"** (`/api/regles/preview-groups`) — layout multi-colonnes :
+  - 1/2/3 colonnes selon le niveau (détection par types présents : global/do/centre)
+  - Colonne 3 interactive : clic sur un groupe DO → remplace le contenu de la colonne par ses centres
+  - Chaque carte centre affiche la liste des membres (nom + fonction, scroll interne max 80px)
+  - Badge de type uniquement en colonne 1 (Global) — supprimé pour DO et Centres (redondant avec l'en-tête)
+  - En-têtes : "Groupe global" / "Groupes DO [count]" / "Centres" (se met à jour avec le nom DO sélectionné)
+  - Avertissement ⚠ dans le bandeau méta si un nom dépasse 64 caractères (limite Exchange)
+  - `monoNiveau` n'affecte que la génération CSV, pas la prévisualisation (toujours hiérarchie complète)
+  - Compteur utilisateurs en haut à droite de chaque carte (`.gp-row-top` flex)
+  - Bouton plein écran : la dernière colonne s'élargit davantage (`.gp-box--wide .gp-col:last-child { flex: 2.5 }`)
+  - Cartes avec fond blanc + ombre sur fond gris (`.gp-col-list { background: #efefef }`)
+  - Colonne 3 : grille multi-colonnes responsive (`repeat(auto-fill, minmax(220px, 1fr))`)
+  - Barre de recherche en colonne 3 (par nom groupe / utilisateur / fonction) + bouton clear + select-all au focus
+  - Scroll fix : `.gp-body { display: flex; flex-direction: column }` → `.gp-columns { flex: 1; min-height: 0 }` (**`display:flex` écrase `[hidden]` → toujours ajouter `.gp-body[hidden] { display: none }` pour les flex containers**)
+  - **Onglet "Groupes"** (vue existante) + **onglet "Adresses mail"** (arbre hiérarchique global → DO → centre)
+  - Contrôle AD des adresses mail : `POST /api/regles/check-mail` → LDAP `(|(mail=$addr)(proxyAddresses=*:$addr))`
+  - Barre de progression pendant le contrôle — adresse courante affichée
+  - **Bouton Stop** (rouge) pour annuler le contrôle en cours — flag `container._checkAborted`
+  - Abort automatique à la fermeture de la modale (×, clic fond)
+
+### Modale CSV (après génération)
+- ✅ Onglet **"Fichiers CSV"** (arbre hiérarchique existant) + onglet **"Adresses mail"** (même composant `renderMailTab` / `checkMails` que la modale prévisualisation)
+- ✅ `Invoke-RuleGeneration` retourne maintenant `groups` + `mailDomain` en plus de `files`/`total`/`outDir`
+- ✅ `renderMailTab(data, container)` et `checkMails(groups, container)` : fonctions génériques réutilisables dans les deux contextes (pas d'IDs codés en dur — tout via `container.querySelector`)
 
 ### Modèle de données — Règle
 ```json
@@ -149,11 +190,69 @@ CONTEXTE-SESSION.md         ← ce fichier
 ### Niveaux de groupement CSV
 | Niveau | Label | Fichiers produits |
 |--------|-------|-------------------|
-| 1 | Par centre | 3 CSV (centre + DO + global) |
+| 1 | Global | 1 CSV global |
 | 2 | Par DO | 2 CSV (DO + global) |
-| 3 | Global | 1 CSV global |
+| 3 | Par centre | 3 CSV (centre + DO + global) |
 
-`monoNiveau: true` (niveau 3 uniquement) = centre par DO seulement, pas de CSV DO ni global.
+`monoNiveau: true` + niveau 3 = centre par DO seulement, sans CSV DO ni global.
+
+### Format CSV généré
+```
+"nom";"samaccountname";"mail";"fonction"
+"Dupont Jean";"jdupont";"jdupont@example.com";"FORMATEUR"
+```
+
+Colonnes : `DisplayName`, `SamAccountName`, `Mail`, `Title`.
+
+---
+
+## csv-generator.psm1 — Architecture interne
+
+**Problème clé résolu** : dans `ForEach-Object -Parallel`, les objets AD passés dans la closure sont **désérialisés** → `DisplayName`, `Title` deviennent vides.
+
+**Solution** : séparer accès AD et écriture fichier.
+
+```powershell
+# Accès aux propriétés AD dans le thread principal (objets natifs)
+function Get-CsvContent { param($Users) ... return $sb.ToString() }
+
+# Écriture parallèle (reçoit du texte, jamais d'objets AD)
+function Invoke-WriteJobs { param($Jobs)
+    $Jobs | ForEach-Object -Parallel {
+        [System.IO.File]::WriteAllText($_.path, $_.content, [System.Text.Encoding]::UTF8)
+    } -ThrottleLimit 8
+}
+```
+
+Chaque job hashtable : `@{ path = '...'; fname = '...'; content = <string pré-calculée> }`.
+
+### Get-NormalizedDepartment
+
+Normalise le champ `Department` AD vers les labels canoniques des régions (`parametres.json`).
+
+```powershell
+function Get-NormalizedDepartment {
+    param([string]$Department)
+    # Cherche dans $global:parametresJson.ad.regions : label + aliases (insensible à la casse)
+    # Retourne le label canonique (ex. "DO NORD" → "DO I2N") ou la valeur brute si pas de match
+}
+```
+
+Utilisé dans tous les `Group-Object { Get-NormalizedDepartment $_.Department }`.
+
+### parametres.json — régions avec aliases
+
+Chaque région a un tableau `aliases` pour normaliser les valeurs brutes du champ `Department` :
+
+```json
+{ "label": "DO I2N",   "aliases": ["DO NORD", "DO IDF", "NORD", "IDF", "I2N", "DO I2N"] }
+{ "label": "DO OUEST", "aliases": ["DO OUEST", "OUEST"] }
+{ "label": "DO EST",   "aliases": ["DO EST", "EST"] }
+{ "label": "DO SUD",   "aliases": ["DO SUD", "DO SUD-EST", "SUD", "SUD-EST", "DO AURASUD", "AURASUD", "DO AURA", "AURA"] }
+{ "label": "MONCHY",   "aliases": ["MONCHY", "DO MONCHY"] }
+```
+
+> Si les valeurs de `Department` dans l'AD ne correspondent pas aux aliases, les ajuster directement dans `parametres.json` sans toucher au code PS.
 
 ---
 
@@ -164,9 +263,12 @@ CONTEXTE-SESSION.md         ← ce fichier
 - `Get-ChildItem -Filter "*.json" -Exclude "_index.json"` **ne fonctionne pas en PS5.1** → utiliser `| Where-Object { $_.Name -ne '_index.json' }`
 - `$global:path."f_xxx"` → chemin fichier ; `$global:path."r_xxx"` → chemin dossier
 - `_initGlobalVariables.psm1` auto-découvre TOUS les fichiers de l'arborescence → pas besoin d'enregistrer manuellement de nouveaux fichiers
+- **Parallel runspaces** : ne jamais passer des objets AD à `ForEach-Object -Parallel` — les propriétés étendues (DisplayName, Title, etc.) seront vides après désérialisation. Toujours pré-calculer le contenu dans le thread principal.
+- `Get-ADUser` ne retourne **pas** `DisplayName` par défaut → toujours l'inclure dans `-Properties`
 
 ### CSS / JS
-- `display: flex` sur une overlay écrase `[hidden]` → toujours ajouter `.overlay[hidden] { display: none; }`
+- `display: flex` sur n'importe quel élément écrase l'attribut `[hidden]` du navigateur → **toujours** ajouter `.element[hidden] { display: none; }` dès qu'on met `display: flex` ou `display: grid` sur un élément qu'on veut pouvoir cacher via `hidden`
+- Fonctions génériques avec `container` : préférer `container.querySelector('.class')` à `document.getElementById('id')` pour les composants réutilisables dans plusieurs contextes
 - Tooltips dans des conteneurs `overflow: hidden` : utiliser `position: fixed` côté JS (système `data-tooltip` + `setupTooltip()`)
 - Dans les iframes, `100vh` = hauteur de l'iframe (pas de la fenêtre parente) → header masqué = layout doit passer à `height: 100vh`
 - Structure d'une carte règle : `.rule-card-row` (label seul, clic = ouvre formulaire)
@@ -175,6 +277,7 @@ CONTEXTE-SESSION.md         ← ce fichier
 - `$global:parametresJson` → config depuis `parametres.json`
 - `$global:AD_credential` → credentials AD actifs
 - `$global:path` → dictionnaire de tous les chemins auto-découverts
+- `$global:AD_usersCache` → cache utilisateurs pré-chargé en arrière-plan au démarrage
 
 ---
 
@@ -191,3 +294,4 @@ CONTEXTE-SESSION.md         ← ce fichier
 - Export/import du fichier `regles.json`
 - Prévisualisation du nombre d'utilisateurs avant génération
 - Pagination ou recherche si beaucoup de règles
+- CSVs récursifs (agréger les mails de groupe DO/global) — à valider avec l'utilisateur

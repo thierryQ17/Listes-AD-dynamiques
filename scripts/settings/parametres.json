@@ -3,28 +3,33 @@
     "server":     "",
     "searchBase": "DC=aft-iftim,DC=france",
     "groupsOU":   "%%_OU_GROUPES_I2N_%%",
+    "mailDomain": "aftral.com",
     "regions": [
       {
-        "label": "I2N",
+        "label": "DO I2N",
+        "aliases": ["DO NORD", "DO IDF", "NORD", "IDF", "I2N", "DO I2N"],
         "bases": [
           "OU=NORD,OU=administratif,DC=aft-iftim,DC=france",
           "OU=IDF,OU=administratif,DC=aft-iftim,DC=france"
         ]
       },
       {
-        "label": "OUEST",
+        "label": "DO OUEST",
+        "aliases": ["DO OUEST", "OUEST"],
         "bases": [
           "OU=OUEST,OU=administratif,DC=aft-iftim,DC=france"
         ]
       },
       {
-        "label": "EST",
+        "label": "DO EST",
+        "aliases": ["DO EST", "EST"],
         "bases": [
           "OU=EST,OU=administratif,DC=aft-iftim,DC=france"
         ]
       },
       {
-        "label": "SUD",
+        "label": "DO SUD",
+        "aliases": ["DO SUD", "DO SUD-EST", "SUD", "SUD-EST", "DO AURASUD", "AURASUD", "DO AURA", "AURA"],
         "bases": [
           "OU=SUD,OU=administratif,DC=aft-iftim,DC=france",
           "OU=SUD-EST,OU=administratif,DC=aft-iftim,DC=france"
@@ -32,6 +37,7 @@
       },
       {
         "label": "MONCHY",
+        "aliases": ["MONCHY", "DO MONCHY"],
         "bases": [
           "OU=MONCHY,OU=administratif,DC=aft-iftim,DC=france"
         ]

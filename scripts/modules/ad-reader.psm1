@@ -232,6 +232,7 @@ function Get-OUSiteUsers {
                     extensionAttribute1 = $u.extensionAttribute1
                     postalCode        = $u.PostalCode
                     streetAddress     = $u.StreetAddress
+                    ouDn              = ($u.DistinguishedName -replace '^CN=[^,]+,', '')
                 }
             } | Sort-Object displayName
         )

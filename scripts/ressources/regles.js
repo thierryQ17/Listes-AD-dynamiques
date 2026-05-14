@@ -18,8 +18,13 @@ const OPS = [
     ['notlike', 'ne contient pas'],
 ];
 
-const NIV_LABELS = { 1: 'Par centre', 2: 'Par DO', 3: 'Global' };
-const NIV_CSV    = { 1: '3 CSV (centre + DO + global)', 2: '2 CSV (DO + global)', 3: '1 CSV global' };
+const NIV_LABELS = { 1: 'Global', 2: 'Par DO', 3: 'Par centre' };
+const NIV_CSV    = { 1: '1 CSV global', 2: '2 CSV (DO + global)', 3: '3 CSV (centre + DO + global)' };
+const NIV_DESCRIPTIONS = {
+    1: `Un seul CSV avec tous les utilisateurs correspondants.<br>→ <strong>1 groupe AD global</strong> dont les membres sont les utilisateurs directement.`,
+    2: `1 CSV par Direction Opérationnelle + 1 CSV global.<br>→ <strong>Groupes DO</strong> (membres = utilisateurs) + <strong>1 groupe global</strong> (membres = groupes DO).`,
+    3: `1 CSV par centre + 1 CSV par DO + 1 CSV global.<br>→ <strong>Groupes centres</strong> (utilisateurs) → <strong>Groupes DO</strong> (groupes centres) → <strong>Groupe global</strong> (groupes DO).`,
+};
 
 function metaLabel(rule) {
     const nInc  = rule?.conditions?.include?.length || 0;
@@ -76,6 +81,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     setupJsonModal();
     setupHelpModal();
     setupCsvModal();
+    setupCsvFileModal();
+    setupGroupsPreviewModal();
     setupTooltip();
 });
 
@@ -168,6 +175,22 @@ function renderForm(rule) {
             `</div>` +
 
             `<div class="form-group">` +
+                `<label class="form-label" for="f-prefix">` +
+                    `Préfixe technique <span class="form-label-opt">(optionnel)</span>` +
+                `</label>` +
+                `<div class="prefix-wrap">` +
+                    `<input id="f-prefix" class="form-input" type="text" ` +
+                        `placeholder="Si vide, dérivé du nom" ` +
+                        `value="${esc(rule?.prefix || '')}">` +
+                    `<button class="btn-preview-groups" id="btn-preview-groups" type="button" title="Prévisualiser les groupes AD et adresses mail">` +
+                        `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>` +
+                        ` Prévisualiser les groupes` +
+                    `</button>` +
+                `</div>` +
+                `<small class="prefix-hint" id="prefix-hint"></small>` +
+            `</div>` +
+
+            `<div class="form-group">` +
                 `<label class="form-label" for="f-desc">Description</label>` +
                 `<input id="f-desc" class="form-input form-input-auto" type="text" value="${esc(metaLabel(rule || {}))}" readonly>` +
             `</div>` +
@@ -192,6 +215,7 @@ function renderForm(rule) {
                         `</label>`
                     ).join('') +
                 `</div>` +
+                `<div class="niveau-desc" id="niveau-desc"></div>` +
             `</div>` +
 
             `<div class="form-group">` +
@@ -219,10 +243,14 @@ function renderForm(rule) {
                 `<span class="gen-progress-msg" id="gen-progress-msg"></span>` +
             `</div>` +
             `<div class="form-footer-buttons">` +
-                `<button class="btn-secondary" id="btn-cancel">Annuler</button>` +
-                (editingId ? `<button class="btn-danger" id="btn-delete-rule">Supprimer</button>` : '') +
-                (editingId ? `<button class="btn-generate-form" id="btn-generate-form">Générer le CSV</button>` : '') +
-                `<button class="btn-primary" id="btn-save">Enregistrer</button>` +
+                `<div class="form-footer-left">` +
+                    (editingId ? `<button class="btn-danger" id="btn-delete-rule">Supprimer</button>` : '') +
+                `</div>` +
+                `<div class="form-footer-right">` +
+                    `<button class="btn-secondary" id="btn-cancel">Annuler</button>` +
+                    (editingId ? `<button class="btn-generate-form" id="btn-generate-form">Générer le CSV</button>` : '') +
+                    `<button class="btn-primary" id="btn-save">Enregistrer</button>` +
+                `</div>` +
             `</div>` +
         `</div>`;
 
@@ -235,13 +263,32 @@ function renderForm(rule) {
             opt.classList.add('selected');
             opt.querySelector('input').checked = true;
             autoUpdateDesc();
+            const d = document.getElementById('niveau-desc');
+            if (d) d.innerHTML = NIV_DESCRIPTIONS[parseInt(opt.dataset.n)] || '';
         });
     });
+    const initNivDesc = document.getElementById('niveau-desc');
+    if (initNivDesc) initNivDesc.innerHTML = NIV_DESCRIPTIONS[niveau] || '';
 
     document.getElementById('btn-add-include').addEventListener('click', () => { addCondRow('cond-include'); autoUpdateDesc(); });
     document.getElementById('btn-add-exclude').addEventListener('click', () => { addCondRow('cond-exclude'); autoUpdateDesc(); });
     document.getElementById('btn-save').addEventListener('click', saveRule);
     document.getElementById('btn-cancel').addEventListener('click', closeForm);
+    document.getElementById('btn-preview-groups').addEventListener('click', previewGroups);
+
+    const prefixInput = document.getElementById('f-prefix');
+    const prefixHint  = document.getElementById('prefix-hint');
+    function updatePrefixHint() {
+        const raw = prefixInput.value.trim();
+        if (!raw) { prefixHint.textContent = ''; return; }
+        const cleaned = cleanForFileName(raw);
+        prefixHint.textContent = cleaned
+            ? `→ Sera utilisé comme : ${cleaned}  |  Mail : ${cleaned.toLowerCase()}@…`
+            : '';
+        prefixHint.className = 'prefix-hint' + (cleaned.length > 20 ? ' prefix-hint-warn' : '');
+    }
+    prefixInput.addEventListener('input', updatePrefixHint);
+    updatePrefixHint();
     const genFormBtn = document.getElementById('btn-generate-form');
     if (genFormBtn) genFormBtn.addEventListener('click', () => generateCsv(editingId));
     const delRuleBtn = document.getElementById('btn-delete-rule');
@@ -300,6 +347,12 @@ function readCondList(listId) {
     })).filter(c => c.value !== '');
 }
 
+function cleanForFileName(name) {
+    if (!name) return '';
+    const normalized = name.normalize('NFD').replace(/[̀-ͯ]/g, '');
+    return normalized.replace(/[^\w\s-]/g, '').replace(/\s+/g, '-').toUpperCase().replace(/^-+|-+$/g, '');
+}
+
 function readForm() {
     const label  = document.getElementById('f-label')?.value.trim();
     const radio  = document.querySelector('input[name="f-niveau"]:checked');
@@ -313,10 +366,12 @@ function readForm() {
     const exclude    = readCondList('cond-exclude');
     const existing   = editingId ? rules.find(r => r.id === editingId) : null;
     const activeChk  = document.getElementById('f-active');
+    const rawPrefix  = document.getElementById('f-prefix')?.value.trim() || '';
 
     return {
         id:         editingId || uid(),
         label,
+        prefix:     rawPrefix || null,
         niveau,
         monoNiveau: existing?.monoNiveau ?? false,
         conditions: { include, exclude },
@@ -440,26 +495,44 @@ async function preloadUsers() {
 
 function getGenSteps() {
     return usersPreloaded
-        ? ['Filtrage selon les conditions…', 'Écriture des fichiers CSV…']
-        : ['Chargement des utilisateurs AD…', 'Filtrage selon les conditions…', 'Écriture des fichiers CSV…'];
+        ? [
+            'Filtrage selon les conditions…',
+            'Groupement par Direction Opérationnelle…',
+            'Écriture des fichiers CSV…',
+            'Finalisation…'
+          ]
+        : [
+            'Chargement des utilisateurs AD…',
+            'Filtrage selon les conditions…',
+            'Groupement par Direction Opérationnelle…',
+            'Écriture des fichiers CSV…',
+            'Finalisation…'
+          ];
 }
 
 async function generateCsv(id) {
     const rule  = rules.find(r => r.id === id);
     const label = rule?.label || id;
 
-    const btn      = document.getElementById('btn-generate-form');
-    const progress = document.getElementById('gen-progress');
-    const msg      = document.getElementById('gen-progress-msg');
+    const btn         = document.getElementById('btn-generate-form');
+    const progress    = document.getElementById('gen-progress');
+    const msg         = document.getElementById('gen-progress-msg');
+    const overlay     = document.getElementById('gen-overlay');
+    const overlayStep = document.getElementById('gen-overlay-step');
 
-    if (btn) { btn.disabled = true; btn.textContent = 'Génération…'; }
+    if (btn)     { btn.disabled = true; btn.textContent = 'Génération…'; }
     if (progress) progress.removeAttribute('hidden');
+    if (overlay)  overlay.removeAttribute('hidden');
 
     const steps = getGenSteps();
     let stepIdx = 0;
-    function showStep() { if (msg) msg.textContent = steps[stepIdx % steps.length]; }
+    function showStep() {
+        const step = steps[stepIdx % steps.length];
+        if (msg)         msg.textContent  = step;
+        if (overlayStep) overlayStep.textContent = step;
+    }
     showStep();
-    const ticker = setInterval(() => { stepIdx++; showStep(); }, 2500);
+    const ticker = setInterval(() => { stepIdx++; showStep(); }, 2000);
 
     try {
         const r    = await fetch(`/api/regles/${encodeURIComponent(id)}/generate`, { method: 'POST' });
@@ -470,17 +543,459 @@ async function generateCsv(id) {
             return;
         }
 
-        showCsvModal(data, label);
+        showCsvModal(data, rule || { label });
     } catch {
         showToast('Erreur lors de la génération', 'error');
     } finally {
         clearInterval(ticker);
         if (btn)      { btn.disabled = false; btn.textContent = 'Générer le CSV'; }
         if (progress) progress.setAttribute('hidden', '');
+        if (overlay)  overlay.setAttribute('hidden', '');
     }
 }
 
-function showCsvModal(data, label) {
+// ── Prévisualisation groupes AD ───────────────────────────────────────
+
+async function previewGroups() {
+    const rule = readForm();
+    if (!rule) return;
+
+    const btn = document.getElementById('btn-preview-groups');
+    if (btn) { btn.disabled = true; btn.textContent = 'Chargement…'; }
+
+    try {
+        const r    = await fetch('/api/regles/preview-groups', {
+            method:  'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body:    JSON.stringify(rule),
+        });
+        const data = await r.json();
+        if (data.error) { showToast(data.error, 'error'); return; }
+        showGroupsPreviewModal(data);
+    } catch {
+        showToast('Erreur lors de la prévisualisation', 'error');
+    } finally {
+        if (btn) { btn.disabled = false; btn.innerHTML =
+            `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg> Prévisualiser les groupes`; }
+    }
+}
+
+function showGroupsPreviewModal(data) {
+    const modal   = document.getElementById('groups-preview-modal');
+    const summary = document.getElementById('gp-summary');
+    const meta    = document.getElementById('gp-meta');
+    const body    = document.getElementById('gp-body');
+
+    const allGroups = data.groups || [];
+    const warnings  = allGroups.filter(g => g.name.length > 64).length;
+    const monoNiv   = !!data.monoNiveau;
+
+    summary.textContent = `${allGroups.length} groupe${allGroups.length !== 1 ? 's' : ''} · ${data.total} utilisateur${data.total !== 1 ? 's' : ''}`;
+
+    const globalGroup = allGroups.find(g => g.type === 'global');
+    const doGroups    = allGroups.filter(g => g.type === 'do').sort((a, b) => a.name.localeCompare(b.name));
+    const centres     = allGroups.filter(g => g.type === 'centre');
+
+    for (const dg of doGroups) {
+        dg._centres = centres
+            .filter(c => c.name.startsWith(dg.name + '-'))
+            .sort((a, b) => a.name.localeCompare(b.name));
+    }
+
+    const hasGlobal = !!globalGroup;
+    const hasDO     = doGroups.length > 0;
+    const hasCentre = centres.length > 0;
+    const numCols   = [hasGlobal, hasDO, hasCentre].filter(Boolean).length;
+
+    const niveauLabel = data.niveau
+        ? `Niveau ${data.niveau}${(monoNiv && data.niveau === 3) ? ' — CSV : centres uniquement' : ''}`
+        : '';
+
+    meta.innerHTML =
+        `<span class="gp-meta-item"><strong>Préfixe :</strong> ${esc(data.prefix)}</span>` +
+        `<span class="gp-meta-item"><strong>Domaine :</strong> @${esc(data.mailDomain)}</span>` +
+        (niveauLabel ? `<span class="gp-meta-item">${esc(niveauLabel)}</span>` : '') +
+        (warnings ? `<span class="gp-meta-warn">⚠ ${warnings} nom${warnings > 1 ? 's' : ''} dépasse${warnings > 1 ? 'nt' : ''} 64 caractères</span>` : '');
+
+    const SVG_CHV = `<svg width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden="true"><path d="M2.5 1.5l5 3.5-5 3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+
+    function buildRow(g, { clickable = false, showBadge = true } = {}) {
+        const isWarn    = g.name.length > 64;
+        const typeLabel = g.type === 'global' ? 'Global' : g.type === 'do' ? 'DO' : 'Centre';
+        const n         = g.count ?? 0;
+
+        let membersHtml = '';
+        if (g.members && g.members.length > 0) {
+            membersHtml = `<div class="gp-members-list">` +
+                g.members.map(m =>
+                    `<div class="gp-member">` +
+                        `<span class="gp-member-name">${esc(m.name)}</span>` +
+                        (m.title ? `<span class="gp-member-title">${esc(m.title)}</span>` : '') +
+                    `</div>`
+                ).join('') +
+            `</div>`;
+        }
+
+        return `<div class="gp-row-item${clickable ? ' clickable' : ''}${isWarn ? ' gp-warn' : ''}" data-name="${esc(g.name)}">` +
+            (showBadge ? `<span class="gp-type-badge gp-type-${g.type}">${typeLabel}</span>` : '') +
+            `<div class="gp-row-info">` +
+                `<div class="gp-row-top">` +
+                    `<div class="gp-row-name">${esc(g.name)}</div>` +
+                    `<div class="gp-row-count">${n} utilisateur${n !== 1 ? 's' : ''}</div>` +
+                `</div>` +
+                `<div class="gp-row-mail">${esc(g.mail)}</div>` +
+                membersHtml +
+            `</div>` +
+            (clickable ? `<span class="gp-row-chevron">${SVG_CHV}</span>` : '') +
+            `</div>`;
+    }
+
+    let cols = '';
+
+    if (hasGlobal) {
+        cols += `<div class="gp-col">` +
+            `<div class="gp-col-hdr">Groupe global</div>` +
+            `<div class="gp-col-list">${buildRow(globalGroup)}</div>` +
+            `</div>`;
+    }
+
+    if (hasDO) {
+        const doItems = doGroups.map(dg => buildRow(dg, { clickable: hasCentre, showBadge: false })).join('');
+        cols += `<div class="gp-col">` +
+            `<div class="gp-col-hdr">` +
+                `Groupes DO <span class="gp-col-count">${doGroups.length}</span>` +
+            `</div>` +
+            `<div class="gp-col-list" id="gp-col-do-list">${doItems}</div>` +
+            `</div>`;
+    }
+
+    if (hasCentre) {
+        const initContent = hasDO
+            ? `<div class="gp-col-empty">Cliquer sur un groupe DO<br>pour afficher ses centres</div>`
+            : centres.map(c => buildRow(c, { showBadge: false })).join('');
+        const countBadge = hasDO ? '' : ` <span class="gp-col-count">${centres.length}</span>`;
+        cols += `<div class="gp-col">` +
+            `<div class="gp-col-hdr" id="gp-col-centre-hdr">Centres${countBadge}</div>` +
+            `<div class="gp-col-search">` +
+                `<input type="text" id="gp-centre-search" class="gp-search-input" placeholder="Groupe, utilisateur, fonction…" autocomplete="off">` +
+                `<button id="gp-centre-search-clear" class="gp-search-clear" title="Vider la recherche" hidden>` +
+                    `<svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M1 1l8 8M9 1L1 9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>` +
+                `</button>` +
+            `</div>` +
+            `<div class="gp-col-list" id="gp-col-centre-list">${initContent}</div>` +
+            `</div>`;
+    }
+
+    body.innerHTML = `<div class="gp-columns gp-cols-${numCols}">${cols}</div>`;
+
+    if (hasCentre) {
+        const centreSearch      = body.querySelector('#gp-centre-search');
+        const centreSearchClear = body.querySelector('#gp-centre-search-clear');
+        const centreList        = body.querySelector('#gp-col-centre-list');
+
+        function applycentreSearch() {
+            const q = centreSearch.value.trim().toLowerCase();
+            centreSearchClear.hidden = !centreSearch.value;
+            centreList.querySelectorAll('.gp-row-item').forEach(card => {
+                if (!q) { card.classList.remove('gp-hidden'); return; }
+                const groupName = (card.querySelector('.gp-row-name')?.textContent  || '').toLowerCase();
+                const members   = [...card.querySelectorAll('.gp-member-name, .gp-member-title')]
+                    .map(el => el.textContent.toLowerCase()).join(' ');
+                card.classList.toggle('gp-hidden', !groupName.includes(q) && !members.includes(q));
+            });
+        }
+
+        centreSearch.addEventListener('input', applycentreSearch);
+        centreSearch.addEventListener('focus', () => centreSearch.select());
+        centreSearchClear.addEventListener('click', () => {
+            centreSearch.value = '';
+            applycentreSearch();
+            centreSearch.focus();
+        });
+
+        if (hasDO) {
+            const doList    = body.querySelector('#gp-col-do-list');
+            const centreHdr = body.querySelector('#gp-col-centre-hdr');
+
+            doList.addEventListener('click', e => {
+                const card = e.target.closest('.gp-row-item.clickable');
+                if (!card) return;
+                const dg = doGroups.find(d => d.name === card.dataset.name);
+                if (!dg) return;
+
+                doList.querySelectorAll('.gp-row-item').forEach(r => r.classList.remove('gp-selected'));
+                card.classList.add('gp-selected');
+
+                centreHdr.innerHTML = `${esc(dg.name)} <span class="gp-col-count">${dg._centres.length}</span>`;
+                centreList.innerHTML = dg._centres.length
+                    ? dg._centres.map(c => buildRow(c, { showBadge: false })).join('')
+                    : `<div class="gp-col-empty">Aucun centre pour ce groupe DO</div>`;
+                centreSearch.value = '';
+                centreSearchClear.hidden = true;
+            });
+        }
+    }
+
+    // Reset tabs — toujours ouvrir sur l'onglet Groupes
+    const tabsBar = document.getElementById('gp-tabs');
+    tabsBar.querySelectorAll('.gp-tab').forEach(t => t.classList.remove('gp-tab--active'));
+    tabsBar.querySelector('[data-tab="groupes"]').classList.add('gp-tab--active');
+    body.removeAttribute('hidden');
+    const mailPanel = document.getElementById('gp-mail-panel');
+    mailPanel.setAttribute('hidden', '');
+    delete mailPanel.dataset.rendered;
+    modal._gpData = data;
+
+    modal.removeAttribute('hidden');
+}
+
+const SVG_EXPAND   = `<svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true"><path d="M1 5V1h4M9 1h4v4M13 9v4H9M5 13H1V9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+const SVG_COLLAPSE = `<svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true"><path d="M5 1v4H1M13 5H9V1M9 13v-4h4M1 9h4v4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+
+function setupGroupsPreviewModal() {
+    const modal     = document.getElementById('groups-preview-modal');
+    const box       = modal.querySelector('.gp-box');
+    const closeBtn  = document.getElementById('btn-gp-close');
+    const expandBtn = document.getElementById('btn-gp-expand');
+    const tabsBar   = document.getElementById('gp-tabs');
+
+    function closeModal() {
+        // Annuler un contrôle AD en cours
+        const mailPanel = document.getElementById('gp-mail-panel');
+        if (mailPanel) mailPanel._checkAborted = true;
+        box.classList.remove('gp-box--wide');
+        expandBtn.innerHTML = SVG_EXPAND;
+        expandBtn.title     = 'Agrandir';
+        modal.setAttribute('hidden', '');
+    }
+
+    expandBtn.addEventListener('click', () => {
+        const wide = box.classList.toggle('gp-box--wide');
+        expandBtn.innerHTML = wide ? SVG_COLLAPSE : SVG_EXPAND;
+        expandBtn.title     = wide ? 'Réduire' : 'Agrandir';
+    });
+    closeBtn.addEventListener('click', closeModal);
+    modal.addEventListener('click', e => { if (e.target === modal) closeModal(); });
+
+    // Onglets
+    tabsBar.addEventListener('click', e => {
+        const tab = e.target.closest('.gp-tab');
+        if (!tab) return;
+        const tabName = tab.dataset.tab;
+
+        tabsBar.querySelectorAll('.gp-tab').forEach(t => t.classList.remove('gp-tab--active'));
+        tab.classList.add('gp-tab--active');
+
+        const bodyEl    = document.getElementById('gp-body');
+        const mailPanel = document.getElementById('gp-mail-panel');
+
+        if (tabName === 'groupes') {
+            bodyEl.removeAttribute('hidden');
+            mailPanel.setAttribute('hidden', '');
+        } else if (tabName === 'mails') {
+            bodyEl.setAttribute('hidden', '');
+            mailPanel.removeAttribute('hidden');
+            if (!mailPanel.dataset.rendered) {
+                renderMailTab(modal._gpData, mailPanel);
+            }
+        }
+    });
+}
+
+function renderMailTab(data, container) {
+    const allGroups = data.groups || [];
+
+    const globalGroup = allGroups.find(g => g.type === 'global');
+    const doGroups    = allGroups.filter(g => g.type === 'do').sort((a, b) => a.name.localeCompare(b.name));
+    const centres     = allGroups.filter(g => g.type === 'centre');
+
+    for (const dg of doGroups) {
+        dg._centres = centres
+            .filter(c => c.name.startsWith(dg.name + '-'))
+            .sort((a, b) => a.name.localeCompare(b.name));
+    }
+
+    function mailRow(g) {
+        const typeLabel = g.type === 'global' ? 'Global' : g.type === 'do' ? 'DO' : 'Centre';
+        const n         = g.count ?? 0;
+        return `<div class="gp-mail-row gp-mail-row--${g.type}" data-mail="${esc(g.mail)}">` +
+            `<span class="gp-mail-row-type gp-mail-type-${g.type}">${typeLabel}</span>` +
+            `<span class="gp-mail-row-name">${esc(g.name)}</span>` +
+            `<span class="gp-mail-row-sep">→</span>` +
+            `<span class="gp-mail-row-addr">${esc(g.mail)}</span>` +
+            `<span class="gp-mail-row-count">${n} util.</span>` +
+            `<span class="gp-mail-row-status"></span>` +
+            `</div>`;
+    }
+
+    // Ordre visuel : global → DO → centres de cette DO → DO suivante → …
+    const orderedGroups = [];
+    if (globalGroup) orderedGroups.push(globalGroup);
+    for (const dg of doGroups) {
+        orderedGroups.push(dg);
+        for (const c of dg._centres) orderedGroups.push(c);
+    }
+
+    let rows = '';
+    if (globalGroup) rows += mailRow(globalGroup);
+    for (const dg of doGroups) {
+        rows += `<div class="gp-mail-separator"></div>`;
+        rows += mailRow(dg);
+        for (const c of dg._centres) rows += mailRow(c);
+    }
+    if (doGroups.length === 0) {
+        for (const c of centres.sort((a, b) => a.name.localeCompare(b.name))) rows += mailRow(c);
+    }
+
+    const SVG_CHECK = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>`;
+    const SVG_STOP  = `<svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>`;
+
+    container.innerHTML =
+        `<div class="gp-mail-toolbar">` +
+            `<button class="btn-check-mails">${SVG_CHECK} Vérifier disponibilité dans l'AD</button>` +
+            `<button class="btn-stop-mails" hidden>${SVG_STOP} Arrêter</button>` +
+            `<div class="gp-check-progress" hidden>` +
+                `<div class="gp-check-progress-label"></div>` +
+                `<div class="gp-check-progress-bar-wrap"><div class="gp-check-progress-bar"></div></div>` +
+            `</div>` +
+            `<span class="gp-check-summary"></span>` +
+        `</div>` +
+        `<div class="gp-mail-tree">${rows}</div>`;
+
+    container.querySelector('.btn-check-mails').addEventListener('click', () => checkMails(orderedGroups, container));
+    container.querySelector('.btn-stop-mails').addEventListener('click',  () => { container._checkAborted = true; });
+    container.dataset.rendered = '1';
+}
+
+async function checkMails(groups, container) {
+    const btn      = container.querySelector('.btn-check-mails');
+    const progress = container.querySelector('.gp-check-progress');
+    const bar      = container.querySelector('.gp-check-progress-bar');
+    const label    = container.querySelector('.gp-check-progress-label');
+    const summary  = container.querySelector('.gp-check-summary');
+    const tree     = container.querySelector('.gp-mail-tree');
+    const total    = groups.length;
+    if (total === 0) return;
+
+    const stopBtn = container.querySelector('.btn-stop-mails');
+
+    if (!confirm(`Vérifier la disponibilité de ${total} adresse${total > 1 ? 's' : ''} dans l'AD ?\n\nLe traitement se fait adresse par adresse depuis le début de la liste.`)) return;
+
+    container._checkAborted = false;
+    btn.setAttribute('hidden', '');
+    stopBtn.removeAttribute('hidden');
+    progress.removeAttribute('hidden');
+    summary.textContent = '';
+
+    tree.querySelectorAll('.gp-mail-row-status').forEach(el => {
+        el.textContent = '';
+        el.className   = 'gp-mail-row-status';
+    });
+
+    let available = 0, taken = 0, errors = 0;
+
+    for (let i = 0; i < total; i++) {
+        if (container._checkAborted) break;
+
+        const addr = groups[i].mail;
+        bar.style.width   = `${Math.round((i / total) * 100)}%`;
+        label.textContent = `${i + 1}/${total}  ${addr}…`;
+
+        const row        = tree.querySelector(`.gp-mail-row[data-mail="${CSS.escape(addr)}"]`);
+        row?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        const statusCell = row?.querySelector('.gp-mail-row-status');
+        if (statusCell) {
+            statusCell.textContent = 'vérification…';
+            statusCell.className   = 'gp-mail-row-status gp-mail-status-checking';
+        }
+
+        try {
+            const r = await fetch('/api/regles/check-mail', {
+                method:  'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body:    JSON.stringify({ address: addr }),
+            });
+            const d = await r.json();
+            if (d.error) {
+                if (statusCell) { statusCell.textContent = '⚠ erreur'; statusCell.className = 'gp-mail-row-status gp-mail-status-error'; }
+                errors++;
+            } else if (d.available) {
+                if (statusCell) { statusCell.textContent = '✓ disponible'; statusCell.className = 'gp-mail-row-status gp-mail-status-available'; }
+                available++;
+            } else {
+                if (statusCell) { statusCell.textContent = '✗ pris'; statusCell.className = 'gp-mail-row-status gp-mail-status-taken'; }
+                taken++;
+            }
+        } catch {
+            if (statusCell) { statusCell.textContent = '⚠ erreur'; statusCell.className = 'gp-mail-row-status gp-mail-status-error'; }
+            errors++;
+        }
+    }
+
+    const aborted = container._checkAborted;
+    bar.style.width   = aborted ? bar.style.width : '100%';
+    label.textContent = aborted ? `Arrêté à ${i}/${total}` : `${total}/${total}  Terminé`;
+    const parts = [];
+    if (available > 0) parts.push(`${available} disponible${available > 1 ? 's' : ''}`);
+    if (taken > 0)     parts.push(`${taken} pris`);
+    if (errors > 0)    parts.push(`${errors} erreur${errors > 1 ? 's' : ''}`);
+    if (aborted)       parts.push(`arrêté`);
+    summary.textContent = parts.join(' · ');
+
+    stopBtn.setAttribute('hidden', '');
+    btn.removeAttribute('hidden');
+    setTimeout(() => { progress.setAttribute('hidden', ''); }, 2500);
+}
+
+function buildFileTree(files) {
+    const sorted = [...files].sort((a, b) => a.length - b.length);
+    const bases  = sorted.map(f => f.replace(/\.csv$/i, ''));
+
+    function directParent(base) {
+        let best = null;
+        for (const b of bases) {
+            if (b !== base && base.startsWith(b + '-')) {
+                if (!best || b.length > best.length) best = b;
+            }
+        }
+        return best;
+    }
+
+    const nodes = new Map();
+    for (let i = 0; i < sorted.length; i++) {
+        nodes.set(bases[i], { file: sorted[i], base: bases[i], children: [] });
+    }
+
+    const roots = [];
+    for (const [base, node] of nodes) {
+        const p = directParent(base);
+        if (p && nodes.has(p)) nodes.get(p).children.push(node);
+        else roots.push(node);
+    }
+    return roots;
+}
+
+function renderFileTree(nodes, level = 0) {
+    return nodes.map(node => {
+        const hasKids = node.children.length > 0;
+        const cls = (level === 0 && hasKids) ? 'csv-file-global'
+                  : (level === 1 && hasKids) ? 'csv-file-do'
+                  : 'csv-file-item';
+        const kids = hasKids
+            ? `<ul class="csv-file-list csv-file-sublist">${renderFileTree(node.children, level + 1)}</ul>`
+            : '';
+        return `<li class="${cls}" data-file="${esc(node.file)}">${esc(node.file)}${kids}</li>`;
+    }).join('');
+}
+
+function formatCond(cond) {
+    const fLabel  = FIELDS.find(([k]) => k === cond.field)?.[1] || cond.field;
+    const opLabel = OPS.find(([k])   => k === cond.op)?.[1]    || cond.op;
+    return `${fLabel} ${opLabel} "${cond.value}"`;
+}
+
+function showCsvModal(data, rule) {
+    const label = rule?.label || '';
     document.getElementById('csv-modal-title').textContent = `CSV — ${label}`;
     const n = data.total;
     const f = data.files?.length || 0;
@@ -488,29 +1003,133 @@ function showCsvModal(data, label) {
         `${n} utilisateur${n !== 1 ? 's' : ''} · ${f} fichier${f !== 1 ? 's' : ''}`;
     document.getElementById('csv-modal-footer').textContent = data.outDir || '';
 
-    const body  = document.getElementById('csv-modal-body');
-    const files = data.files || [];
+    const criteria = document.getElementById('csv-modal-criteria');
+    if (criteria) {
+        const inc = rule?.conditions?.include || [];
+        const exc = rule?.conditions?.exclude || [];
+        let html = '';
+        if (inc.length) {
+            html += `<span class="crit-label crit-inc">INCLURE</span>` +
+                inc.map(c => `<span class="crit-pill crit-pill-inc">${esc(formatCond(c))}</span>`).join('');
+        }
+        if (exc.length) {
+            html += `<span class="crit-label crit-exc">EXCLURE</span>` +
+                exc.map(c => `<span class="crit-pill crit-pill-exc">${esc(formatCond(c))}</span>`).join('');
+        }
+        criteria.innerHTML = html;
+        criteria.hidden = !html;
+    }
 
-    document.getElementById('csv-modal-tabs').innerHTML = '';
+    const body   = document.getElementById('csv-modal-body');
+    const files  = data.files || [];
+    const outDir = data.outDir || '';
+
+    // Réinitialiser l'état des panels
+    body.removeAttribute('hidden');
+    const csvMailPanel = document.getElementById('csv-mail-panel');
+    csvMailPanel.setAttribute('hidden', '');
+    delete csvMailPanel.dataset.rendered;
+
+    const tabsEl = document.getElementById('csv-modal-tabs');
+    if (data.groups && data.groups.length) {
+        tabsEl.innerHTML =
+            `<button class="csv-tab active" data-csv-tab="files">Fichiers CSV</button>` +
+            `<button class="csv-tab" data-csv-tab="mails">` +
+                `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m2 8 10 7 10-7"/></svg>` +
+                ` Adresses mail` +
+            `</button>`;
+        document.getElementById('csv-modal')._csvData = data;
+    } else {
+        tabsEl.innerHTML = '';
+    }
 
     if (!files.length) {
         body.innerHTML = '<p class="csv-empty">Aucun fichier généré</p>';
     } else {
-        body.innerHTML =
-            `<ul class="csv-file-list">${
-                files.map(f => `<li class="csv-file-item">${esc(f)}</li>`).join('')
-            }</ul>`;
+        const tree = buildFileTree(files);
+        body.innerHTML = `<ul class="csv-file-list">${renderFileTree(tree)}</ul>`;
+        body.querySelectorAll('[data-file]').forEach(el => {
+            el.addEventListener('click', e => {
+                e.stopPropagation();
+                openCsvFileModal(outDir, el.dataset.file);
+            });
+        });
     }
 
     document.getElementById('csv-modal').removeAttribute('hidden');
 }
 
-function setupCsvModal() {
-    document.getElementById('btn-csv-close').addEventListener('click', () => {
-        document.getElementById('csv-modal').setAttribute('hidden', '');
+async function openCsvFileModal(dir, file) {
+    const modal = document.getElementById('csv-file-modal');
+    const title = document.getElementById('csv-file-modal-title');
+    const body  = document.getElementById('csv-file-modal-body');
+
+    title.textContent = file;
+    body.innerHTML    = '<p class="csv-empty">Chargement…</p>';
+    modal.removeAttribute('hidden');
+
+    try {
+        const r    = await fetch(`/api/csv/read?dir=${encodeURIComponent(dir)}&file=${encodeURIComponent(file)}`);
+        const rows = await r.json();
+        if (!Array.isArray(rows) || !rows.length) {
+            body.innerHTML = '<p class="csv-empty">Aucun utilisateur</p>';
+        } else {
+            body.innerHTML =
+                `<table class="csv-table">` +
+                    `<thead><tr><th>Nom</th><th>Fonction</th></tr></thead>` +
+                    `<tbody>${rows.map(r => `<tr><td>${esc(r.nom)}</td><td>${esc(r.fonction)}</td></tr>`).join('')}</tbody>` +
+                `</table>`;
+        }
+    } catch {
+        body.innerHTML = '<p class="csv-empty">Erreur de chargement</p>';
+    }
+}
+
+function setupCsvFileModal() {
+    document.getElementById('btn-csv-file-close').addEventListener('click', () => {
+        document.getElementById('csv-file-modal').setAttribute('hidden', '');
     });
-    document.getElementById('csv-modal').addEventListener('click', e => {
+    document.getElementById('csv-file-modal').addEventListener('click', e => {
         if (e.target === e.currentTarget) e.currentTarget.setAttribute('hidden', '');
+    });
+}
+
+function setupCsvModal() {
+    const modal = document.getElementById('csv-modal');
+
+    function closeCsvModal() {
+        const csvMailPanel = document.getElementById('csv-mail-panel');
+        if (csvMailPanel) csvMailPanel._checkAborted = true;
+        document.getElementById('csv-modal-body').removeAttribute('hidden');
+        csvMailPanel?.setAttribute('hidden', '');
+        modal.setAttribute('hidden', '');
+    }
+
+    document.getElementById('btn-csv-close').addEventListener('click', closeCsvModal);
+    modal.addEventListener('click', e => { if (e.target === modal) closeCsvModal(); });
+
+    // Onglets CSV
+    document.getElementById('csv-modal-tabs').addEventListener('click', e => {
+        const tab = e.target.closest('.csv-tab');
+        if (!tab) return;
+        const tabName = tab.dataset.csvTab;
+
+        document.querySelectorAll('#csv-modal-tabs .csv-tab').forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+
+        const bodyEl       = document.getElementById('csv-modal-body');
+        const csvMailPanel = document.getElementById('csv-mail-panel');
+
+        if (tabName === 'files') {
+            bodyEl.removeAttribute('hidden');
+            csvMailPanel.setAttribute('hidden', '');
+        } else if (tabName === 'mails') {
+            bodyEl.setAttribute('hidden', '');
+            csvMailPanel.removeAttribute('hidden');
+            if (!csvMailPanel.dataset.rendered) {
+                renderMailTab(modal._csvData, csvMailPanel);
+            }
+        }
     });
 }
 

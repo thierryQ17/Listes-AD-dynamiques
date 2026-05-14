@@ -166,7 +166,7 @@ function Invoke-RouteHandler {
                             Filter      = { Enabled -eq $true }
                             SearchBase  = $global:parametresJson.ad.searchBase
                             Credential  = $global:AD_credential
-                            Properties  = @('SamAccountName','Mail','Title','Department','Office','extensionAttribute1','Description')
+                            Properties  = @('SamAccountName','Mail','DisplayName','Title','Department','Office','extensionAttribute1','Description')
                             ErrorAction = 'Stop'
                         }
                         $global:AD_usersCache = @(Get-ADUser @adParams)
@@ -190,6 +190,123 @@ function Invoke-RouteHandler {
             $cached = ($null -ne $global:AD_usersCache -and $global:AD_usersCache.Count -gt 0)
             $count  = if ($cached) { $global:AD_usersCache.Count } else { 0 }
             Send-JsonResponse -Response $Response -Body "{`"cached`":$(if($cached){'true'}else{'false'}),`"count`":$count}"
+        }
+        '^/api/csv/read$' {
+            $dir  = [uri]::UnescapeDataString($Request.QueryString["dir"])
+            $file = [uri]::UnescapeDataString($Request.QueryString["file"])
+            $settingsDir = $global:path."r_settings" -replace '/', '\'
+            $baseDir     = Join-Path (Split-Path (Split-Path $settingsDir -Parent) -Parent) "application\output"
+            $resolved    = [System.IO.Path]::GetFullPath((Join-Path $dir $file))
+            if (-not $resolved.StartsWith($baseDir)) {
+                $Response.StatusCode = 403
+                Send-JsonResponse -Response $Response -Body '{"error":"Chemin non autorisé"}'
+            } elseif (-not (Test-Path $resolved)) {
+                $Response.StatusCode = 404
+                Send-JsonResponse -Response $Response -Body '{"error":"Fichier introuvable"}'
+            } else {
+                $lines = @([System.IO.File]::ReadAllLines($resolved, [System.Text.Encoding]::UTF8))
+                $rows  = [System.Collections.Generic.List[PSCustomObject]]::new()
+                for ($i = 1; $i -lt $lines.Count; $i++) {
+                    $line = $lines[$i].Trim()
+                    if (-not $line) { continue }
+                    $parts = @($line -split ';' | ForEach-Object { $_ -replace '^"|"$', '' })
+                    $nom      = if ($parts.Count -gt 0) { $parts[0] } else { '' }
+                    $sam      = if ($parts.Count -gt 1) { $parts[1] } else { '' }
+                    $mail     = if ($parts.Count -gt 2) { $parts[2] } else { '' }
+                    $fonction = if ($parts.Count -gt 3) { $parts[3] } else { '' }
+                    $rows.Add([PSCustomObject]@{ nom = $nom; sam = $sam; mail = $mail; fonction = $fonction })
+                }
+                Send-JsonResponse -Response $Response -Body (ConvertTo-Json -InputObject @($rows) -Depth 2 -Compress)
+            }
+        }
+        '^/api/regles/preview-groups$' {
+            if ($Method -eq 'POST') {
+                try {
+                    $rule = ConvertFrom-Json (Read-RequestBody -Request $Request)
+                    if (-not $global:AD_usersCache -or $global:AD_usersCache.Count -eq 0) {
+                        Send-JsonResponse -Response $Response -Body '{"error":"Cache AD non disponible — rechargez la page"}'
+                    } else {
+                        $lbl        = if ($rule.prefix) { Clean-ForFileName $rule.prefix } else { Clean-ForFileName $rule.label }
+                        $mailDomain = $global:parametresJson.ad.mailDomain
+                        $filtered   = @($global:AD_usersCache | Where-Object { Test-UserMatchesRule -User $_ -Conditions $rule.conditions })
+                        $groups     = [System.Collections.Generic.List[hashtable]]::new()
+
+                        if ($rule.niveau -eq 3) {
+                            # Hiérarchie complète pour la prévisualisation (monoNiveau n'affecte que la génération CSV)
+                            $byDO = $filtered | Group-Object { Get-NormalizedDepartment $_.Department }
+                            foreach ($doGrp in $byDO) {
+                                $doName  = if ($doGrp.Name) { $doGrp.Name } else { 'SANS-DO' }
+                                $doClean = Clean-ForFileName $doName
+                                $doBase  = "$lbl-$doClean"
+                                foreach ($cGrp in ($doGrp.Group | Group-Object Office)) {
+                                    $cName  = if ($cGrp.Name) { $cGrp.Name } else { 'SANS-CENTRE' }
+                                    $cClean = Clean-ForFileName $cName
+                                    $cBase  = "$lbl-$doClean-$cClean"
+                                    $centreMembers = @($cGrp.Group | Sort-Object DisplayName | ForEach-Object {
+                                        [ordered]@{
+                                            name  = if ($_.DisplayName) { "$($_.DisplayName)" } else { "$($_.SamAccountName)" }
+                                            title = if ($_.Title)       { "$($_.Title)"        } else { '' }
+                                        }
+                                    })
+                                    $groups.Add(@{ name = $cBase; mail = "$($cBase.ToLower())@$mailDomain"; type = 'centre'; count = $cGrp.Group.Count; members = $centreMembers })
+                                }
+                                $groups.Add(@{ name = $doBase; mail = "$($doBase.ToLower())@$mailDomain"; type = 'do'; count = $doGrp.Group.Count })
+                            }
+                            $groups.Add(@{ name = $lbl; mail = "$($lbl.ToLower())@$mailDomain"; type = 'global'; count = $filtered.Count })
+                        } elseif ($rule.niveau -eq 2) {
+                            $byDO = $filtered | Group-Object { Get-NormalizedDepartment $_.Department }
+                            $doNames = [System.Collections.Generic.List[string]]::new()
+                            foreach ($doGrp in $byDO) {
+                                $doName  = if ($doGrp.Name) { $doGrp.Name } else { 'SANS-DO' }
+                                $doClean = Clean-ForFileName $doName
+                                $doBase  = "$lbl-$doClean"
+                                $doNames.Add($doBase)
+                                $groups.Add(@{ name = $doBase; mail = "$($doBase.ToLower())@$mailDomain"; type = 'do'; count = $doGrp.Group.Count })
+                            }
+                            $groups.Add(@{ name = $lbl; mail = "$($lbl.ToLower())@$mailDomain"; type = 'global'; count = $filtered.Count })
+                        } else {
+                            $groups.Add(@{ name = $lbl; mail = "$($lbl.ToLower())@$mailDomain"; type = 'global'; count = $filtered.Count })
+                        }
+
+                        $result = [PSCustomObject]@{
+                            prefix     = $lbl
+                            mailDomain = $mailDomain
+                            total      = $filtered.Count
+                            niveau     = [int]$rule.niveau
+                            monoNiveau = ($rule.monoNiveau -eq $true)
+                            groups     = @($groups)
+                        }
+                        Send-JsonResponse -Response $Response -Body (ConvertTo-Json -InputObject $result -Depth 5 -Compress)
+                    }
+                } catch {
+                    $errMsg = $_.Exception.Message -replace '"', "'"
+                    Send-JsonResponse -Response $Response -Body "{`"error`":`"$errMsg`"}"
+                }
+            }
+        }
+        '^/api/regles/check-mail$' {
+            if ($Method -eq 'POST') {
+                try {
+                    $body = ConvertFrom-Json (Read-RequestBody -Request $Request)
+                    $addr = if ($body.address) { "$($body.address)".Trim() } else { '' }
+                    if (-not $addr) {
+                        Send-JsonResponse -Response $Response -Body '{"error":"Adresse manquante"}'
+                    } else {
+                        $searchBase = $global:parametresJson.ad.searchBase
+                        $ldapFilter = "(|(mail=$addr)(proxyAddresses=*:$addr))"
+                        $obj = Get-ADObject -LDAPFilter $ldapFilter `
+                            -SearchBase $searchBase `
+                            -Credential $global:AD_credential `
+                            -ResultSetSize 1 `
+                            -ErrorAction SilentlyContinue
+                        $isAvailable = ($null -eq $obj)
+                        Send-JsonResponse -Response $Response -Body "{`"available`":$(if ($isAvailable) { 'true' } else { 'false' })}"
+                    }
+                } catch {
+                    $errMsg = $_.Exception.Message -replace '"', "'"
+                    Send-JsonResponse -Response $Response -Body "{`"error`":`"$errMsg`"}"
+                }
+            }
         }
         '^/api/regles/([^/]+)/generate$' {
             $id    = [uri]::UnescapeDataString($Matches[1])

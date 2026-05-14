@@ -100,7 +100,7 @@
             <div class="help-modal-body">
                 <div class="help-section">
                     <div class="help-section-title"><span class="help-step">1</span> Nom de la règle</div>
-                    <p class="help-text">Donnez un nom court et descriptif (ex. <em>Administratif</em>, <em>Enseignants CDI</em>). Ce nom sera utilisé comme préfixe dans les noms de fichiers CSV générés.</p>
+                    <p class="help-text">Donnez un nom court et descriptif (ex. <em>Administratif</em>, <em>Formateurs</em>). Ce nom devient le préfixe de tous les fichiers CSV et groupes AD générés.</p>
                 </div>
                 <div class="help-section">
                     <div class="help-section-title"><span class="help-step">2</span> Règle active / inactive</div>
@@ -108,23 +108,29 @@
                 </div>
                 <div class="help-section">
                     <div class="help-section-title"><span class="help-step">3</span> Niveau de groupement</div>
+                    <p class="help-text">Détermine comment les utilisateurs sont répartis entre les fichiers CSV et les groupes AD.</p>
                     <div class="help-niveau-grid">
                         <div class="help-niveau-card">
                             <span class="help-niveau-num">1</span>
                             <span class="help-niveau-lbl">Global</span>
-                            <span class="help-niveau-desc">1 fichier CSV contenant tous les utilisateurs correspondants.</span>
+                            <span class="help-niveau-desc">1 seul fichier CSV avec tous les utilisateurs correspondants.<br>→ 1 groupe AD global.</span>
                         </div>
                         <div class="help-niveau-card">
                             <span class="help-niveau-num">2</span>
                             <span class="help-niveau-lbl">Par DO</span>
-                            <span class="help-niveau-desc">1 CSV par direction (Department) + 1 CSV global. Idéal pour des listes par service.</span>
+                            <span class="help-niveau-desc">1 CSV par direction opérationnelle + 1 CSV global.<br>→ 1 groupe AD par DO (membres = utilisateurs) + 1 groupe global (membres = groupes DO).</span>
                         </div>
                         <div class="help-niveau-card">
                             <span class="help-niveau-num">3</span>
                             <span class="help-niveau-lbl">Par centre</span>
-                            <span class="help-niveau-desc">1 CSV par centre (Office) dans chaque DO + 1 CSV par DO + 1 CSV global.</span>
+                            <span class="help-niveau-desc">
+                                <strong>Complet :</strong> 1 CSV par centre + 1 CSV par DO + 1 CSV global.<br>
+                                → Hiérarchie complète : groupe centre (utilisateurs) → groupe DO (groupes centres) → groupe global (groupes DO).<br><br>
+                                <strong>Par centre uniquement :</strong> 1 CSV par centre seulement (sans DO ni global) — cochez l'option dédiée.
+                            </span>
                         </div>
                     </div>
+                    <p class="help-text" style="margin-top:8px">Les directions opérationnelles sont normalisées automatiquement : <em>DO NORD</em> et <em>DO IDF</em> sont regroupées sous <em>DO I2N</em>, <em>DO SUD</em> et <em>DO SUD-EST</em> sous <em>DO SUD</em>, etc.</p>
                 </div>
                 <div class="help-section">
                     <div class="help-section-title"><span class="help-step">4</span> Conditions d'inclusion</div>
@@ -155,7 +161,27 @@
                 </div>
                 <div class="help-section">
                     <div class="help-section-title"><span class="help-step">8</span> Générer les CSV</div>
-                    <p class="help-text">Une fois la règle enregistrée, utilisez le bouton <strong>Générer les CSV</strong> (ou l'icône téléchargement dans la carte) pour lancer la génération. Les fichiers sont créés dans <code>application/output/</code>, dans un sous-dossier horodaté.</p>
+                    <p class="help-text">Une fois la règle enregistrée, cliquez sur <strong>Générer le CSV</strong>. L'AD est interrogé en lecture seule, les utilisateurs sont filtrés selon les conditions, puis les fichiers sont écrits dans <code>application/output/</code> dans un sous-dossier horodaté.</p>
+                    <ul class="help-list">
+                        <li>Chaque fichier contient : <strong>Nom</strong>, SAM Account Name, Mail, <strong>Fonction</strong>.</li>
+                        <li>À la fin, une modale liste tous les fichiers classés par hiérarchie (global → DO → centre).</li>
+                        <li><strong>Cliquer sur un fichier</strong> affiche son contenu (Nom + Fonction des utilisateurs).</li>
+                    </ul>
+                </div>
+                <div class="help-section">
+                    <div class="help-section-title"><span class="help-step">9</span> Simulation provisionnement groupes AD</div>
+                    <p class="help-text">Après chaque génération CSV, la console affiche une <strong>simulation complète</strong> du provisionnement des groupes de distribution AD (tag <code>[AD-PROV]</code>). Les opérations AD sont <strong>commentées</strong> — aucune modification n'est effectuée.</p>
+                    <ul class="help-list">
+                        <li><strong>Étape 1 :</strong> liste de tous les groupes à créer (<code>New-ADGroup</code>) avec leur mail et leur type (parent / feuille).</li>
+                        <li><strong>Étape 2 :</strong> alimentation de chaque groupe — les groupes <em>feuilles</em> (centre) reçoivent les utilisateurs du CSV (<code>Add-ADGroupMember</code>) ; les groupes <em>parents</em> (DO, global) reçoivent leurs sous-groupes comme membres.</li>
+                    </ul>
+                    <p class="help-text">Exemple pour la règle <em>FORMATEURS</em> au niveau 3 :</p>
+                    <pre class="help-pre">FORMATEURS              ← groupe global (membres = groupes DO)
+  FORMATEURS-DO-I2N     ← groupe DO    (membres = groupes centres)
+    FORMATEURS-DO-I2N-CENTRE-LILLE  ← groupe centre (membres = utilisateurs)
+    FORMATEURS-DO-I2N-CENTRE-PARIS
+  FORMATEURS-DO-OUEST
+    FORMATEURS-DO-OUEST-CENTRE-NANTES</pre>
                 </div>
             </div>
         </div>
@@ -169,6 +195,64 @@
                 <button class="btn-secondary" id="confirm-cancel">Annuler</button>
                 <button id="confirm-ok">Confirmer</button>
             </div>
+        </div>
+    </div>
+
+    <!-- Overlay génération CSV -->
+    <div id="gen-overlay" hidden>
+        <div class="gen-overlay-inner">
+            <div class="gen-overlay-spinner"></div>
+            <p class="gen-overlay-title">Génération CSV</p>
+            <p class="gen-overlay-step" id="gen-overlay-step"></p>
+        </div>
+    </div>
+
+    <!-- Sous-modal contenu fichier CSV -->
+    <div id="csv-file-modal" class="csv-file-modal-overlay" hidden>
+        <div class="csv-file-modal-box">
+            <div class="csv-file-modal-header">
+                <span class="csv-file-modal-title" id="csv-file-modal-title"></span>
+                <button id="btn-csv-file-close" class="csv-modal-close" title="Fermer">
+                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+                        <path d="M1 1l12 12M13 1L1 13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                    </svg>
+                </button>
+            </div>
+            <div class="csv-file-modal-body" id="csv-file-modal-body"></div>
+        </div>
+    </div>
+
+    <!-- Modal Prévisualisation groupes AD -->
+    <div id="groups-preview-modal" class="gp-overlay" hidden>
+        <div class="gp-box">
+            <div class="gp-header">
+                <div class="gp-header-left">
+                    <span class="gp-title">Prévisualisation — Groupes AD</span>
+                    <span class="gp-summary" id="gp-summary"></span>
+                </div>
+                <div style="display:flex;gap:6px;align-items:center;">
+                    <button id="btn-gp-expand" class="gp-close" title="Agrandir">
+                        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+                            <path d="M1 5V1h4M9 1h4v4M13 9v4H9M5 13H1V9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                    </button>
+                    <button id="btn-gp-close" class="gp-close" title="Fermer">
+                        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+                            <path d="M1 1l12 12M13 1L1 13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+            <div class="gp-meta" id="gp-meta"></div>
+            <div class="gp-tabs" id="gp-tabs">
+                <button class="gp-tab gp-tab--active" data-tab="groupes">Groupes</button>
+                <button class="gp-tab" data-tab="mails">
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m2 8 10 7 10-7"/></svg>
+                    Adresses mail
+                </button>
+            </div>
+            <div class="gp-body" id="gp-body"></div>
+            <div class="gp-mail-panel" id="gp-mail-panel" hidden></div>
         </div>
     </div>
 
@@ -186,8 +270,10 @@
                     </svg>
                 </button>
             </div>
+            <div id="csv-modal-criteria" class="csv-modal-criteria"></div>
             <div class="csv-modal-tabs" id="csv-modal-tabs"></div>
             <div class="csv-modal-body" id="csv-modal-body"></div>
+            <div class="csv-mail-panel" id="csv-mail-panel" hidden></div>
             <div class="csv-modal-footer" id="csv-modal-footer"></div>
         </div>
     </div>

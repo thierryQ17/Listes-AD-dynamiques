@@ -795,10 +795,12 @@ tr.row-selected td {
     padding: 5px 12px 6px;
     border-bottom: 1px solid var(--border-lt);
     flex-shrink: 0;
+    display: flex;
+    gap: 6px;
 }
 
 .btn-tree-toggle {
-    width: 100%;
+    flex: 1;
     height: 24px;
     font-size: 11.5px;
     font-family: inherit;
@@ -814,6 +816,30 @@ tr.row-selected td {
 .btn-tree-toggle:hover {
     background: #eeeae4;
     color: var(--text);
+}
+
+.btn-refresh-all {
+    flex-shrink: 0;
+    height: 24px;
+    padding: 0 8px;
+    font-size: 11.5px;
+    font-family: inherit;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--text-sub);
+    cursor: pointer;
+    transition: background .1s, color .1s;
+}
+
+.btn-refresh-all:hover {
+    background: #eeeae4;
+    color: var(--text);
+}
+
+.btn-refresh-all:disabled {
+    opacity: .5;
+    cursor: not-allowed;
 }
 
 /* ============================================================
@@ -1266,4 +1292,29 @@ td.col-func.func-clickable:hover { color: #2563eb; text-decoration-color: #2563e
     font-size: 11px;
     color: var(--text-muted, #9ca3af);
     font-weight: 400;
+}
+.search-uncached-badge {
+    display: inline-block;
+    margin-left: 8px;
+    font-size: 10px;
+    font-weight: 500;
+    color: #92400e;
+    background: #fef3c7;
+    border: 1px solid #fcd34d;
+    border-radius: 4px;
+    padding: 1px 6px;
+    vertical-align: middle;
+    cursor: pointer;
+}
+.search-uncached-hint {
+    color: var(--text-muted, #9ca3af) !important;
+    font-style: italic;
+}
+mark.hl {
+    background: #fef08a;
+    color: inherit;
+    border-radius: 2px;
+    padding: 0 1px;
+    font-style: inherit;
+    font-weight: inherit;
 }

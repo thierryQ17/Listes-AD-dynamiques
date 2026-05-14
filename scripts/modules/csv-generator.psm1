@@ -17,7 +17,7 @@ function Invoke-RuleGeneration {
             Filter      = { Enabled -eq $true }
             SearchBase  = $searchBase
             Credential  = $global:AD_credential
-            Properties  = @('SamAccountName','Mail','Title','Department','Office','extensionAttribute1','Description')
+            Properties  = @('SamAccountName','Mail','DisplayName','Title','Department','Office','extensionAttribute1','Description')
             ErrorAction = 'Stop'
         }
         $allUsers = @(Get-ADUser @adParams)
@@ -42,11 +42,46 @@ function Invoke-RuleGeneration {
 
     add-msg -msg "  [CSV] Terminé : $(@($files).Count) fichiers dans '$outDir'." -foregroundColor Green -quelType writeHost
 
+    Invoke-GroupProvisioning -Files @($files) -OutDir $outDir -Rule $Rule
+
+    # Calcul des groupes (même logique que preview-groups) pour le contrôle des adresses mail
+    $lbl        = if ($Rule.prefix) { Clean-ForFileName $Rule.prefix } else { Clean-ForFileName $Rule.label }
+    $mailDomain = $global:parametresJson.ad.mailDomain
+    $gpGroups   = [System.Collections.Generic.List[hashtable]]::new()
+
+    if ($Rule.niveau -eq 3) {
+        $byDO = $filtered | Group-Object { Get-NormalizedDepartment $_.Department }
+        foreach ($doGrp in $byDO) {
+            $doName  = if ($doGrp.Name) { $doGrp.Name } else { 'SANS-DO' }
+            $doClean = Clean-ForFileName $doName
+            $doBase  = "$lbl-$doClean"
+            foreach ($cGrp in ($doGrp.Group | Group-Object Office)) {
+                $cName  = if ($cGrp.Name) { $cGrp.Name } else { 'SANS-CENTRE' }
+                $cBase  = "$lbl-$doClean-$(Clean-ForFileName $cName)"
+                $gpGroups.Add(@{ name = $cBase; mail = "$($cBase.ToLower())@$mailDomain"; type = 'centre'; count = $cGrp.Group.Count })
+            }
+            $gpGroups.Add(@{ name = $doBase; mail = "$($doBase.ToLower())@$mailDomain"; type = 'do'; count = $doGrp.Group.Count })
+        }
+        $gpGroups.Add(@{ name = $lbl; mail = "$($lbl.ToLower())@$mailDomain"; type = 'global'; count = $filtered.Count })
+    } elseif ($Rule.niveau -eq 2) {
+        $byDO = $filtered | Group-Object { Get-NormalizedDepartment $_.Department }
+        foreach ($doGrp in $byDO) {
+            $doName  = if ($doGrp.Name) { $doGrp.Name } else { 'SANS-DO' }
+            $doBase  = "$lbl-$(Clean-ForFileName $doName)"
+            $gpGroups.Add(@{ name = $doBase; mail = "$($doBase.ToLower())@$mailDomain"; type = 'do'; count = $doGrp.Group.Count })
+        }
+        $gpGroups.Add(@{ name = $lbl; mail = "$($lbl.ToLower())@$mailDomain"; type = 'global'; count = $filtered.Count })
+    } else {
+        $gpGroups.Add(@{ name = $lbl; mail = "$($lbl.ToLower())@$mailDomain"; type = 'global'; count = $filtered.Count })
+    }
+
     return [PSCustomObject]@{
-        ok     = $true
-        outDir = $outDir
-        files  = @($files)
-        total  = $filtered.Count
+        ok         = $true
+        outDir     = $outDir
+        files      = @($files)
+        total      = $filtered.Count
+        groups     = @($gpGroups)
+        mailDomain = $mailDomain
     }
 }
 
@@ -55,12 +90,17 @@ function Invoke-RuleGeneration {
 function Test-UserMatchesRule {
     param($User, $Conditions)
 
-    # Au moins une condition include doit correspondre (OR)
     $inc = @($Conditions.include)
-    $matchInc = ($inc.Count -eq 0) -or ($null -ne ($inc | Where-Object { Test-Condition -User $User -Cond $_ } | Select-Object -First 1))
-    if (-not $matchInc) { return $false }
+    if ($inc.Count -gt 0) {
+        $positive = @($inc | Where-Object { $_.op -in @('eq','like') })
+        $negative = @($inc | Where-Object { $_.op -in @('ne','notlike') })
+        # Conditions positives : OR (au moins une doit correspondre)
+        $matchPos = ($positive.Count -eq 0) -or ($null -ne ($positive | Where-Object { Test-Condition -User $User -Cond $_ } | Select-Object -First 1))
+        # Conditions négatives : AND (toutes doivent correspondre)
+        $matchNeg = ($negative.Count -eq 0) -or ($null -eq ($negative | Where-Object { -not (Test-Condition -User $User -Cond $_) } | Select-Object -First 1))
+        if (-not ($matchPos -and $matchNeg)) { return $false }
+    }
 
-    # Aucune condition exclude ne doit correspondre (OR)
     $exc = @($Conditions.exclude)
     if ($exc.Count -gt 0) {
         $matchExc = $null -ne ($exc | Where-Object { Test-Condition -User $User -Cond $_ } | Select-Object -First 1)
@@ -90,92 +130,112 @@ function Test-Condition {
     }
 }
 
-# ── Écriture CSV ────────────────────────────────────────────────────────
+# ── Conversion en contenu CSV (thread principal — objets AD natifs) ──────────
+
+function Get-CsvContent {
+    param($Users)
+    # Accès aux propriétés AD dans le thread principal (non sérialisées)
+    $sb = [System.Text.StringBuilder]::new()
+    [void]$sb.AppendLine('"nom";"samaccountname";"mail";"fonction"')
+    foreach ($u in @($Users)) {
+        $n = [string]$u.DisplayName
+        $s = [string]$u.SamAccountName
+        $m = [string]$u.Mail
+        $f = [string]$u.Title
+        [void]$sb.AppendLine("`"$n`";`"$s`";`"$m`";`"$f`"")
+    }
+    return $sb.ToString()
+}
+
+# ── Écriture parallèle (reçoit du texte pré-calculé, pas d'objets AD) ────────
+
+function Invoke-WriteJobs {
+    param([System.Collections.Generic.List[hashtable]]$Jobs)
+    $Jobs | ForEach-Object -Parallel {
+        [System.IO.File]::WriteAllText($_.path, $_.content, [System.Text.Encoding]::UTF8)
+    } -ThrottleLimit 8
+}
 
 function Write-CsvNiveau3 {
     param($Users, [string]$Label, [string]$OutDir)
 
-    $files     = [System.Collections.Generic.List[string]]::new()
     $lbl       = Clean-ForFileName $Label
     $userArray = @($Users)
+    $jobs      = [System.Collections.Generic.List[hashtable]]::new()
 
-    $byDO = $userArray | Group-Object Department
+    add-msg -msg "  [CSV] Génération niveau 3 (centre + DO + global) — '$Label'" -foregroundColor DarkCyan -quelType writeHost
+    $byDO = $userArray | Group-Object { Get-NormalizedDepartment $_.Department }
     foreach ($doGrp in $byDO) {
         $doName  = if ($doGrp.Name) { $doGrp.Name } else { 'SANS-DO' }
         $doClean = Clean-ForFileName $doName
-
-        $byCentre = $doGrp.Group | Group-Object Office
-        foreach ($cGrp in $byCentre) {
+        foreach ($cGrp in ($doGrp.Group | Group-Object Office)) {
             $cName  = if ($cGrp.Name) { $cGrp.Name } else { 'SANS-CENTRE' }
             $cClean = Clean-ForFileName $cName
             $fname  = "$lbl-$doClean-$cClean.csv"
-            Write-UsersCsv -Users $cGrp.Group -Path (Join-Path $OutDir $fname)
-            $files.Add($fname)
-            add-msg -msg "  [CSV]   $fname ($($cGrp.Count))" -foregroundColor DarkGray -quelType writeHost
+            add-msg -msg "  [CSV]   + '$fname' ($($cGrp.Group.Count) utilisateur(s)) [centre]" -foregroundColor DarkGray -quelType writeHost
+            $jobs.Add(@{ path = Join-Path $OutDir $fname; fname = $fname; content = Get-CsvContent $cGrp.Group })
         }
-
         $fname = "$lbl-$doClean.csv"
-        Write-UsersCsv -Users $doGrp.Group -Path (Join-Path $OutDir $fname)
-        $files.Add($fname)
-        add-msg -msg "  [CSV]   $fname ($($doGrp.Count), récursif DO)" -foregroundColor DarkGray -quelType writeHost
+        add-msg -msg "  [CSV]   + '$fname' ($($doGrp.Group.Count) utilisateur(s)) [DO]" -foregroundColor DarkGray -quelType writeHost
+        $jobs.Add(@{ path = Join-Path $OutDir $fname; fname = $fname; content = Get-CsvContent $doGrp.Group })
     }
-
     $fname = "$lbl.csv"
-    Write-UsersCsv -Users $userArray -Path (Join-Path $OutDir $fname)
-    $files.Add($fname)
-    add-msg -msg "  [CSV]   $fname ($($userArray.Count), global)" -foregroundColor DarkGray -quelType writeHost
+    add-msg -msg "  [CSV]   + '$fname' ($($userArray.Count) utilisateur(s)) [global]" -foregroundColor DarkGray -quelType writeHost
+    $jobs.Add(@{ path = Join-Path $OutDir $fname; fname = $fname; content = Get-CsvContent $userArray })
 
-    return @($files)
+    add-msg -msg "  [CSV] Écriture de $($jobs.Count) fichier(s) en parallèle…" -foregroundColor DarkCyan -quelType writeHost
+    Invoke-WriteJobs -Jobs $jobs
+    return @($jobs | ForEach-Object { $_.fname })
 }
 
 function Write-CsvNiveau3Mono {
     param($Users, [string]$Label, [string]$OutDir)
 
-    $files     = [System.Collections.Generic.List[string]]::new()
     $lbl       = Clean-ForFileName $Label
     $userArray = @($Users)
+    $jobs      = [System.Collections.Generic.List[hashtable]]::new()
 
-    $byDO = $userArray | Group-Object Department
+    add-msg -msg "  [CSV] Génération niveau 3 mono (centre uniquement) — '$Label'" -foregroundColor DarkCyan -quelType writeHost
+    $byDO = $userArray | Group-Object { Get-NormalizedDepartment $_.Department }
     foreach ($doGrp in $byDO) {
-        $doName   = if ($doGrp.Name) { $doGrp.Name } else { 'SANS-DO' }
-        $doClean  = Clean-ForFileName $doName
-        $byCentre = $doGrp.Group | Group-Object Office
-        foreach ($cGrp in $byCentre) {
+        $doName  = if ($doGrp.Name) { $doGrp.Name } else { 'SANS-DO' }
+        $doClean = Clean-ForFileName $doName
+        foreach ($cGrp in ($doGrp.Group | Group-Object Office)) {
             $cName  = if ($cGrp.Name) { $cGrp.Name } else { 'SANS-CENTRE' }
             $cClean = Clean-ForFileName $cName
             $fname  = "$lbl-$doClean-$cClean.csv"
-            Write-UsersCsv -Users $cGrp.Group -Path (Join-Path $OutDir $fname)
-            $files.Add($fname)
-            add-msg -msg "  [CSV]   $fname ($($cGrp.Count))" -foregroundColor DarkGray -quelType writeHost
+            add-msg -msg "  [CSV]   + '$fname' ($($cGrp.Group.Count) utilisateur(s)) [centre]" -foregroundColor DarkGray -quelType writeHost
+            $jobs.Add(@{ path = Join-Path $OutDir $fname; fname = $fname; content = Get-CsvContent $cGrp.Group })
         }
     }
 
-    return @($files)
+    add-msg -msg "  [CSV] Écriture de $($jobs.Count) fichier(s) en parallèle…" -foregroundColor DarkCyan -quelType writeHost
+    Invoke-WriteJobs -Jobs $jobs
+    return @($jobs | ForEach-Object { $_.fname })
 }
 
 function Write-CsvNiveau2 {
     param($Users, [string]$Label, [string]$OutDir)
 
-    $files     = [System.Collections.Generic.List[string]]::new()
     $lbl       = Clean-ForFileName $Label
     $userArray = @($Users)
+    $jobs      = [System.Collections.Generic.List[hashtable]]::new()
 
-    $byDO = $userArray | Group-Object Department
+    add-msg -msg "  [CSV] Génération niveau 2 (DO + global) — '$Label'" -foregroundColor DarkCyan -quelType writeHost
+    $byDO = $userArray | Group-Object { Get-NormalizedDepartment $_.Department }
     foreach ($doGrp in $byDO) {
-        $doName  = if ($doGrp.Name) { $doGrp.Name } else { 'SANS-DO' }
-        $doClean = Clean-ForFileName $doName
-        $fname   = "$lbl-$doClean.csv"
-        Write-UsersCsv -Users $doGrp.Group -Path (Join-Path $OutDir $fname)
-        $files.Add($fname)
-        add-msg -msg "  [CSV]   $fname ($($doGrp.Count))" -foregroundColor DarkGray -quelType writeHost
+        $doName = if ($doGrp.Name) { $doGrp.Name } else { 'SANS-DO' }
+        $fname  = "$lbl-$(Clean-ForFileName $doName).csv"
+        add-msg -msg "  [CSV]   + '$fname' ($($doGrp.Group.Count) utilisateur(s)) [DO]" -foregroundColor DarkGray -quelType writeHost
+        $jobs.Add(@{ path = Join-Path $OutDir $fname; fname = $fname; content = Get-CsvContent $doGrp.Group })
     }
-
     $fname = "$lbl.csv"
-    Write-UsersCsv -Users $userArray -Path (Join-Path $OutDir $fname)
-    $files.Add($fname)
-    add-msg -msg "  [CSV]   $fname ($($userArray.Count), global)" -foregroundColor DarkGray -quelType writeHost
+    add-msg -msg "  [CSV]   + '$fname' ($($userArray.Count) utilisateur(s)) [global]" -foregroundColor DarkGray -quelType writeHost
+    $jobs.Add(@{ path = Join-Path $OutDir $fname; fname = $fname; content = Get-CsvContent $userArray })
 
-    return @($files)
+    add-msg -msg "  [CSV] Écriture de $($jobs.Count) fichier(s) en parallèle…" -foregroundColor DarkCyan -quelType writeHost
+    Invoke-WriteJobs -Jobs $jobs
+    return @($jobs | ForEach-Object { $_.fname })
 }
 
 function Write-CsvNiveau1 {
@@ -183,24 +243,135 @@ function Write-CsvNiveau1 {
 
     $lbl   = Clean-ForFileName $Label
     $fname = "$lbl.csv"
-    Write-UsersCsv -Users @($Users) -Path (Join-Path $OutDir $fname)
-    add-msg -msg "  [CSV]   $fname ($(@($Users).Count), global)" -foregroundColor DarkGray -quelType writeHost
+    $path  = Join-Path $OutDir $fname
+    add-msg -msg "  [CSV] Génération niveau 1 (global uniquement) — '$Label'" -foregroundColor DarkCyan -quelType writeHost
+    add-msg -msg "  [CSV]   + '$fname' ($(@($Users).Count) utilisateur(s)) [global]" -foregroundColor DarkGray -quelType writeHost
+    [System.IO.File]::WriteAllText($path, (Get-CsvContent $Users), [System.Text.Encoding]::UTF8)
+    add-msg -msg "  [CSV] Écriture de 1 fichier terminée." -foregroundColor DarkCyan -quelType writeHost
     return @($fname)
 }
 
-function Write-UsersCsv {
-    param($Users, [string]$Path)
-    $lines = [System.Collections.Generic.List[string]]::new()
-    $lines.Add('"samaccountname";"mail"')
-    foreach ($u in @($Users)) {
-        $sam  = if ($u.SamAccountName) { $u.SamAccountName } else { '' }
-        $mail = if ($u.Mail)           { $u.Mail }           else { '' }
-        $lines.Add("`"$sam`";`"$mail`"")
+# ── Helpers ─────────────────────────────────────────────────────────────
+
+function Get-NormalizedDepartment {
+    param([string]$Department)
+    if (-not $Department) { return '' }
+    $dept = $Department.Trim().ToUpper()
+    foreach ($region in $global:parametresJson.ad.regions) {
+        if ($dept -eq $region.label.ToUpper()) { return $region.label }
+        foreach ($alias in @($region.aliases)) {
+            if ($dept -eq $alias.ToUpper()) { return $region.label }
+        }
     }
-    [System.IO.File]::WriteAllLines($Path, $lines, [System.Text.Encoding]::UTF8)
+    return $Department
 }
 
-# ── Helpers ─────────────────────────────────────────────────────────────
+function Find-FileParent {
+    param([string]$Base, [string[]]$AllBases)
+    $best = $null
+    foreach ($b in $AllBases) {
+        if ($b -ne $Base -and $Base.StartsWith($b + '-')) {
+            if (-not $best -or $b.Length -gt $best.Length) { $best = $b }
+        }
+    }
+    return $best
+}
+
+function Invoke-GroupProvisioning {
+    param(
+        [string[]]$Files,
+        [string]$OutDir,
+        [PSCustomObject]$Rule
+    )
+
+    $groupsOU    = $global:parametresJson.ad.groupsOU
+    $searchBase  = $global:parametresJson.ad.searchBase
+    $domainParts = @($searchBase -split ',' | Where-Object { $_ -match '^DC=' } | ForEach-Object { $_ -replace '^DC=', '' })
+    $domain      = $domainParts -join '.'
+
+    add-msg -msg "  [AD-PROV] ═══════════════════════════════════════════════════" -foregroundColor Magenta -quelType writeHost
+    add-msg -msg "  [AD-PROV] SIMULATION — Provisionnement groupes de distribution" -foregroundColor Magenta -quelType writeHost
+    add-msg -msg "  [AD-PROV] Règle    : $($Rule.label)" -foregroundColor Magenta -quelType writeHost
+    add-msg -msg "  [AD-PROV] Niveau   : $($Rule.niveau) | monoNiveau : $($Rule.monoNiveau)" -foregroundColor Magenta -quelType writeHost
+    add-msg -msg "  [AD-PROV] OU cible : $groupsOU" -foregroundColor Magenta -quelType writeHost
+    add-msg -msg "  [AD-PROV] Domaine  : $domain" -foregroundColor Magenta -quelType writeHost
+    add-msg -msg "  [AD-PROV] ═══════════════════════════════════════════════════" -foregroundColor Magenta -quelType writeHost
+
+    if (-not $Files -or $Files.Count -eq 0) {
+        add-msg -msg "  [AD-PROV] Aucun fichier CSV — provisionnement ignoré." -foregroundColor DarkGray -quelType writeHost
+        return
+    }
+
+    $sorted = @($Files | Sort-Object { $_.Length })
+    $bases  = @($sorted | ForEach-Object { $_ -replace '(?i)\.csv$', '' })
+
+    # Identifier les groupes parents (ont au moins un enfant direct)
+    $parentSet = @{}
+    foreach ($base in $bases) {
+        $parent = Find-FileParent -Base $base -AllBases $bases
+        if ($parent) { $parentSet[$parent] = $true }
+    }
+
+    # ── Étape 1 : Création des groupes ──────────────────────────────────
+    add-msg -msg "  [AD-PROV] --- Étape 1 : Création des groupes ($($bases.Count)) ---" -foregroundColor Cyan -quelType writeHost
+    foreach ($base in $bases) {
+        $isParent  = $parentSet.ContainsKey($base)
+        $typeLabel = if ($isParent) { 'parent (contiendra des sous-groupes)' } else { 'feuille (contiendra des utilisateurs)' }
+        $groupMail = "$base@$domain"
+        add-msg -msg "  [AD-PROV] Groupe : '$base' [$typeLabel]" -foregroundColor White -quelType writeHost
+        add-msg -msg "  [AD-PROV]   Mail  : $groupMail" -foregroundColor DarkGray -quelType writeHost
+        # DÉSACTIVÉ — écriture AD non autorisée pour l'instant :
+        # New-ADGroup_tge `
+        #     -Name            $base `
+        #     -SamAccountName  $base `
+        #     -GroupCategory   Distribution `
+        #     -GroupScope      Universal `
+        #     -Path            $groupsOU `
+        #     -OtherAttributes @{ mail = $groupMail; proxyAddresses = "SMTP:$groupMail" } `
+        #     -Credential      $global:AD_credential
+    }
+
+    # ── Étape 2 : Alimentation des groupes ──────────────────────────────
+    add-msg -msg "  [AD-PROV] --- Étape 2 : Alimentation des groupes ---" -foregroundColor Cyan -quelType writeHost
+    for ($i = 0; $i -lt $sorted.Count; $i++) {
+        $fname = $sorted[$i]
+        $base  = $bases[$i]
+
+        if ($parentSet.ContainsKey($base)) {
+            # Groupe parent → membres = sous-groupes directs
+            $children = @($bases | Where-Object { (Find-FileParent -Base $_ -AllBases $bases) -eq $base })
+            add-msg -msg "  [AD-PROV] '$base' ← $($children.Count) sous-groupe(s) :" -foregroundColor White -quelType writeHost
+            foreach ($child in $children) {
+                add-msg -msg "  [AD-PROV]   + '$child'" -foregroundColor DarkGray -quelType writeHost
+                # DÉSACTIVÉ — écriture AD non autorisée pour l'instant :
+                # Add-ADGroupMember_tge `
+                #     -Identity   $base `
+                #     -Members    $child `
+                #     -Credential $global:AD_credential
+            }
+        } else {
+            # Groupe feuille → membres = utilisateurs du CSV
+            $csvPath = Join-Path $OutDir $fname
+            try {
+                $allLines  = [System.IO.File]::ReadAllLines($csvPath, [System.Text.Encoding]::UTF8)
+                $userCount = [math]::Max(0, $allLines.Count - 1)
+            } catch { $userCount = '(erreur lecture)' }
+            add-msg -msg "  [AD-PROV] '$base' ← $userCount utilisateur(s) depuis '$fname'" -foregroundColor White -quelType writeHost
+            # DÉSACTIVÉ — écriture AD non autorisée pour l'instant :
+            # $members = Import-Csv -Path $csvPath -Delimiter ';' |
+            #            Where-Object { $_.samaccountname } |
+            #            Select-Object -ExpandProperty samaccountname
+            # if ($members.Count -gt 0) {
+            #     Add-ADGroupMember_tge `
+            #         -Identity   $base `
+            #         -Members    $members `
+            #         -Credential $global:AD_credential
+            # }
+        }
+    }
+
+    add-msg -msg "  [AD-PROV] ═══ Fin simulation : $($Files.Count) groupe(s) à provisionner ═══" -foregroundColor Magenta -quelType writeHost
+}
 
 function Get-RunOutputDir {
     param([string]$Label)
