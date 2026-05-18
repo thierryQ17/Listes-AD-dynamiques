@@ -1175,11 +1175,11 @@ body { overflow: hidden; }
 
 /* Icône œil sur les cartes de groupe */
 .btn-gp-eye-peer {
-    display: flex;
+    display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 20px;
-    height: 20px;
+    width: 16px;
+    height: 16px;
     padding: 0;
     border: none;
     background: none;
@@ -1190,7 +1190,7 @@ body { overflow: hidden; }
     opacity: 0;
     transition: opacity .15s, background .1s;
 }
-.gp-row-item:hover .btn-gp-eye-peer { opacity: 0.7; }
+.gp-row-item:hover .btn-gp-eye-peer { opacity: 0.65; }
 .btn-gp-eye-peer:hover { opacity: 1 !important; background: var(--accent-lt); }
 
 /* Mini-modale flottante draggable */

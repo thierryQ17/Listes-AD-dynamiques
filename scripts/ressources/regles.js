@@ -734,12 +734,12 @@ function showGroupsPreviewModal(data, sourceRule = null) {
             `<div class="gp-row-info">` +
                 `<div class="gp-row-top">` +
                     `<div class="gp-row-name">${esc(g.name)}</div>` +
+                    eyeBtn +
                     `<div class="gp-row-count" title="${n} utilisateur${n !== 1 ? 's' : ''}">${n}</div>` +
                 `</div>` +
                 `<div class="gp-row-mail">${esc(g.mail)}</div>` +
                 membersHtml +
             `</div>` +
-            eyeBtn +
             (clickable ? `<span class="gp-row-chevron">${SVG_CHV}</span>` : '') +
             `</div>`;
     }
