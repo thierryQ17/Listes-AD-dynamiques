@@ -159,7 +159,14 @@ function Invoke-RouteHandler {
                 $regles = if (Test-Path $rPath) { @(ConvertFrom-Json ([System.IO.File]::ReadAllText($rPath, [System.Text.Encoding]::UTF8))) } else { @() }
                 $idx    = -1
                 for ($i = 0; $i -lt $regles.Count; $i++) { if ($regles[$i].id -eq $rule.id) { $idx = $i; break } }
-                if ($idx -ge 0) { $regles[$idx] = $rule } else { $regles += $rule }
+                if ($idx -ge 0) {
+                    $stored = $regles[$idx]
+                    $regles[$idx] = $rule
+                    # Préserver les champs non gérés par le formulaire (ex. invertOf)
+                    if ($stored.PSObject.Properties['invertOf'] -and -not $rule.PSObject.Properties['invertOf']) {
+                        $regles[$idx] | Add-Member -NotePropertyName 'invertOf' -NotePropertyValue $stored.invertOf -Force
+                    }
+                } else { $regles += $rule }
                 [System.IO.File]::WriteAllText($rPath, (ConvertTo-Json -InputObject @($regles) -Depth 10 -Compress), [System.Text.Encoding]::UTF8)
                 Send-JsonResponse -Response $Response -Body '{"ok":true}'
             }

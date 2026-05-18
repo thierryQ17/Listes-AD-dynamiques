@@ -121,6 +121,17 @@ body { overflow: hidden; }
     white-space: nowrap;
 }
 
+.rule-link-badge {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+    color: var(--accent);
+    opacity: .7;
+    cursor: default;
+}
+.rule-link-badge:hover { opacity: 1; }
+.rule-link-icon { display: block; }
+
 .btn-card-edit,
 .btn-card-generate,
 .btn-card-toggle {
