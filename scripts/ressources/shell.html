@@ -61,6 +61,8 @@
 
         window.switchTab = switchTab;
 
+        let _cachePollingTimer = null;
+
         async function refreshCacheDate() {
             try {
                 const r = await fetch('/api/cache/info');
@@ -77,13 +79,34 @@
                     el.textContent = 'Cache : absent';
                     el.hidden = false;
                 }
-            } catch { }
+                return d.builtAt || null;
+            } catch { return null; }
         }
+
+        function startCacheDatePolling(knownBuiltAt) {
+            if (_cachePollingTimer) clearInterval(_cachePollingTimer);
+            const deadline = Date.now() + 10 * 60 * 1000;
+            _cachePollingTimer = setInterval(async () => {
+                const builtAt = await refreshCacheDate();
+                if (builtAt && builtAt !== knownBuiltAt) {
+                    clearInterval(_cachePollingTimer);
+                    _cachePollingTimer = null;
+                }
+                if (Date.now() > deadline) {
+                    clearInterval(_cachePollingTimer);
+                    _cachePollingTimer = null;
+                }
+            }, 10000);
+        }
+
         refreshCacheDate();
         setInterval(refreshCacheDate, 60000);
 
-        window.addEventListener('message', e => {
-            if (e.data?.type === 'cache-rebuilt') refreshCacheDate();
+        window.addEventListener('message', async e => {
+            if (e.data?.type === 'cache-rebuilt') {
+                const current = await refreshCacheDate();
+                startCacheDatePolling(current);
+            }
         });
     </script>
 </body>
