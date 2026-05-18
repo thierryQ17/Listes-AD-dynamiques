@@ -715,12 +715,6 @@ function showGroupsPreviewModal(data) {
                     .map(el => el.textContent.toLowerCase()).join(' ');
                 card.classList.toggle('gp-hidden', !groupName.includes(q) && !members.includes(q));
             });
-            centreList.querySelectorAll('.gp-base-separator').forEach(sep => {
-                const bl = sep.dataset.baseHdr;
-                const anyVisible = [...centreList.querySelectorAll(`.gp-row-item[data-base="${bl}"]`)]
-                    .some(c => !c.classList.contains('gp-hidden'));
-                sep.classList.toggle('gp-hidden', !anyVisible);
-            });
         }
 
         centreSearch.addEventListener('input', applycentreSearch);
@@ -749,25 +743,7 @@ function showGroupsPreviewModal(data) {
                 const zeroNote    = zeroCount > 0 ? ` (excluant ${zeroCount} avec 0 utilisateur)` : '';
                 centreHdr.innerHTML = `${esc(dg.name)} — <span class="gp-col-count">${activeCount} Groupe${activeCount !== 1 ? 's' : ''}${zeroNote}</span> · ${dg.count ?? 0} pers.`;
 
-                let centreHtml;
-                if (dg.multiBase && dg._centres.some(c => c.baseLabel)) {
-                    const byBase = {};
-                    for (const c of dg._centres) {
-                        const bl = c.baseLabel || '';
-                        if (!byBase[bl]) byBase[bl] = [];
-                        byBase[bl].push(c);
-                    }
-                    centreHtml = Object.entries(byBase)
-                        .sort(([a], [b]) => a.localeCompare(b))
-                        .map(([bl, cs]) => {
-                            const sep = bl
-                                ? `<div class="gp-base-separator" data-base-hdr="${esc(bl)}">${esc(bl)} <span class="gp-col-count">${cs.length}</span></div>`
-                                : '';
-                            return sep + cs.map(c => buildRow(c, { showBadge: false, baseLabel: bl })).join('');
-                        }).join('');
-                } else {
-                    centreHtml = dg._centres.map(c => buildRow(c, { showBadge: false })).join('');
-                }
+                const centreHtml = dg._centres.map(c => buildRow(c, { showBadge: false })).join('');
 
                 centreList.innerHTML = dg._centres.length
                     ? centreHtml
