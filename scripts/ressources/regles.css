@@ -1276,6 +1276,30 @@ body { overflow: hidden; }
     border-bottom: 1px solid var(--border-lt);
 }
 .peer-mini-member:last-child { border-bottom: none; }
+.peer-mini-fn-hdr {
+    font-size: 9.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    color: var(--accent);
+    background: var(--accent-lt);
+    padding: 3px 8px;
+    margin: 4px -8px 2px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+.peer-mini-fn-hdr:first-child { margin-top: 0; }
+.peer-mini-fn-count {
+    font-size: 9px;
+    background: var(--accent-dim);
+    color: #fff;
+    border-radius: 8px;
+    padding: 0 5px;
+    font-weight: 600;
+    letter-spacing: 0;
+    text-transform: none;
+}
 .peer-mini-name  { font-size: 11px; font-weight: 500; color: var(--text); white-space: nowrap; }
 .peer-mini-title { font-size: 10px; color: var(--text-sub); flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .peer-mini-empty { font-size: 11px; color: var(--text-sub); font-style: italic; padding: 8px 0; }

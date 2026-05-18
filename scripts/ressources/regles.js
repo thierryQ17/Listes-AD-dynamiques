@@ -913,9 +913,24 @@ function showPeerGroupMini(group, peerName, peerRuleLabel, anchorEl) {
     const n       = group?.count ?? 0;
     const members = (group?.members || []).slice().sort((a, b) =>
         (a.title || '').localeCompare(b.title || '') || (a.name || '').localeCompare(b.name || ''));
-    const membersHtml = members.length
-        ? members.map(m => `<div class="peer-mini-member"><span class="peer-mini-name">${esc(m.name)}</span>${m.title ? `<span class="peer-mini-title">${esc(m.title)}</span>` : ''}</div>`).join('')
-        : `<div class="peer-mini-empty">Aucun membre</div>`;
+
+    let membersHtml = '';
+    if (!members.length) {
+        membersHtml = `<div class="peer-mini-empty">Aucun membre</div>`;
+    } else {
+        const byTitle = new Map();
+        for (const m of members) {
+            const key = m.title || '';
+            if (!byTitle.has(key)) byTitle.set(key, []);
+            byTitle.get(key).push(m);
+        }
+        for (const [title, list] of byTitle) {
+            if (title) membersHtml += `<div class="peer-mini-fn-hdr">${esc(title)} <span class="peer-mini-fn-count">${list.length}</span></div>`;
+            membersHtml += list.map(m =>
+                `<div class="peer-mini-member"><span class="peer-mini-name">${esc(m.name)}</span></div>`
+            ).join('');
+        }
+    }
 
     mini.innerHTML =
         `<div class="peer-mini-hdr">` +
