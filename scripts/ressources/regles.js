@@ -637,7 +637,7 @@ async function fetchAndShowPreview(rule, spinEl = null) {
         });
         const data = await r.json();
         if (data.error) { showToast(data.error, 'error'); return; }
-        showGroupsPreviewModal(data);
+        showGroupsPreviewModal(data, rule);
     } catch {
         showToast('Erreur lors de la prévisualisation', 'error');
     } finally {
@@ -660,7 +660,7 @@ async function previewGroups() {
     }
 }
 
-function showGroupsPreviewModal(data) {
+function showGroupsPreviewModal(data, sourceRule = null) {
     const modal   = document.getElementById('groups-preview-modal');
     const summary = document.getElementById('gp-summary');
     const meta    = document.getElementById('gp-meta');
@@ -832,6 +832,26 @@ function showGroupsPreviewModal(data) {
     mailPanel.setAttribute('hidden', '');
     delete mailPanel.dataset.rendered;
     modal._gpData = data;
+
+    // Bouton "voir l'autre règle liée" (uniquement pour les paires invertOf)
+    const peerBtn   = document.getElementById('btn-gp-peer');
+    const peerLabel = document.getElementById('btn-gp-peer-label');
+    const peerRule  = sourceRule
+        ? (sourceRule.invertOf
+            ? rules.find(r => r.id === sourceRule.invertOf)          // subordonné → maître
+            : rules.find(r => r.invertOf === sourceRule.id))         // maître → subordonné
+        : null;
+    if (peerBtn) {
+        if (peerRule) {
+            peerLabel.textContent = peerRule.label;
+            peerBtn.title         = `Prévisualiser « ${peerRule.label} »`;
+            peerBtn.removeAttribute('hidden');
+            peerBtn.onclick = () => fetchAndShowPreview(peerRule, peerBtn);
+        } else {
+            peerBtn.setAttribute('hidden', '');
+            peerBtn.onclick = null;
+        }
+    }
 
     modal.removeAttribute('hidden');
 }

@@ -143,15 +143,15 @@ body { overflow: hidden; }
     padding: 0;
     border: none;
     background: none;
-    color: var(--text-sub);
+    color: var(--accent);
     cursor: pointer;
     border-radius: 3px;
     flex-shrink: 0;
-    opacity: 0;
+    opacity: 0.35;
     transition: opacity .15s, color .1s, background .1s;
 }
 .rule-card:hover .btn-card-peer-preview { opacity: 1; }
-.btn-card-peer-preview:hover { color: var(--accent); background: var(--accent-lt); }
+.btn-card-peer-preview:hover { background: var(--accent-lt); }
 
 .btn-card-edit,
 .btn-card-generate,
@@ -1172,6 +1172,26 @@ body { overflow: hidden; }
     align-items: center;
 }
 .gp-close:hover { background: var(--border-lt); color: var(--text); }
+
+.btn-gp-peer {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    height: 26px;
+    padding: 0 10px;
+    border: 1px solid var(--accent-dim);
+    border-radius: var(--radius-sm);
+    background: var(--accent-lt);
+    color: var(--accent);
+    font-size: 11px;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background .12s, border-color .12s;
+}
+.btn-gp-peer:hover { background: #dbeafe; border-color: var(--accent); }
+.btn-gp-peer[hidden] { display: none; }
 
 .gp-toggle-members {
     display: flex;
