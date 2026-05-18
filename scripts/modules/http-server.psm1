@@ -237,7 +237,19 @@ function Invoke-RouteHandler {
                     } else {
                         $lbl        = if ($rule.prefix) { Clean-ForFileName $rule.prefix } else { Clean-ForFileName $rule.label }
                         $mailDomain = $global:parametresJson.ad.mailDomain
-                        $filtered   = @($allUsers | Where-Object { Test-UserMatchesRule -User $_ -Conditions $rule.conditions })
+                        if ($rule.invertOf) {
+                            $rPath   = Join-Path ($global:path."r_settings" -replace '/', '\') "regles.json"
+                            $srcRule = @(ConvertFrom-Json ([System.IO.File]::ReadAllText($rPath, [System.Text.Encoding]::UTF8))) | Where-Object { $_.id -eq $rule.invertOf } | Select-Object -First 1
+                            if (-not $srcRule) {
+                                Send-JsonResponse -Response $Response -Body '{"error":"Règle source introuvable pour le calcul inverse."}'
+                                return
+                            }
+                            $srcIds  = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+                            @($allUsers | Where-Object { Test-UserMatchesRule -User $_ -Conditions $srcRule.conditions }) | ForEach-Object { [void]$srcIds.Add($_.samAccountName) }
+                            $filtered = @($allUsers | Where-Object { -not $srcIds.Contains($_.samAccountName) })
+                        } else {
+                            $filtered = @($allUsers | Where-Object { Test-UserMatchesRule -User $_ -Conditions $rule.conditions })
+                        }
                         $groups     = [System.Collections.Generic.List[hashtable]]::new()
 
                         if ($rule.niveau -eq 3) {

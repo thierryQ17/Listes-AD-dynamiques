@@ -11,6 +11,8 @@ const FIELDS = [
     ['description',        'Description'],
 ];
 
+const FIELD_LABELS = Object.fromEntries(FIELDS);
+
 const OPS = [
     ['eq',      'est exactement'],
     ['ne',      "n'est pas"],
@@ -27,6 +29,14 @@ const NIV_DESCRIPTIONS = {
 };
 
 function metaLabel(rule) {
+    if (rule?.invertOf) {
+        const src = rules.find(r => r.id === rule.invertOf);
+        return [
+            `Inverse de ${src ? src.label : '?'}`,
+            NIV_LABELS[rule?.niveau] || `Niv. ${rule?.niveau ?? '?'}`,
+            NIV_CSV[rule?.niveau]    || '',
+        ].filter(Boolean).join(' · ');
+    }
     const nInc  = rule?.conditions?.include?.length || 0;
     const nExc  = rule?.conditions?.exclude?.length || 0;
     const total = nInc + nExc;
@@ -227,24 +237,43 @@ function renderForm(rule) {
                 `<div class="niveau-desc" id="niveau-desc"></div>` +
             `</div>` +
 
-            `<div class="form-group">` +
-                `<div class="cond-section">` +
-                    `<div class="cond-section-hdr">` +
-                        `<span class="cond-section-lbl include">Inclure</span>` +
-                        `<span class="cond-section-hint">utilisateurs répondant à ces critères</span>` +
+            (() => {
+                const srcRule = rule?.invertOf ? rules.find(r => r.id === rule.invertOf) : null;
+                if (srcRule) {
+                    const OPS_MAP = Object.fromEntries(OPS);
+                    const condPills = (srcRule.conditions?.include || []).map(c =>
+                        `<span class="invertof-cond-pill">${FIELD_LABELS[c.field] || c.field} ${OPS_MAP[c.op] || c.op} <strong>${esc(c.value)}</strong></span>`
+                    ).join('');
+                    return `<div class="form-group">` +
+                        `<div class="invertof-banner">` +
+                            SVG_LINK +
+                            `<div class="invertof-banner-body">` +
+                                `<div class="invertof-banner-title">Critères verrouillés — inverse de « ${esc(srcRule.label)} »</div>` +
+                                `<div class="invertof-banner-desc">Les membres sont tous les utilisateurs actifs qui <strong>ne correspondent pas</strong> à la règle <em>${esc(srcRule.label)}</em>. Modifiez cette règle pour mettre à jour automatiquement.</div>` +
+                                (condPills ? `<div class="invertof-source-conds">${condPills}</div>` : '') +
+                            `</div>` +
+                        `</div>` +
+                    `</div>`;
+                }
+                return `<div class="form-group">` +
+                    `<div class="cond-section">` +
+                        `<div class="cond-section-hdr">` +
+                            `<span class="cond-section-lbl include">Inclure</span>` +
+                            `<span class="cond-section-hint">utilisateurs répondant à ces critères</span>` +
+                        `</div>` +
+                        `<div class="cond-list" id="cond-include"></div>` +
+                        `<button class="btn-add-cond" id="btn-add-include">+ Ajouter une condition</button>` +
                     `</div>` +
-                    `<div class="cond-list" id="cond-include"></div>` +
-                    `<button class="btn-add-cond" id="btn-add-include">+ Ajouter une condition</button>` +
-                `</div>` +
-                `<div class="cond-section">` +
-                    `<div class="cond-section-hdr">` +
-                        `<span class="cond-section-lbl exclude">Exclure</span>` +
-                        `<span class="cond-section-hint">parmi les inclus, retirer ces utilisateurs</span>` +
+                    `<div class="cond-section">` +
+                        `<div class="cond-section-hdr">` +
+                            `<span class="cond-section-lbl exclude">Exclure</span>` +
+                            `<span class="cond-section-hint">parmi les inclus, retirer ces utilisateurs</span>` +
+                        `</div>` +
+                        `<div class="cond-list" id="cond-exclude"></div>` +
+                        `<button class="btn-add-cond" id="btn-add-exclude">+ Ajouter une exclusion</button>` +
                     `</div>` +
-                    `<div class="cond-list" id="cond-exclude"></div>` +
-                    `<button class="btn-add-cond" id="btn-add-exclude">+ Ajouter une exclusion</button>` +
-                `</div>` +
-            `</div>` +
+                `</div>`;
+            })() +
         `</div>` +
         `<div class="form-footer">` +
             `<div class="gen-progress" id="gen-progress" hidden>` +
@@ -263,8 +292,10 @@ function renderForm(rule) {
             `</div>` +
         `</div>`;
 
-    for (const c of inc) addCondRow('cond-include', c);
-    for (const c of exc) addCondRow('cond-exclude', c);
+    if (!rule?.invertOf) {
+        for (const c of inc) addCondRow('cond-include', c);
+        for (const c of exc) addCondRow('cond-exclude', c);
+    }
 
     main.querySelectorAll('.niveau-option').forEach(opt => {
         opt.addEventListener('click', () => {
@@ -369,11 +400,12 @@ function readForm() {
 
     if (!label) { showToast('Le nom est obligatoire', 'error'); return null; }
 
-    const include = readCondList('cond-include');
-    if (!include.length) { showToast('Au moins une condition "Inclure" est requise', 'error'); return null; }
-
-    const exclude    = readCondList('cond-exclude');
     const existing   = editingId ? rules.find(r => r.id === editingId) : null;
+    const isInvertOf = !!existing?.invertOf;
+    const include    = isInvertOf ? [] : readCondList('cond-include');
+    if (!isInvertOf && !include.length) { showToast('Au moins une condition "Inclure" est requise', 'error'); return null; }
+
+    const exclude    = isInvertOf ? [] : readCondList('cond-exclude');
     const activeChk  = document.getElementById('f-active');
     const rawPrefix  = document.getElementById('f-prefix')?.value.trim() || '';
 

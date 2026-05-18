@@ -3,7 +3,7 @@
 function Invoke-RuleGeneration {
     param([Parameter(Mandatory)][PSCustomObject]$Rule)
 
-    if (-not $Rule.conditions -or -not $Rule.conditions.include -or $Rule.conditions.include.Count -eq 0) {
+    if (-not $Rule.invertOf -and (-not $Rule.conditions -or -not $Rule.conditions.include -or $Rule.conditions.include.Count -eq 0)) {
         throw "La règle n'a pas de conditions 'include'."
     }
 
@@ -13,7 +13,17 @@ function Invoke-RuleGeneration {
     }
     add-msg -msg "  [CSV] $($allUsers.Count) utilisateurs lus depuis le cache JSON." -foregroundColor DarkGray -quelType writeHost
 
-    $filtered = @($allUsers | Where-Object { Test-UserMatchesRule -User $_ -Conditions $Rule.conditions })
+    if ($Rule.invertOf) {
+        $rPath      = Join-Path ($global:path."r_settings" -replace '/', '\') "regles.json"
+        $srcRule    = @(ConvertFrom-Json ([System.IO.File]::ReadAllText($rPath, [System.Text.Encoding]::UTF8))) | Where-Object { $_.id -eq $Rule.invertOf } | Select-Object -First 1
+        if (-not $srcRule) { throw "Règle source '$($Rule.invertOf)' introuvable pour le calcul inverse." }
+        $srcIds     = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+        @($allUsers | Where-Object { Test-UserMatchesRule -User $_ -Conditions $srcRule.conditions }) | ForEach-Object { [void]$srcIds.Add($_.samAccountName) }
+        $filtered   = @($allUsers | Where-Object { -not $srcIds.Contains($_.samAccountName) })
+        add-msg -msg "  [CSV] Inverse de '$($srcRule.label)' : $($filtered.Count) utilisateurs (sur $($allUsers.Count))." -foregroundColor Cyan -quelType writeHost
+    } else {
+        $filtered = @($allUsers | Where-Object { Test-UserMatchesRule -User $_ -Conditions $Rule.conditions })
+    }
     add-msg -msg "  [CSV] $($filtered.Count) utilisateurs correspondent aux conditions." -foregroundColor Cyan -quelType writeHost
 
     $outDir = Get-RunOutputDir -Label $Rule.label
