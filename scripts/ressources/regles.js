@@ -317,8 +317,8 @@ function renderForm(rule) {
     const initNivDesc = document.getElementById('niveau-desc');
     if (initNivDesc) initNivDesc.innerHTML = NIV_DESCRIPTIONS[niveau] || '';
 
-    document.getElementById('btn-add-include').addEventListener('click', () => { addCondRow('cond-include'); autoUpdateDesc(); });
-    document.getElementById('btn-add-exclude').addEventListener('click', () => { addCondRow('cond-exclude'); autoUpdateDesc(); });
+    document.getElementById('btn-add-include')?.addEventListener('click', () => { addCondRow('cond-include'); autoUpdateDesc(); });
+    document.getElementById('btn-add-exclude')?.addEventListener('click', () => { addCondRow('cond-exclude'); autoUpdateDesc(); });
     document.getElementById('btn-save').addEventListener('click', saveRule);
     document.getElementById('btn-cancel').addEventListener('click', closeForm);
     document.getElementById('btn-preview-groups').addEventListener('click', previewGroups);
