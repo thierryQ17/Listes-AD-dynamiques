@@ -699,7 +699,9 @@ function showGroupsPreviewModal(data, sourceRule = null) {
 
     const SVG_CHV = `<svg width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden="true"><path d="M2.5 1.5l5 3.5-5 3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 
-    function buildRow(g, { clickable = false, showBadge = true, baseLabel = '' } = {}) {
+    const SVG_EYE_PEER = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`;
+
+    function buildRow(g, { clickable = false, showBadge = true, baseLabel = '', hasPeer = false, peerLabel = '' } = {}) {
         const isWarn    = g.name.length > 64;
         const typeLabel = g.type === 'global' ? 'Global' : g.type === 'do' ? 'DO' : 'Centre';
         const n         = g.count ?? 0;
@@ -716,6 +718,10 @@ function showGroupsPreviewModal(data, sourceRule = null) {
             `</div>`;
         }
 
+        const eyeBtn = hasPeer
+            ? `<button class="btn-gp-eye-peer" data-tooltip="Voir ${esc(peerLabel)}" tabindex="-1">${SVG_EYE_PEER}</button>`
+            : '';
+
         const baseAttr = baseLabel ? ` data-base="${esc(baseLabel)}"` : '';
         return `<div class="gp-row-item${clickable ? ' clickable' : ''}${isWarn ? ' gp-warn' : ''}" data-name="${esc(g.name)}"${baseAttr}>` +
             (showBadge ? `<span class="gp-type-badge gp-type-${g.type}">${typeLabel}</span>` : '') +
@@ -727,21 +733,24 @@ function showGroupsPreviewModal(data, sourceRule = null) {
                 `<div class="gp-row-mail">${esc(g.mail)}</div>` +
                 membersHtml +
             `</div>` +
+            eyeBtn +
             (clickable ? `<span class="gp-row-chevron">${SVG_CHV}</span>` : '') +
             `</div>`;
     }
 
     let cols = '';
 
+    const peerOpts = peerRule ? { hasPeer: true, peerLabel: peerRule.label } : {};
+
     if (hasGlobal) {
         cols += `<div class="gp-col">` +
             `<div class="gp-col-hdr">Groupe global</div>` +
-            `<div class="gp-col-list">${buildRow(globalGroup)}</div>` +
+            `<div class="gp-col-list">${buildRow(globalGroup, { ...peerOpts })}</div>` +
             `</div>`;
     }
 
     if (hasDO) {
-        const doItems = doGroups.map(dg => buildRow(dg, { clickable: hasCentre, showBadge: false })).join('');
+        const doItems = doGroups.map(dg => buildRow(dg, { clickable: hasCentre, showBadge: false, ...peerOpts })).join('');
         cols += `<div class="gp-col">` +
             `<div class="gp-col-hdr">` +
                 `Groupes DO <span class="gp-col-count">${doGroups.length}</span>` +
@@ -753,7 +762,7 @@ function showGroupsPreviewModal(data, sourceRule = null) {
     if (hasCentre) {
         const initContent = hasDO
             ? `<div class="gp-col-empty">Cliquer sur un groupe DO<br>pour afficher ses centres</div>`
-            : centres.map(c => buildRow(c, { showBadge: false })).join('');
+            : centres.map(c => buildRow(c, { showBadge: false, ...peerOpts })).join('');
         const countBadge = hasDO ? '' : ` <span class="gp-col-count">${centres.length}</span>`;
         cols += `<div class="gp-col">` +
             `<div class="gp-col-hdr" id="gp-col-centre-hdr">Centres${countBadge}</div>` +
@@ -812,7 +821,7 @@ function showGroupsPreviewModal(data, sourceRule = null) {
                 const zeroNote    = zeroCount > 0 ? ` (excluant ${zeroCount} avec 0 utilisateur)` : '';
                 centreHdr.innerHTML = `${esc(dg.name)} — <span class="gp-col-count">${activeCount} Groupe${activeCount !== 1 ? 's' : ''}${zeroNote}</span> · ${dg.count ?? 0} pers.`;
 
-                const centreHtml = dg._centres.map(c => buildRow(c, { showBadge: false })).join('');
+                const centreHtml = dg._centres.map(c => buildRow(c, { showBadge: false, ...peerOpts })).join('');
 
                 centreList.innerHTML = dg._centres.length
                     ? centreHtml
@@ -832,6 +841,43 @@ function showGroupsPreviewModal(data, sourceRule = null) {
     mailPanel.setAttribute('hidden', '');
     delete mailPanel.dataset.rendered;
     modal._gpData = data;
+
+    // ── Icônes œil sur chaque carte — ouvre la mini-modale de l'autre règle ──
+    if (peerRule) {
+        modal._peerData  = null;
+        modal._peerRule  = peerRule;
+        modal._curPrefix = data.prefix;
+
+        body.addEventListener('click', async e => {
+            const btn = e.target.closest('.btn-gp-eye-peer');
+            if (!btn) return;
+            e.stopPropagation();
+            const card      = btn.closest('.gp-row-item');
+            const groupName = card?.dataset.name || '';
+
+            btn.disabled = true;
+            if (!modal._peerData) {
+                try {
+                    const r = await fetch('/api/regles/preview-groups', {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(peerRule),
+                    });
+                    const d = await r.json();
+                    if (d.error) { showToast(d.error, 'error'); btn.disabled = false; return; }
+                    modal._peerData = d;
+                } catch { showToast('Erreur', 'error'); btn.disabled = false; return; }
+            }
+            btn.disabled = false;
+
+            const curPrefix  = modal._curPrefix;
+            const peerPrefix = modal._peerData.prefix;
+            const suffix     = groupName === curPrefix ? '' : groupName.startsWith(curPrefix + '-') ? groupName.slice(curPrefix.length + 1) : groupName;
+            const peerName   = suffix ? `${peerPrefix}-${suffix}` : peerPrefix;
+            const peerGroup  = (modal._peerData.groups || []).find(g => g.name === peerName);
+
+            showPeerGroupMini(peerGroup || null, peerName, peerRule.label, btn);
+        }, { once: false });
+    }
 
     // Bouton "voir l'autre règle liée" (uniquement pour les paires invertOf)
     const peerBtn   = document.getElementById('btn-gp-peer');
@@ -854,6 +900,55 @@ function showGroupsPreviewModal(data, sourceRule = null) {
     }
 
     modal.removeAttribute('hidden');
+}
+
+function showPeerGroupMini(group, peerName, peerRuleLabel, anchorEl) {
+    let mini = document.getElementById('peer-group-mini');
+    if (!mini) {
+        mini = document.createElement('div');
+        mini.id = 'peer-group-mini';
+        mini.className = 'peer-mini';
+        document.body.appendChild(mini);
+
+        let _dx = 0, _dy = 0, _active = false, _ox = 0, _oy = 0;
+        mini.addEventListener('mousedown', e => {
+            if (e.button !== 0 || e.target.closest('button')) return;
+            _active = true; _ox = e.clientX - _dx; _oy = e.clientY - _dy;
+            mini.style.cursor = 'grabbing'; e.preventDefault();
+        });
+        document.addEventListener('mousemove', e => {
+            if (!_active) return;
+            _dx = e.clientX - _ox; _dy = e.clientY - _oy;
+            mini.style.transform = `translate(${_dx}px,${_dy}px)`;
+        });
+        document.addEventListener('mouseup', () => { if (_active) { _active = false; mini.style.cursor = ''; } });
+    }
+
+    const n       = group?.count ?? 0;
+    const members = group?.members || [];
+    const membersHtml = members.length
+        ? members.map(m => `<div class="peer-mini-member"><span class="peer-mini-name">${esc(m.name)}</span>${m.title ? `<span class="peer-mini-title">${esc(m.title)}</span>` : ''}</div>`).join('')
+        : `<div class="peer-mini-empty">Aucun membre</div>`;
+
+    mini.innerHTML =
+        `<div class="peer-mini-hdr">` +
+            `<div class="peer-mini-title-wrap">` +
+                `<span class="peer-mini-rule">${esc(peerRuleLabel)}</span>` +
+                `<span class="peer-mini-name-badge">${esc(peerName)}</span>` +
+                `<span class="peer-mini-count">${n} pers.</span>` +
+            `</div>` +
+            `<button class="peer-mini-close" title="Fermer"><svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M1 1l8 8M9 1L1 9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button>` +
+        `</div>` +
+        `<div class="peer-mini-body">${membersHtml}</div>`;
+
+    mini.querySelector('.peer-mini-close').onclick = () => { mini.remove(); };
+    mini.style.transform = '';
+
+    // Positionner près du bouton cliqué
+    const rect = anchorEl.getBoundingClientRect();
+    mini.style.top  = Math.min(rect.bottom + 6, window.innerHeight - 300) + 'px';
+    mini.style.left = Math.max(0, Math.min(rect.left, window.innerWidth - 300)) + 'px';
+    mini.hidden = false;
 }
 
 const SVG_EXPAND   = `<svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true"><path d="M1 5V1h4M9 1h4v4M13 9v4H9M5 13H1V9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`;

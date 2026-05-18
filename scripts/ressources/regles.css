@@ -1173,6 +1173,113 @@ body { overflow: hidden; }
 }
 .gp-close:hover { background: var(--border-lt); color: var(--text); }
 
+/* Icône œil sur les cartes de groupe */
+.btn-gp-eye-peer {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    padding: 0;
+    border: none;
+    background: none;
+    color: var(--accent);
+    cursor: pointer;
+    border-radius: 3px;
+    flex-shrink: 0;
+    opacity: 0;
+    transition: opacity .15s, background .1s;
+}
+.gp-row-item:hover .btn-gp-eye-peer { opacity: 0.7; }
+.btn-gp-eye-peer:hover { opacity: 1 !important; background: var(--accent-lt); }
+
+/* Mini-modale flottante draggable */
+.peer-mini {
+    position: fixed;
+    z-index: 1200;
+    width: 300px;
+    max-height: 360px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: 0 8px 32px rgba(0,0,0,.18);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    cursor: grab;
+}
+.peer-mini-hdr {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+    padding: 8px 10px;
+    background: var(--surface-alt);
+    border-bottom: 1px solid var(--border-lt);
+    flex-shrink: 0;
+}
+.peer-mini-title-wrap {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    min-width: 0;
+    flex: 1;
+    flex-wrap: wrap;
+}
+.peer-mini-rule {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    color: var(--accent);
+}
+.peer-mini-name-badge {
+    font-size: 10.5px;
+    font-family: 'Consolas', monospace;
+    font-weight: 600;
+    color: var(--text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 150px;
+}
+.peer-mini-count {
+    font-size: 10px;
+    color: var(--text-sub);
+    flex-shrink: 0;
+}
+.peer-mini-close {
+    width: 20px; height: 20px;
+    background: none; border: none;
+    cursor: pointer;
+    color: var(--text-sub);
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 3px;
+    flex-shrink: 0;
+    transition: background .1s, color .1s;
+}
+.peer-mini-close:hover { background: var(--border-lt); color: var(--text); }
+.peer-mini-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 6px 8px;
+}
+.peer-mini-body::-webkit-scrollbar       { width: 4px; }
+.peer-mini-body::-webkit-scrollbar-track { background: transparent; }
+.peer-mini-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+.peer-mini-member {
+    display: flex;
+    align-items: baseline;
+    gap: 5px;
+    padding: 2px 0;
+    min-height: 19px;
+    border-bottom: 1px solid var(--border-lt);
+}
+.peer-mini-member:last-child { border-bottom: none; }
+.peer-mini-name  { font-size: 11px; font-weight: 500; color: var(--text); white-space: nowrap; }
+.peer-mini-title { font-size: 10px; color: var(--text-sub); flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.peer-mini-empty { font-size: 11px; color: var(--text-sub); font-style: italic; padding: 8px 0; }
+
 .btn-gp-peer {
     display: flex;
     align-items: center;
