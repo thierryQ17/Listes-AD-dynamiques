@@ -7,22 +7,11 @@ function Invoke-RuleGeneration {
         throw "La règle n'a pas de conditions 'include'."
     }
 
-    if ($global:AD_usersCache -and $global:AD_usersCache.Count -gt 0) {
-        $allUsers = $global:AD_usersCache
-        add-msg -msg "  [CSV] Cache utilisateurs utilisé ($($allUsers.Count) utilisateurs)." -foregroundColor DarkGray -quelType writeHost
-    } else {
-        $searchBase = $global:parametresJson.ad.searchBase
-        add-msg -msg "  [CSV] Chargement des utilisateurs (searchBase: $searchBase)…" -foregroundColor Cyan -quelType writeHost
-        $adParams = @{
-            Filter      = { Enabled -eq $true }
-            SearchBase  = $searchBase
-            Credential  = $global:AD_credential
-            Properties  = @('SamAccountName','Mail','DisplayName','Title','Department','Office','extensionAttribute1','Description')
-            ErrorAction = 'Stop'
-        }
-        $allUsers = @(Get-ADUser @adParams)
-        add-msg -msg "  [CSV] $($allUsers.Count) utilisateurs actifs chargés." -foregroundColor Cyan -quelType writeHost
+    $allUsers = @(Get-AllUsersFromCache)
+    if ($allUsers.Count -eq 0) {
+        throw "Aucun utilisateur en cache — ouvrez l'Explorateur AD pour peupler le cache (bouton ↻)."
     }
+    add-msg -msg "  [CSV] $($allUsers.Count) utilisateurs lus depuis le cache JSON." -foregroundColor DarkGray -quelType writeHost
 
     $filtered = @($allUsers | Where-Object { Test-UserMatchesRule -User $_ -Conditions $Rule.conditions })
     add-msg -msg "  [CSV] $($filtered.Count) utilisateurs correspondent aux conditions." -foregroundColor Cyan -quelType writeHost
@@ -50,7 +39,7 @@ function Invoke-RuleGeneration {
     $gpGroups   = [System.Collections.Generic.List[hashtable]]::new()
 
     if ($Rule.niveau -eq 3) {
-        $byDO = $filtered | Group-Object { Get-NormalizedDepartment $_.Department }
+        $byDO = $filtered | Group-Object { Get-RegionFromDN $_.dn } | Where-Object { $_.Name -and $_.Name -ne 'MONCHY' }
         foreach ($doGrp in $byDO) {
             $doName  = if ($doGrp.Name) { $doGrp.Name } else { 'SANS-DO' }
             $doClean = Clean-ForFileName $doName
@@ -64,7 +53,7 @@ function Invoke-RuleGeneration {
         }
         $gpGroups.Add(@{ name = $lbl; mail = "$($lbl.ToLower())@$mailDomain"; type = 'global'; count = $filtered.Count })
     } elseif ($Rule.niveau -eq 2) {
-        $byDO = $filtered | Group-Object { Get-NormalizedDepartment $_.Department }
+        $byDO = $filtered | Group-Object { Get-RegionFromDN $_.dn } | Where-Object { $_.Name -and $_.Name -ne 'MONCHY' }
         foreach ($doGrp in $byDO) {
             $doName  = if ($doGrp.Name) { $doGrp.Name } else { 'SANS-DO' }
             $doBase  = "$lbl-$(Clean-ForFileName $doName)"
@@ -164,7 +153,7 @@ function Write-CsvNiveau3 {
     $jobs      = [System.Collections.Generic.List[hashtable]]::new()
 
     add-msg -msg "  [CSV] Génération niveau 3 (centre + DO + global) — '$Label'" -foregroundColor DarkCyan -quelType writeHost
-    $byDO = $userArray | Group-Object { Get-NormalizedDepartment $_.Department }
+    $byDO = $userArray | Group-Object { Get-RegionFromDN $_.dn } | Where-Object { $_.Name -and $_.Name -ne 'MONCHY' }
     foreach ($doGrp in $byDO) {
         $doName  = if ($doGrp.Name) { $doGrp.Name } else { 'SANS-DO' }
         $doClean = Clean-ForFileName $doName
@@ -196,7 +185,7 @@ function Write-CsvNiveau3Mono {
     $jobs      = [System.Collections.Generic.List[hashtable]]::new()
 
     add-msg -msg "  [CSV] Génération niveau 3 mono (centre uniquement) — '$Label'" -foregroundColor DarkCyan -quelType writeHost
-    $byDO = $userArray | Group-Object { Get-NormalizedDepartment $_.Department }
+    $byDO = $userArray | Group-Object { Get-RegionFromDN $_.dn } | Where-Object { $_.Name -and $_.Name -ne 'MONCHY' }
     foreach ($doGrp in $byDO) {
         $doName  = if ($doGrp.Name) { $doGrp.Name } else { 'SANS-DO' }
         $doClean = Clean-ForFileName $doName
@@ -222,7 +211,7 @@ function Write-CsvNiveau2 {
     $jobs      = [System.Collections.Generic.List[hashtable]]::new()
 
     add-msg -msg "  [CSV] Génération niveau 2 (DO + global) — '$Label'" -foregroundColor DarkCyan -quelType writeHost
-    $byDO = $userArray | Group-Object { Get-NormalizedDepartment $_.Department }
+    $byDO = $userArray | Group-Object { Get-RegionFromDN $_.dn } | Where-Object { $_.Name -and $_.Name -ne 'MONCHY' }
     foreach ($doGrp in $byDO) {
         $doName = if ($doGrp.Name) { $doGrp.Name } else { 'SANS-DO' }
         $fname  = "$lbl-$(Clean-ForFileName $doName).csv"

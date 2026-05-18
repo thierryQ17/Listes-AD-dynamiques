@@ -15,7 +15,7 @@ function init_globalVariables {
     $leaf_basePath = Split-Path -Path $basePath -Leaf
 
     $xmlConnect = "xmlConnect"
-    $exludedDirectories = @()
+    $exludedDirectories = @("application")
     $exludedFiles = @("application\out\0-enAttente")
 
     foreach ($directory in $directories) {
@@ -67,7 +67,12 @@ function init_globalVariables {
         $fileFullName = $file.FullName
 
         $flg_exludedFile = $false
-        if ($exludedFiles.count -gt 0){
+        foreach ($exludedDirectory in $exludedDirectories) {
+            if ($fileFullName -like "*\$exludedDirectory\*" -or $fileFullName -like "*/$exludedDirectory/*") {
+                $flg_exludedFile = $true; break
+            }
+        }
+        if (-not $flg_exludedFile -and $exludedFiles.count -gt 0){
             foreach ($exludedFile in $exludedFiles) {
                 if ($fileFullName -like "*$exludedFile*") {
                     $flg_exludedFile = $true

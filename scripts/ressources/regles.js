@@ -70,7 +70,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     await loadRules();
-    preloadUsers();
     const raw = localStorage.getItem('regles_draft');
     if (raw) {
         localStorage.removeItem('regles_draft');
@@ -84,6 +83,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     setupCsvFileModal();
     setupGroupsPreviewModal();
     setupTooltip();
+    setupCacheInfoBar();
 });
 
 async function loadRules() {
@@ -458,56 +458,67 @@ async function toggleActive(id) {
     }
 }
 
-// ── Génération CSV ────────────────────────────────────────────────────
-// ── Préchargement utilisateurs AD ─────────────────────────────────────
-let usersPreloaded = false;
+// ── Barre info cache utilisateurs ─────────────────────────────────────
 
-async function preloadUsers() {
-    const bar  = document.getElementById('preload-bar');
-    const msg  = document.getElementById('preload-msg');
-    const list = document.getElementById('regles-list');
-    if (!bar || !msg) return;
+function setupCacheInfoBar() {
+    const msg = document.getElementById('cache-info-msg');
+    const btn = document.getElementById('btn-refresh-cache');
+    if (!msg || !btn) return;
 
-    list?.classList.add('users-loading');
-    bar.classList.add('loading');
-    msg.textContent = 'Chargement des utilisateurs AD…';
-
-    try {
-        const r    = await fetch('/api/users/preload', { method: 'POST' });
-        const data = await r.json();
-        bar.classList.remove('loading');
-        if (data.ok) {
-            usersPreloaded = true;
-            bar.classList.add('done');
-            msg.textContent = `✓ ${data.count.toLocaleString('fr-FR')} utilisateurs en cache`;
-        } else {
-            bar.classList.add('error');
-            msg.textContent = `⚠ Erreur préchargement`;
+    async function loadCacheInfo() {
+        try {
+            const data = await fetch('/api/users/cache-info').then(r => r.json());
+            if (data.ok && data.count > 0) {
+                msg.textContent = `✓ ${data.count.toLocaleString('fr-FR')} util. — ${data.ts}`;
+                msg.className = 'cache-info-msg ok';
+            } else {
+                msg.textContent = '⚠ Cache vide — cliquez ↻';
+                msg.className = 'cache-info-msg warn';
+            }
+        } catch {
+            msg.textContent = '⚠ Erreur lecture cache';
+            msg.className = 'cache-info-msg warn';
         }
-    } catch {
-        bar.classList.remove('loading');
-        bar.classList.add('error');
-        if (msg) msg.textContent = '⚠ Erreur préchargement';
-    } finally {
-        list?.classList.remove('users-loading');
     }
+
+    async function refreshCache() {
+        msg.textContent = 'Chargement AD…';
+        msg.className = 'cache-info-msg spin';
+        btn.classList.add('spinning');
+        btn.disabled = true;
+        try {
+            const data = await fetch('/api/users/preload', { method: 'POST' }).then(r => r.json());
+            if (data.ok) {
+                msg.textContent = `✓ ${data.count.toLocaleString('fr-FR')} util. chargés`;
+                msg.className = 'cache-info-msg ok';
+            } else {
+                msg.textContent = `⚠ ${data.error || 'Erreur'}`;
+                msg.className = 'cache-info-msg warn';
+            }
+        } catch {
+            msg.textContent = '⚠ Erreur chargement';
+            msg.className = 'cache-info-msg warn';
+        } finally {
+            btn.classList.remove('spinning');
+            btn.disabled = false;
+            loadCacheInfo();
+        }
+    }
+
+    btn.addEventListener('click', refreshCache);
+    loadCacheInfo();
 }
 
+// ── Génération CSV ────────────────────────────────────────────────────
+
 function getGenSteps() {
-    return usersPreloaded
-        ? [
-            'Filtrage selon les conditions…',
-            'Groupement par Direction Opérationnelle…',
-            'Écriture des fichiers CSV…',
-            'Finalisation…'
-          ]
-        : [
-            'Chargement des utilisateurs AD…',
-            'Filtrage selon les conditions…',
-            'Groupement par Direction Opérationnelle…',
-            'Écriture des fichiers CSV…',
-            'Finalisation…'
-          ];
+    return [
+        'Lecture du cache JSON…',
+        'Filtrage selon les conditions…',
+        'Groupement par Direction Opérationnelle…',
+        'Écriture des fichiers CSV…',
+        'Finalisation…'
+    ];
 }
 
 async function generateCsv(id) {
@@ -619,7 +630,7 @@ function showGroupsPreviewModal(data) {
 
     const SVG_CHV = `<svg width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden="true"><path d="M2.5 1.5l5 3.5-5 3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 
-    function buildRow(g, { clickable = false, showBadge = true } = {}) {
+    function buildRow(g, { clickable = false, showBadge = true, baseLabel = '' } = {}) {
         const isWarn    = g.name.length > 64;
         const typeLabel = g.type === 'global' ? 'Global' : g.type === 'do' ? 'DO' : 'Centre';
         const n         = g.count ?? 0;
@@ -636,12 +647,13 @@ function showGroupsPreviewModal(data) {
             `</div>`;
         }
 
-        return `<div class="gp-row-item${clickable ? ' clickable' : ''}${isWarn ? ' gp-warn' : ''}" data-name="${esc(g.name)}">` +
+        const baseAttr = baseLabel ? ` data-base="${esc(baseLabel)}"` : '';
+        return `<div class="gp-row-item${clickable ? ' clickable' : ''}${isWarn ? ' gp-warn' : ''}" data-name="${esc(g.name)}"${baseAttr}>` +
             (showBadge ? `<span class="gp-type-badge gp-type-${g.type}">${typeLabel}</span>` : '') +
             `<div class="gp-row-info">` +
                 `<div class="gp-row-top">` +
                     `<div class="gp-row-name">${esc(g.name)}</div>` +
-                    `<div class="gp-row-count">${n} utilisateur${n !== 1 ? 's' : ''}</div>` +
+                    `<div class="gp-row-count" title="${n} utilisateur${n !== 1 ? 's' : ''}">${n}</div>` +
                 `</div>` +
                 `<div class="gp-row-mail">${esc(g.mail)}</div>` +
                 membersHtml +
@@ -703,6 +715,12 @@ function showGroupsPreviewModal(data) {
                     .map(el => el.textContent.toLowerCase()).join(' ');
                 card.classList.toggle('gp-hidden', !groupName.includes(q) && !members.includes(q));
             });
+            centreList.querySelectorAll('.gp-base-separator').forEach(sep => {
+                const bl = sep.dataset.baseHdr;
+                const anyVisible = [...centreList.querySelectorAll(`.gp-row-item[data-base="${bl}"]`)]
+                    .some(c => !c.classList.contains('gp-hidden'));
+                sep.classList.toggle('gp-hidden', !anyVisible);
+            });
         }
 
         centreSearch.addEventListener('input', applycentreSearch);
@@ -726,9 +744,33 @@ function showGroupsPreviewModal(data) {
                 doList.querySelectorAll('.gp-row-item').forEach(r => r.classList.remove('gp-selected'));
                 card.classList.add('gp-selected');
 
-                centreHdr.innerHTML = `${esc(dg.name)} <span class="gp-col-count">${dg._centres.length}</span>`;
+                const activeCount = dg._centres.filter(c => (c.count ?? 0) > 0).length;
+                const zeroCount   = dg._centres.length - activeCount;
+                const zeroNote    = zeroCount > 0 ? ` (excluant ${zeroCount} avec 0 utilisateur)` : '';
+                centreHdr.innerHTML = `${esc(dg.name)} — <span class="gp-col-count">${activeCount} Groupe${activeCount !== 1 ? 's' : ''}${zeroNote}</span> · ${dg.count ?? 0} pers.`;
+
+                let centreHtml;
+                if (dg.multiBase && dg._centres.some(c => c.baseLabel)) {
+                    const byBase = {};
+                    for (const c of dg._centres) {
+                        const bl = c.baseLabel || '';
+                        if (!byBase[bl]) byBase[bl] = [];
+                        byBase[bl].push(c);
+                    }
+                    centreHtml = Object.entries(byBase)
+                        .sort(([a], [b]) => a.localeCompare(b))
+                        .map(([bl, cs]) => {
+                            const sep = bl
+                                ? `<div class="gp-base-separator" data-base-hdr="${esc(bl)}">${esc(bl)} <span class="gp-col-count">${cs.length}</span></div>`
+                                : '';
+                            return sep + cs.map(c => buildRow(c, { showBadge: false, baseLabel: bl })).join('');
+                        }).join('');
+                } else {
+                    centreHtml = dg._centres.map(c => buildRow(c, { showBadge: false })).join('');
+                }
+
                 centreList.innerHTML = dg._centres.length
-                    ? dg._centres.map(c => buildRow(c, { showBadge: false })).join('')
+                    ? centreHtml
                     : `<div class="gp-col-empty">Aucun centre pour ce groupe DO</div>`;
                 centreSearch.value = '';
                 centreSearchClear.hidden = true;
@@ -776,6 +818,12 @@ function setupGroupsPreviewModal() {
     });
     closeBtn.addEventListener('click', closeModal);
     modal.addEventListener('click', e => { if (e.target === modal) closeModal(); });
+
+    // Checkbox affichage membres
+    const chkMembers = document.getElementById('chk-gp-members');
+    chkMembers.addEventListener('change', () => {
+        box.classList.toggle('hide-members', !chkMembers.checked);
+    });
 
     // Onglets
     tabsBar.addEventListener('click', e => {

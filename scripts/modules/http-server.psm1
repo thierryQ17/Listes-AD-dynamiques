@@ -104,6 +104,13 @@ function Invoke-RouteHandler {
             $data = if (Test-Path $idx) { [System.IO.File]::ReadAllText($idx, [System.Text.Encoding]::UTF8) } else { '{}' }
             Send-JsonResponse -Response $Response -Body $data
         }
+        '^/api/cache/info$' {
+            $gPath    = Get-GlobalUsersCachePath
+            $builtAt  = if (Test-Path $gPath) { (Get-Item $gPath).LastWriteTime.ToString('yyyy-MM-ddTHH:mm:ss') } else { $null }
+            $nullStr  = 'null'
+            $body     = if ($builtAt) { "{`"builtAt`":`"$builtAt`"}" } else { "{`"builtAt`":$nullStr}" }
+            Send-JsonResponse -Response $Response -Body $body
+        }
         '^/api/cache/refresh-all$' {
             $scriptsDir = Split-Path $global:path."r_settings" -Parent
             $cacheDir   = Join-Path $scriptsDir "cache"
@@ -157,38 +164,32 @@ function Invoke-RouteHandler {
                 Send-JsonResponse -Response $Response -Body '{"ok":true}'
             }
         }
+        '^/api/users/cache-info$' {
+            $cachePath = Get-GlobalUsersCachePath
+            if (Test-Path $cachePath) {
+                $fi    = [System.IO.FileInfo]$cachePath
+                $count = @(Get-AllUsersFromCache).Count
+                $ts    = $fi.LastWriteTime.ToString('dd/MM/yyyy HH:mm')
+                Send-JsonResponse -Response $Response -Body "{`"ok`":true,`"count`":$count,`"ts`":`"$ts`"}"
+            } else {
+                Send-JsonResponse -Response $Response -Body '{"ok":false,"count":0,"ts":""}'
+            }
+        }
         '^/api/users/preload$' {
             if ($Method -eq 'POST') {
                 try {
-                    if (-not $global:AD_usersCache -or $global:AD_usersCache.Count -eq 0) {
-                        add-msg -msg "  [PRELOAD] Chargement de tous les utilisateurs AD…" -foregroundColor Cyan -quelType writeHost
-                        $adParams = @{
-                            Filter      = { Enabled -eq $true }
-                            SearchBase  = $global:parametresJson.ad.searchBase
-                            Credential  = $global:AD_credential
-                            Properties  = @('SamAccountName','Mail','DisplayName','Title','Department','Office','extensionAttribute1','Description')
-                            ErrorAction = 'Stop'
-                        }
-                        $global:AD_usersCache = @(Get-ADUser @adParams)
-                        add-msg -msg "  [PRELOAD] $($global:AD_usersCache.Count) utilisateurs mis en cache." -foregroundColor Green -quelType writeHost
-                    } else {
-                        add-msg -msg "  [PRELOAD] Cache déjà chaud ($($global:AD_usersCache.Count) utilisateurs)." -foregroundColor DarkGray -quelType writeHost
-                    }
-                    Send-JsonResponse -Response $Response -Body "{`"ok`":true,`"count`":$($global:AD_usersCache.Count)}"
+                    $count = Build-GlobalUsersCache
+                    Send-JsonResponse -Response $Response -Body "{`"ok`":true,`"count`":$count}"
                 } catch {
                     $errMsg = $_.Exception.Message -replace '"', "'"
                     Send-JsonResponse -Response $Response -Body "{`"ok`":false,`"error`":`"$errMsg`"}"
                 }
             }
-            if ($Method -eq 'DELETE') {
-                $global:AD_usersCache = $null
-                add-msg -msg "  [PRELOAD] Cache utilisateurs vidé." -foregroundColor Yellow -quelType writeHost
-                Send-JsonResponse -Response $Response -Body '{"ok":true}'
-            }
         }
         '^/api/users/preload/status$' {
-            $cached = ($null -ne $global:AD_usersCache -and $global:AD_usersCache.Count -gt 0)
-            $count  = if ($cached) { $global:AD_usersCache.Count } else { 0 }
+            $cachePath = Get-GlobalUsersCachePath
+            $cached = Test-Path $cachePath
+            $count  = if ($cached) { @(Get-AllUsersFromCache).Count } else { 0 }
             Send-JsonResponse -Response $Response -Body "{`"cached`":$(if($cached){'true'}else{'false'}),`"count`":$count}"
         }
         '^/api/csv/read$' {
@@ -223,45 +224,60 @@ function Invoke-RouteHandler {
             if ($Method -eq 'POST') {
                 try {
                     $rule = ConvertFrom-Json (Read-RequestBody -Request $Request)
-                    if (-not $global:AD_usersCache -or $global:AD_usersCache.Count -eq 0) {
-                        Send-JsonResponse -Response $Response -Body '{"error":"Cache AD non disponible — rechargez la page"}'
+                    $allUsers = @(Get-AllUsersFromCache)
+                    if ($allUsers.Count -eq 0) {
+                        Send-JsonResponse -Response $Response -Body '{"error":"Cache JSON vide — ouvrez l'"'"'Explorateur AD et cliquez sur ↻ Cache."}'
                     } else {
                         $lbl        = if ($rule.prefix) { Clean-ForFileName $rule.prefix } else { Clean-ForFileName $rule.label }
                         $mailDomain = $global:parametresJson.ad.mailDomain
-                        $filtered   = @($global:AD_usersCache | Where-Object { Test-UserMatchesRule -User $_ -Conditions $rule.conditions })
+                        $filtered   = @($allUsers | Where-Object { Test-UserMatchesRule -User $_ -Conditions $rule.conditions })
                         $groups     = [System.Collections.Generic.List[hashtable]]::new()
 
                         if ($rule.niveau -eq 3) {
                             # Hiérarchie complète pour la prévisualisation (monoNiveau n'affecte que la génération CSV)
-                            $byDO = $filtered | Group-Object { Get-NormalizedDepartment $_.Department }
+                            $byDO = $filtered | Group-Object { Get-RegionFromDN $_.dn } | Where-Object { $_.Name -and $_.Name -ne 'MONCHY' }
                             foreach ($doGrp in $byDO) {
-                                $doName  = if ($doGrp.Name) { $doGrp.Name } else { 'SANS-DO' }
-                                $doClean = Clean-ForFileName $doName
-                                $doBase  = "$lbl-$doClean"
-                                foreach ($cGrp in ($doGrp.Group | Group-Object Office)) {
+                                $doName      = if ($doGrp.Name) { $doGrp.Name } else { 'SANS-DO' }
+                                $doClean     = Clean-ForFileName $doName
+                                $doBase      = "$lbl-$doClean"
+                                $regionCfg   = $global:parametresJson.ad.regions | Where-Object { $_.label -eq $doName } | Select-Object -First 1
+                                $isMultiBase = ($null -ne $regionCfg -and @($regionCfg.bases).Count -gt 1)
+                                foreach ($cGrp in ($doGrp.Group | Group-Object office)) {
                                     $cName  = if ($cGrp.Name) { $cGrp.Name } else { 'SANS-CENTRE' }
                                     $cClean = Clean-ForFileName $cName
                                     $cBase  = "$lbl-$doClean-$cClean"
-                                    $centreMembers = @($cGrp.Group | Sort-Object DisplayName | ForEach-Object {
+                                    $baseLabel = ''
+                                    if ($isMultiBase) {
+                                        $firstUser = $cGrp.Group | Select-Object -First 1
+                                        if ($firstUser -and $firstUser.dn) {
+                                            foreach ($base in $regionCfg.bases) {
+                                                if ($firstUser.dn -like "*,$base") {
+                                                    if ($base -match '^OU=([^,]+)') { $baseLabel = $Matches[1] }
+                                                    break
+                                                }
+                                            }
+                                        }
+                                    }
+                                    $centreMembers = @($cGrp.Group | Sort-Object displayName | ForEach-Object {
                                         [ordered]@{
-                                            name  = if ($_.DisplayName) { "$($_.DisplayName)" } else { "$($_.SamAccountName)" }
-                                            title = if ($_.Title)       { "$($_.Title)"        } else { '' }
+                                            name  = if ($_.displayName) { "$($_.displayName)" } else { "$($_.samAccountName)" }
+                                            title = if ($_.title)       { "$($_.title)"        } else { '' }
                                         }
                                     })
-                                    $groups.Add(@{ name = $cBase; mail = "$($cBase.ToLower())@$mailDomain"; type = 'centre'; count = $cGrp.Group.Count; members = $centreMembers })
+                                    $groups.Add(@{ name = $cBase; mail = "$($cBase.ToLower())@$mailDomain"; type = 'centre'; count = $cGrp.Group.Count; members = $centreMembers; baseLabel = $baseLabel })
                                 }
-                                $groups.Add(@{ name = $doBase; mail = "$($doBase.ToLower())@$mailDomain"; type = 'do'; count = $doGrp.Group.Count })
+                                $groups.Add(@{ name = $doBase; mail = "$($doBase.ToLower())@$mailDomain"; type = 'do'; count = $doGrp.Group.Count; multiBase = $isMultiBase })
                             }
                             $groups.Add(@{ name = $lbl; mail = "$($lbl.ToLower())@$mailDomain"; type = 'global'; count = $filtered.Count })
                         } elseif ($rule.niveau -eq 2) {
-                            $byDO = $filtered | Group-Object { Get-NormalizedDepartment $_.Department }
-                            $doNames = [System.Collections.Generic.List[string]]::new()
+                            $byDO = $filtered | Group-Object { Get-RegionFromDN $_.dn } | Where-Object { $_.Name -and $_.Name -ne 'MONCHY' }
                             foreach ($doGrp in $byDO) {
-                                $doName  = if ($doGrp.Name) { $doGrp.Name } else { 'SANS-DO' }
-                                $doClean = Clean-ForFileName $doName
-                                $doBase  = "$lbl-$doClean"
-                                $doNames.Add($doBase)
-                                $groups.Add(@{ name = $doBase; mail = "$($doBase.ToLower())@$mailDomain"; type = 'do'; count = $doGrp.Group.Count })
+                                $doName      = if ($doGrp.Name) { $doGrp.Name } else { 'SANS-DO' }
+                                $doClean     = Clean-ForFileName $doName
+                                $doBase      = "$lbl-$doClean"
+                                $regionCfg   = $global:parametresJson.ad.regions | Where-Object { $_.label -eq $doName } | Select-Object -First 1
+                                $isMultiBase = ($null -ne $regionCfg -and @($regionCfg.bases).Count -gt 1)
+                                $groups.Add(@{ name = $doBase; mail = "$($doBase.ToLower())@$mailDomain"; type = 'do'; count = $doGrp.Group.Count; multiBase = $isMultiBase })
                             }
                             $groups.Add(@{ name = $lbl; mail = "$($lbl.ToLower())@$mailDomain"; type = 'global'; count = $filtered.Count })
                         } else {
@@ -390,14 +406,21 @@ function Start-CacheWarmup {
 
         $indexPath = Join-Path $cacheDir "_index.json"
         function Update-LocalIndex([string]$DN, [int]$Count) {
-            $map = if (Test-Path $indexPath) {
-                $ht = @{}
-                (ConvertFrom-Json ([System.IO.File]::ReadAllText($indexPath, [System.Text.Encoding]::UTF8))).PSObject.Properties | ForEach-Object { $ht[$_.Name] = $_.Value }
-                $ht
-            } else { @{} }
-            $map[$DN] = $Count
-            $json = ConvertTo-Json -InputObject ([PSCustomObject]$map) -Compress
-            [System.IO.File]::WriteAllText($indexPath, $json, [System.Text.Encoding]::UTF8)
+            for ($i = 0; $i -lt 5; $i++) {
+                try {
+                    $map = if (Test-Path $indexPath) {
+                        $ht = @{}
+                        (ConvertFrom-Json ([System.IO.File]::ReadAllText($indexPath, [System.Text.Encoding]::UTF8))).PSObject.Properties | ForEach-Object { $ht[$_.Name] = $_.Value }
+                        $ht
+                    } else { @{} }
+                    $map[$DN] = $Count
+                    $json = ConvertTo-Json -InputObject ([PSCustomObject]$map) -Compress
+                    [System.IO.File]::WriteAllText($indexPath, $json, [System.Text.Encoding]::UTF8)
+                    return
+                } catch [System.IO.IOException] {
+                    Start-Sleep -Milliseconds 50
+                }
+            }
         }
 
         $tree  = Get-OUTree
@@ -426,6 +449,20 @@ function Start-CacheWarmup {
         }
         [Console]::WriteLine("  [Cache] Warmup termine - " + $done + "/" + $total + " sites")
         [Console]::WriteLine("")
+
+        # Construction du cache global utilisateurs (source de vérité pour Règles)
+        $globalCachePath = Join-Path $cacheDir "_users_global.json"
+        if (-not (Test-Path $globalCachePath)) {
+            try {
+                Import-Module $gPath."f_ad-reader.psm1" -Force -ErrorAction SilentlyContinue
+                $count = Build-GlobalUsersCache
+                [Console]::WriteLine("  [Cache] Cache global utilisateurs : $count utilisateurs")
+            } catch {
+                [Console]::WriteLine("  [Cache] ERR cache global : " + $_.Exception.Message)
+            }
+        } else {
+            [Console]::WriteLine("  [Cache] Cache global utilisateurs deja present.")
+        }
     }) | Out-Null
 
     $ps.BeginInvoke() | Out-Null
@@ -441,17 +478,24 @@ function Get-CacheIndexPath {
 
 function Update-CacheIndex {
     param([string]$DN, [int]$Count)
-    $idx  = Get-CacheIndexPath
-    $map  = if (Test-Path $idx) {
-        $raw = [System.IO.File]::ReadAllText($idx, [System.Text.Encoding]::UTF8)
-        $obj = ConvertFrom-Json $raw
-        $ht  = @{}
-        $obj.PSObject.Properties | ForEach-Object { $ht[$_.Name] = $_.Value }
-        $ht
-    } else { @{} }
-    $map[$DN] = $Count
-    $json = ConvertTo-Json -InputObject ([PSCustomObject]$map) -Compress
-    [System.IO.File]::WriteAllText($idx, $json, [System.Text.Encoding]::UTF8)
+    $idx = Get-CacheIndexPath
+    for ($i = 0; $i -lt 5; $i++) {
+        try {
+            $map = if (Test-Path $idx) {
+                $raw = [System.IO.File]::ReadAllText($idx, [System.Text.Encoding]::UTF8)
+                $obj = ConvertFrom-Json $raw
+                $ht  = @{}
+                $obj.PSObject.Properties | ForEach-Object { $ht[$_.Name] = $_.Value }
+                $ht
+            } else { @{} }
+            $map[$DN] = $Count
+            $json = ConvertTo-Json -InputObject ([PSCustomObject]$map) -Compress
+            [System.IO.File]::WriteAllText($idx, $json, [System.Text.Encoding]::UTF8)
+            return
+        } catch [System.IO.IOException] {
+            Start-Sleep -Milliseconds 50
+        }
+    }
 }
 
 function Get-OUCachePath {

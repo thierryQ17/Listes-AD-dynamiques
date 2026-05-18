@@ -127,6 +127,13 @@ header h1 {
 .btn-cache-refresh:hover    { background: #eeeae4; color: var(--text); }
 .btn-cache-refresh:disabled { opacity: .5; cursor: not-allowed; }
 
+.cache-date-badge {
+    font-size: 10px;
+    color: var(--text-sub);
+    white-space: nowrap;
+}
+.cache-date-badge[hidden] { display: none; }
+
 .badge-readonly {
     font-size: 10px;
     font-weight: 700;

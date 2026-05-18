@@ -39,12 +39,22 @@ function drainPrefetchQueue() {
             .then(users => {
                 if (!Array.isArray(users)) return;
                 allSiteUsers[dn] = users;
-                const badge = document.getElementById('count-' + dnToId(dn));
-                if (badge) badge.textContent = users.length;
+                setBadgeCount(document.getElementById('count-' + dnToId(dn)), users.length);
             })
             .catch(() => {})
             .finally(() => { onDone?.(); prefetchRunning--; drainPrefetchQueue(); });
     }
+}
+
+// ── Helpers compteurs ─────────────────────────────────────────────────
+
+function setBadgeCount(badge, count) {
+    if (!badge) return;
+    badge.textContent = count;
+}
+
+function updateAllRegionCounts() {
+    // Region counts are static (number of sites/sub-groups), set once in createRegionNode
 }
 
 // ============================================================
@@ -262,7 +272,7 @@ async function fetchAndApplyCounts() {
             if (counts[dn] !== undefined) {
                 const badge = document.getElementById('count-' + dnToId(dn));
                 if (badge && badge.textContent !== String(counts[dn])) {
-                    badge.textContent = counts[dn];
+                    setBadgeCount(badge, counts[dn]);
                 }
             }
         });
@@ -305,8 +315,14 @@ function createRegionNode(region) {
     refreshBtn.title = `Actualiser le cache de "${region.name}" — ${nbSites} site(s)`;
     refreshBtn.addEventListener('click', e => { e.stopPropagation(); refreshRegionCache(region, wrap); });
 
+    const regionBadge = document.createElement('span');
+    regionBadge.className = 'region-count';
+    const nbChildren = (region.children || []).length;
+    regionBadge.textContent = nbChildren > 0 ? nbChildren : '';
+
     header.appendChild(arrow);
     header.appendChild(nameSpan);
+    header.appendChild(regionBadge);
     header.appendChild(refreshBtn);
     header.addEventListener('click', () => toggleRegion(wrap));
 
@@ -384,8 +400,7 @@ async function refreshSiteCache(site, btn) {
         const users = await res.json();
         if (Array.isArray(users)) {
             allSiteUsers[site.dn] = users;
-            const badge = document.getElementById('count-' + dnToId(site.dn));
-            if (badge) badge.textContent = users.length;
+            setBadgeCount(document.getElementById('count-' + dnToId(site.dn)), users.length);
             if (state.selectedSite?.site.dn === site.dn) {
                 state.allUsers = users;
                 renderUsers(users);
@@ -412,9 +427,15 @@ function dnToId(dn) {
 }
 
 function toggleRegion(regionEl) {
-    regionEl.classList.toggle('expanded');
+    const opening = !regionEl.classList.contains('expanded');
 
-    if (regionEl.classList.contains('expanded')) {
+    if (opening) {
+        // Fermer toutes les autres régions (accordéon)
+        document.querySelectorAll('.tree-region.expanded').forEach(other => {
+            if (other !== regionEl) other.classList.remove('expanded');
+        });
+        regionEl.classList.add('expanded');
+
         const regionId = regionEl.querySelector('.region-name')?.textContent;
         if (regionId && !warmupDone.has(regionId)) {
             warmupDone.add(regionId);
@@ -423,6 +444,8 @@ function toggleRegion(regionEl) {
                 if (!badge || badge.textContent === '') enqueuePrefetch(siteEl.dataset.dn);
             });
         }
+    } else {
+        regionEl.classList.remove('expanded');
     }
 
     updateToggleTreeBtn();
@@ -464,6 +487,7 @@ async function refreshAllCache() {
         allSites.forEach(s => enqueuePrefetch(s.dn, () => scanFooter.update(s.name)));
 
         showToast(`Cache vidé (${data.deleted} fichier(s)) — reconstruction en cours`, 'info');
+        window.parent.postMessage({ type: 'cache-rebuilt' }, '*');
     } catch (e) {
         showToast('Erreur : ' + e.message, 'error');
     } finally {
@@ -490,8 +514,7 @@ async function refreshRegionCache(region, regionEl) {
                 .then(users => {
                     if (!Array.isArray(users)) return;
                     allSiteUsers[s.dn] = users;
-                    const badge = document.getElementById('count-' + dnToId(s.dn));
-                    if (badge) badge.textContent = users.length;
+                    setBadgeCount(document.getElementById('count-' + dnToId(s.dn)), users.length);
                 })
                 .catch(() => {})
                 .finally(() => scanFooter.update(s.name))
@@ -566,8 +589,7 @@ async function selectSite(site, el, forceRefresh = false) {
 
         if (fromCache) showToast('Données depuis le cache', 'info');
 
-        const badge = document.getElementById('count-' + dnToId(site.dn));
-        if (badge) badge.textContent = state.allUsers.length;
+        setBadgeCount(document.getElementById('count-' + dnToId(site.dn)), state.allUsers.length);
     } catch (e) {
         setTableError(e.message);
         showToast('Erreur chargement utilisateurs : ' + e.message, 'error');

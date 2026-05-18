@@ -27,6 +27,7 @@
             </nav>
         </div>
         <div class="header-right">
+            <span id="cache-date" class="cache-date-badge" title="Date de construction du cache utilisateurs"></span>
             <span class="badge-readonly">Lecture seule</span>
         </div>
     </header>
@@ -59,6 +60,29 @@
         }));
 
         window.switchTab = switchTab;
+
+        async function refreshCacheDate() {
+            try {
+                const r = await fetch('/api/cache/info');
+                const d = await r.json();
+                const el = document.getElementById('cache-date');
+                if (d.builtAt) {
+                    const dt = new Date(d.builtAt);
+                    const pad = n => String(n).padStart(2, '0');
+                    el.textContent = `Cache : ${pad(dt.getDate())}/${pad(dt.getMonth()+1)} ${pad(dt.getHours())}:${pad(dt.getMinutes())}`;
+                    el.hidden = false;
+                } else {
+                    el.textContent = 'Cache : absent';
+                    el.hidden = false;
+                }
+            } catch { }
+        }
+        refreshCacheDate();
+        setInterval(refreshCacheDate, 60000);
+
+        window.addEventListener('message', e => {
+            if (e.data?.type === 'cache-rebuilt') refreshCacheDate();
+        });
     </script>
 </body>
 </html>

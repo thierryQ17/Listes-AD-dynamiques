@@ -103,11 +103,6 @@ body { overflow: hidden; }
 .rule-card:hover { border-color: var(--accent-dim); box-shadow: var(--shadow-sm); }
 .rule-card.active { border-color: var(--accent); background: var(--accent-lt); }
 
-#regles-list.users-loading .rule-card {
-    opacity: 0.4;
-    cursor: not-allowed;
-    pointer-events: none;
-}
 
 .rule-card-row {
     display: flex;
@@ -1100,6 +1095,21 @@ body { overflow: hidden; }
 }
 .gp-close:hover { background: var(--border-lt); color: var(--text); }
 
+.gp-toggle-members {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 12px;
+    color: var(--text-sub);
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+}
+.gp-toggle-members:hover { color: var(--text); }
+.gp-toggle-members input { cursor: pointer; accent-color: var(--accent); }
+
+.gp-box.hide-members .gp-members-list { display: none; }
+
 .gp-meta {
     display: flex;
     align-items: center;
@@ -1229,6 +1239,32 @@ body { overflow: hidden; }
     padding: 28px 10px;
     line-height: 1.7;
 }
+
+/* Entête de la colonne Centres (texte dynamique — peut dépasser la largeur) */
+#gp-col-centre-hdr {
+    white-space: normal;
+    line-height: 1.4;
+    font-size: 10px;
+}
+
+/* Séparateur de base (NORD / IDF / SUD / SUD-EST) dans la colonne centres */
+.gp-base-separator {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 9px 4px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    color: var(--text-sub);
+    border-bottom: 1px solid var(--border-lt);
+    background: var(--surface-alt);
+    position: sticky;
+    top: 0;
+    z-index: 1;
+}
+.gp-base-separator:first-child { border-top: none; }
 
 /* Carte de groupe */
 .gp-row-item {
@@ -1900,50 +1936,41 @@ body { overflow: hidden; }
 }
 
 /* ============================================================
-   Barre de préchargement utilisateurs (bas de sidebar)
+   Barre info cache utilisateurs (bas de sidebar)
    ============================================================ */
-.preload-bar {
+.cache-info-bar {
     flex-shrink: 0;
-    padding: 6px 14px;
-    border-top: 1px solid var(--border-lt);
-    background: var(--surface-alt);
-    min-height: 28px;
     display: flex;
     align-items: center;
-    gap: 8px;
-    overflow: hidden;
+    justify-content: space-between;
+    gap: 6px;
+    padding: 5px 12px;
+    border-top: 1px solid var(--border-lt);
+    background: var(--surface-alt);
+    min-height: 26px;
 }
-.preload-bar.loading::before {
-    content: '';
-    display: block;
-    width: 100%;
-    height: 2px;
-    position: absolute;
-    left: 0;
-    bottom: 0;
-    background: var(--border);
-}
-.preload-bar { position: relative; }
-.preload-bar.loading .preload-msg::before {
-    content: '';
-    display: inline-block;
-    width: 10px;
-    height: 10px;
-    border: 2px solid var(--accent-dim);
-    border-top-color: var(--accent);
-    border-radius: 50%;
-    animation: spin .7s linear infinite;
-    margin-right: 6px;
-    vertical-align: middle;
-}
-@keyframes spin { to { transform: rotate(360deg); } }
-
-.preload-msg {
+.cache-info-msg {
     font-size: 11px;
     color: var(--text-sub);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
 }
-.preload-bar.done  .preload-msg { color: #15803d; }
-.preload-bar.error .preload-msg { color: var(--danger); }
+.cache-info-msg.ok   { color: #15803d; }
+.cache-info-msg.warn { color: #b45309; }
+.cache-info-msg.spin { color: var(--text-sub); }
+.btn-cache-refresh {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 13px;
+    padding: 0 2px;
+    color: var(--text-sub);
+    line-height: 1;
+    flex-shrink: 0;
+    transition: transform .3s;
+}
+.btn-cache-refresh:hover { color: var(--accent); }
+.btn-cache-refresh.spinning { animation: spin .7s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+

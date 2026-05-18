@@ -46,8 +46,9 @@
             <div class="regles-list" id="regles-list">
                 <p class="hint">Chargement…</p>
             </div>
-            <div class="preload-bar" id="preload-bar">
-                <span class="preload-msg" id="preload-msg"></span>
+            <div class="cache-info-bar" id="cache-info-bar">
+                <span class="cache-info-msg" id="cache-info-msg">Données AD…</span>
+                <button id="btn-refresh-cache" class="btn-cache-refresh" title="Recharger les données depuis l'AD">↻</button>
             </div>
         </aside>
 
@@ -230,7 +231,11 @@
                     <span class="gp-title">Prévisualisation — Groupes AD</span>
                     <span class="gp-summary" id="gp-summary"></span>
                 </div>
-                <div style="display:flex;gap:6px;align-items:center;">
+                <div style="display:flex;gap:10px;align-items:center;">
+                    <label class="gp-toggle-members" title="Afficher / masquer les membres">
+                        <input type="checkbox" id="chk-gp-members" checked>
+                        <span>Membres</span>
+                    </label>
                     <button id="btn-gp-expand" class="gp-close" title="Agrandir">
                         <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
                             <path d="M1 5V1h4M9 1h4v4M13 9v4H9M5 13H1V9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>

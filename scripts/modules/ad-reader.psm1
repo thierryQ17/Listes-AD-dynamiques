@@ -169,6 +169,7 @@ function Get-OUTree {
                     -Properties Name -ErrorAction Stop
 
                 foreach ($site in $sites) {
+                    if ($site.Name -notmatch '^A\d{5}') { continue }
                     $allSites.Add([PSCustomObject]@{
                         name      = $site.Name
                         dn        = $site.DistinguishedName
@@ -190,6 +191,78 @@ function Get-OUTree {
     }
 
     return @($result)
+}
+
+function Get-RegionFromDN {
+    param([string]$DN)
+    if (-not $DN) { return '' }
+    foreach ($region in $global:parametresJson.ad.regions) {
+        foreach ($base in $region.bases) {
+            if ($DN -like "*,$base") { return $region.label }
+        }
+    }
+    return ''
+}
+
+function Get-GlobalUsersCachePath {
+    $scriptsDir = Split-Path ($global:path."r_settings" -replace '/', '\') -Parent
+    $cacheDir   = Join-Path $scriptsDir "cache"
+    if (-not (Test-Path $cacheDir)) { New-Item -ItemType Directory -Path $cacheDir -Force | Out-Null }
+    return Join-Path $cacheDir "_users_global.json"
+}
+
+function Get-AllUsersFromCache {
+    $path = Get-GlobalUsersCachePath
+    if (-not (Test-Path $path)) { return @() }
+    try {
+        return @(ConvertFrom-Json ([System.IO.File]::ReadAllText($path, [System.Text.Encoding]::UTF8)))
+    } catch { return @() }
+}
+
+function Build-GlobalUsersCache {
+    $searchBase = $global:parametresJson.ad.searchBase
+    add-msg -msg "  [UsersCache] Chargement de tous les utilisateurs AD (searchBase: $searchBase)…" -foregroundColor Cyan -quelType writeHost
+    $adParams = @{
+        Filter      = { Enabled -eq $true }
+        SearchBase  = $searchBase
+        Credential  = $global:AD_credential
+        Properties  = @('SamAccountName','Mail','DisplayName','Title','Department','Office',
+                        'extensionAttribute1','Description','UserPrincipalName',
+                        'ProxyAddresses','Manager','Company','EmployeeNumber','PostalCode','StreetAddress')
+        ErrorAction = 'Stop'
+    }
+    $users = @(Get-ADUser @adParams)
+    add-msg -msg "  [UsersCache] $($users.Count) utilisateurs actifs chargés." -foregroundColor Cyan -quelType writeHost
+
+    $records = @($users | ForEach-Object {
+        $u = $_
+        [ordered]@{
+            dn                  = "$($u.DistinguishedName)"
+            displayName         = if ($u.DisplayName)           { "$($u.DisplayName)"           } else { "$($u.SamAccountName)" }
+            samAccountName      = "$($u.SamAccountName)"
+            mail                = if ($u.Mail)                   { "$($u.Mail)"                   } else { '' }
+            title               = if ($u.Title)                  { "$($u.Title)"                  } else { '' }
+            department          = if ($u.Department)             { "$($u.Department)"             } else { '' }
+            office              = if ($u.Office)                 { "$($u.Office)"                 } else { '' }
+            extensionAttribute1 = if ($u.extensionAttribute1)   { "$($u.extensionAttribute1)"   } else { '' }
+            description         = if ($u.Description)           { "$($u.Description)"           } else { '' }
+            userPrincipalName   = if ($u.UserPrincipalName)     { "$($u.UserPrincipalName)"     } else { '' }
+            proxyAddresses      = [string[]]@($u.ProxyAddresses | Where-Object { $_ } | ForEach-Object { "$_" })
+            manager             = if ($u.Manager -match '^CN=([^,]+)') { $Matches[1] } else { if ($u.Manager) { "$($u.Manager)" } else { '' } }
+            company             = if ($u.Company)               { "$($u.Company)"               } else { '' }
+            employeeNumber      = if ($u.EmployeeNumber)        { "$($u.EmployeeNumber)"        } else { '' }
+            postalCode          = if ($u.PostalCode)            { "$($u.PostalCode)"            } else { '' }
+            streetAddress       = if ($u.StreetAddress)         { "$($u.StreetAddress)"         } else { '' }
+            enabled             = $true
+            builtAt             = (Get-Date -Format 'yyyy-MM-ddTHH:mm:ss')
+        }
+    })
+
+    $json = ConvertTo-Json -InputObject @($records) -Depth 3 -Compress
+    $cachePath = Get-GlobalUsersCachePath
+    [System.IO.File]::WriteAllText($cachePath, $json, [System.Text.Encoding]::UTF8)
+    add-msg -msg "  [UsersCache] Fichier JSON sauvegardé ($([Math]::Round($json.Length/1kb)) KB) → $cachePath" -foregroundColor Green -quelType writeHost
+    return $users.Count
 }
 
 function Get-OUSiteUsers {
