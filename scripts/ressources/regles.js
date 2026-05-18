@@ -697,6 +697,12 @@ function showGroupsPreviewModal(data, sourceRule = null) {
         (niveauLabel ? `<span class="gp-meta-item">${esc(niveauLabel)}</span>` : '') +
         (warnings ? `<span class="gp-meta-warn">⚠ ${warnings} nom${warnings > 1 ? 's' : ''} dépasse${warnings > 1 ? 'nt' : ''} 64 caractères</span>` : '');
 
+    const peerRule = sourceRule
+        ? (sourceRule.invertOf
+            ? rules.find(r => r.id === sourceRule.invertOf)
+            : rules.find(r => r.invertOf === sourceRule.id))
+        : null;
+
     const SVG_CHV = `<svg width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden="true"><path d="M2.5 1.5l5 3.5-5 3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 
     const SVG_EYE_PEER = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`;
@@ -877,26 +883,6 @@ function showGroupsPreviewModal(data, sourceRule = null) {
 
             showPeerGroupMini(peerGroup || null, peerName, peerRule.label, btn);
         }, { once: false });
-    }
-
-    // Bouton "voir l'autre règle liée" (uniquement pour les paires invertOf)
-    const peerBtn   = document.getElementById('btn-gp-peer');
-    const peerLabel = document.getElementById('btn-gp-peer-label');
-    const peerRule  = sourceRule
-        ? (sourceRule.invertOf
-            ? rules.find(r => r.id === sourceRule.invertOf)          // subordonné → maître
-            : rules.find(r => r.invertOf === sourceRule.id))         // maître → subordonné
-        : null;
-    if (peerBtn) {
-        if (peerRule) {
-            peerLabel.textContent = peerRule.label;
-            peerBtn.title         = `Prévisualiser « ${peerRule.label} »`;
-            peerBtn.removeAttribute('hidden');
-            peerBtn.onclick = () => fetchAndShowPreview(peerRule, peerBtn);
-        } else {
-            peerBtn.setAttribute('hidden', '');
-            peerBtn.onclick = null;
-        }
     }
 
     modal.removeAttribute('hidden');
