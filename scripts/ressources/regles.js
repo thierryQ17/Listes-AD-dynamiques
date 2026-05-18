@@ -911,7 +911,8 @@ function showPeerGroupMini(group, peerName, peerRuleLabel, anchorEl) {
     }
 
     const n       = group?.count ?? 0;
-    const members = group?.members || [];
+    const members = (group?.members || []).slice().sort((a, b) =>
+        (a.title || '').localeCompare(b.title || '') || (a.name || '').localeCompare(b.name || ''));
     const membersHtml = members.length
         ? members.map(m => `<div class="peer-mini-member"><span class="peer-mini-name">${esc(m.name)}</span>${m.title ? `<span class="peer-mini-title">${esc(m.title)}</span>` : ''}</div>`).join('')
         : `<div class="peer-mini-empty">Aucun membre</div>`;
