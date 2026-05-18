@@ -69,8 +69,9 @@
                 if (d.builtAt) {
                     const dt = new Date(d.builtAt);
                     const pad = n => String(n).padStart(2, '0');
-                    const days = ['dimanche','lundi','mardi','mercredi','jeudi','vendredi','samedi'];
-                    el.textContent = `Cache : ${days[dt.getDay()]} ${pad(dt.getDate())}/${pad(dt.getMonth()+1)} ${pad(dt.getHours())}:${pad(dt.getMinutes())}`;
+                    const days   = ['dimanche','lundi','mardi','mercredi','jeudi','vendredi','samedi'];
+                    const months = ['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'];
+                    el.textContent = `Cache : ${days[dt.getDay()]} ${dt.getDate()} ${months[dt.getMonth()]} ${dt.getFullYear()} ${pad(dt.getHours())}:${pad(dt.getMinutes())}`;
                     el.hidden = false;
                 } else {
                     el.textContent = 'Cache : absent';
