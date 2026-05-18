@@ -103,7 +103,7 @@ CONTEXTE-SESSION.md         ← ce fichier
 - ✅ 3 iframes lazy-load (Explorer chargé immédiatement, autres au premier clic)
 - ✅ Onglet actif marqué `.active` dans le header
 - ✅ Communication postMessage pour le workflow "créer règle depuis Explorer"
-- ✅ **Badge date cache** en haut à droite : `Cache : 18/05 16:33` — rafraîchi toutes les 60s + après `cache-rebuilt`
+- ✅ **Badge date cache** en haut à droite : `Cache : lundi 18/05 16:33` — jour complet + rafraîchi toutes les 60s + après `cache-rebuilt`
 
 ### Explorateur AD (`/explorer`)
 - ✅ Arbre AD par régions/sites (prefetch de tous les sites en arrière-plan)
@@ -158,6 +158,15 @@ CONTEXTE-SESSION.md         ← ce fichier
   - **Onglet "Groupes"** + **onglet "Adresses mail"** (contrôle AD des adresses)
   - Contrôle AD des adresses mail via `POST /api/regles/check-mail`
   - **Bouton Stop** pour annuler le contrôle en cours — flag `container._checkAborted`
+- ✅ **Liaison maître/subordonné entre règles (`invertOf`)** :
+  - Une règle peut être l'**inverse dynamique** d'une autre (ex. ADMINISTRATIF = tous − FORMATEURS)
+  - Champ `invertOf` dans `regles.json` stocke l'`id` de la règle source
+  - Backend calcule l'inverse à la volée (preview + génération CSV) : `ALL_USERS − source_rule_users`
+  - Formulaire subordonné : **banner verrouillé** (fond bleu) avec les conditions sources en pills lecture seule — préfixe, niveau, nom, actif restent éditables
+  - `readForm()` et `POST /api/regles` préservent `invertOf` à chaque sauvegarde
+  - **Icônes dans les cartes** : maître = git-fork bleue (`var(--accent)`), subordonné = ↳ ambrée (`#92400e`)
+  - `metaLabel()` affiche `"Inverse de FORMATEURS · Par centre · …"` pour les règles subordonnées
+  - `FIELD_LABELS = Object.fromEntries(FIELDS)` — mapping clé → libellé pour les pills du banner
 
 ### Modale CSV (après génération)
 - ✅ Onglet **"Fichiers CSV"** + onglet **"Adresses mail"** (même composant réutilisable)
