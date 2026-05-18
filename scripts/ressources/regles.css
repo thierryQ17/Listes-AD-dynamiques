@@ -131,6 +131,8 @@ body { overflow: hidden; }
 }
 .rule-link-badge:hover { opacity: 1; }
 .rule-link-icon { display: block; }
+.rule-link-master { color: var(--accent); }
+.rule-link-sub    { color: #92400e; }
 
 .btn-card-edit,
 .btn-card-generate,

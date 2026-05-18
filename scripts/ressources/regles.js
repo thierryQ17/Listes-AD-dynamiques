@@ -129,16 +129,23 @@ function renderList() {
     }
 }
 
-const SVG_LINK = `<svg class="rule-link-icon" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>`;
+// Maître : icône "git-fork" (la règle alimente d'autres règles)
+const SVG_MASTER = `<svg class="rule-link-icon" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="5" r="2"/><circle cx="5" cy="19" r="2"/><circle cx="19" cy="19" r="2"/><path d="M12 7v4m0 0-5 6m5-6 5 6"/></svg>`;
+// Subordonné : icône "corner-down-right" (↳ — dérivé du maître)
+const SVG_LINK   = `<svg class="rule-link-icon" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 10 20 15 15 20"/><path d="M4 4v7a4 4 0 0 0 4 4h12"/></svg>`;
 
 function buildCard(rule) {
     const isActive = rule.active !== false;
 
     const sourceRule  = rule.invertOf ? rules.find(r => r.id === rule.invertOf) : null;
     const inverseRule = rules.find(r => r.invertOf === rule.id);
-    const linkTitle   = sourceRule  ? `Inverse de « ${sourceRule.label} »`
-                      : inverseRule ? `« ${inverseRule.label} » est l'inverse de cette règle`
-                      : null;
+
+    let linkBadge = '';
+    if (sourceRule) {
+        linkBadge = `<span class="rule-link-badge rule-link-sub" title="Subordonné — inverse de « ${esc(sourceRule.label)} »">${SVG_LINK}</span>`;
+    } else if (inverseRule) {
+        linkBadge = `<span class="rule-link-badge rule-link-master" title="Maître — « ${esc(inverseRule.label)} » est l'inverse de cette règle">${SVG_MASTER}</span>`;
+    }
 
     const card = document.createElement('div');
     card.className = 'rule-card'
@@ -148,7 +155,7 @@ function buildCard(rule) {
     card.innerHTML =
         `<div class="rule-card-row">` +
             `<span class="rule-card-label">${esc(rule.label || '(sans nom)')}</span>` +
-            (linkTitle ? `<span class="rule-link-badge" title="${esc(linkTitle)}">${SVG_LINK}</span>` : '') +
+            linkBadge +
             (!isActive ? `<span class="badge-inactive">Inactif</span>` : '') +
         `</div>`;
 

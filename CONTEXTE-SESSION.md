@@ -21,7 +21,7 @@ Le point d'entrée est `shell.html` servi à `/`. Il contient **3 iframes** : l'
 
 ```
 http://localhost:8888/
-  └── shell.html  ← header + 3 iframes
+  └── shell.html  ← header + 3 iframes + badge date cache
         ├── #frame-explorer  src="/explorer"   (chargé immédiatement)
         ├── #frame-regles    src="/regles"      (lazy — premier clic)
         └── #frame-groupes   src="/groupes"     (lazy — premier clic)
@@ -39,6 +39,7 @@ if (window !== window.top) {
 
 - `window.top.switchTab('regles')` — depuis un iframe, bascule vers l'onglet Règles
 - `postMessage({ type: 'tab-activated' }, '*')` — le shell notifie l'iframe activé
+- `postMessage({ type: 'cache-rebuilt' }, '*')` — l'Explorer notifie le shell après ↻ Cache
 - `regles.js` écoute `tab-activated` pour charger un draft localStorage en attente
 
 ---
@@ -58,11 +59,12 @@ scripts/
     regles.html / regles.js / regles.css        ← Règles (/regles)
     index.html / app.js / style.css             ← Groupes Dynamiques (/groupes)
   settings/
-    parametres.json         ← config (searchBase AD, régions avec aliases)
+    parametres.json         ← config (searchBase AD, régions avec bases + aliases)
     regles.json             ← règles de filtrage (CRUD)
   cache/
-    *.json                  ← cache AD par site
-    _index.json             ← index des sites (EXCLU du scan de champs)
+    *.json                  ← cache AD par site (OU)
+    _index.json             ← index DN → count (EXCLU du scan de champs, write protégé par retry)
+    _users_global.json      ← cache global tous utilisateurs actifs (source de vérité pour Règles)
 application/
   output/                   ← CSV générés (sous-dossiers horodatés)
 _initGlobalVariables.psm1   ← auto-découverte des chemins ($global:path)
@@ -84,13 +86,14 @@ CONTEXTE-SESSION.md         ← ce fichier
 | `/api/regles/:id` | DELETE |
 | `/api/regles/:id/generate` | POST → génération CSV |
 | `/api/csv/read` | POST `{ path }` → contenu d'un fichier CSV (4 colonnes : nom, sam, mail, fonction) |
-| `/api/regles/preview-groups` | POST règle → groupes AD simulés (type global/do/centre + membres) |
+| `/api/regles/preview-groups` | POST règle → groupes AD simulés (type global/do/centre + membres + baseLabel + multiBase) |
 | `/api/regles/check-mail` | POST `{ address }` → `{ available: bool }` — vérifie `mail` ET `proxyAddresses` dans l'AD |
 | `/api/ad/values?field=xxx` | Valeurs AD distinctes depuis le cache |
 | `/api/tree` | Arbre AD (régions + sites) |
 | `/api/ou/users?dn=xxx[&fresh=1]` | Utilisateurs d'un site (cache ou AD) |
 | `/api/cache/counts` | Index des compteurs de cache |
-| `/api/cache/refresh-all` | Vide tout le cache |
+| `/api/cache/info` | `{ builtAt: "2026-05-18T16:33:39" }` — date de MAJ de `_users_global.json` |
+| `/api/cache/refresh-all` | Vide tout le cache + relance le warmup |
 
 ---
 
@@ -100,9 +103,13 @@ CONTEXTE-SESSION.md         ← ce fichier
 - ✅ 3 iframes lazy-load (Explorer chargé immédiatement, autres au premier clic)
 - ✅ Onglet actif marqué `.active` dans le header
 - ✅ Communication postMessage pour le workflow "créer règle depuis Explorer"
+- ✅ **Badge date cache** en haut à droite : `Cache : 18/05 16:33` — rafraîchi toutes les 60s + après `cache-rebuilt`
 
 ### Explorateur AD (`/explorer`)
 - ✅ Arbre AD par régions/sites (prefetch de tous les sites en arrière-plan)
+- ✅ **Accordion régions** : ouvrir une région ferme toutes les autres
+- ✅ **Badge compteur de sites** par région (nombre de sous-OUs `^A\d{5}`, statique, affiché à la création du nœud)
+- ✅ **Filtre OUs** : seules les OUs dont le nom correspond à `^A\d{5}` sont des sites valides (exclut "Groupes", "Partenaires", etc.)
 - ✅ Sélection d'un site → tableau d'utilisateurs avec tri + regroupement
 - ✅ Recherche cross-site (filtre arbre + tableau simultanément)
 - ✅ **Recherche étendue** : cherche aussi par **nom de site** (ex. `%rungis%`) en plus des champs utilisateur — sites non cachés affichés avec badge amber "non chargé — cliquer pour ouvrir"
@@ -111,6 +118,7 @@ CONTEXTE-SESSION.md         ← ce fichier
 - ✅ Modal Fonction (analyse d'une fonction sur 1 site / région / toute la structure)
 - ✅ Actualisation de cache site par site ou par région entière
 - ✅ Snapshot `sessionStorage` (TTL 30 min) pour accès direct sans shell
+- ✅ Après `↻ Cache`, envoie `postMessage({ type: 'cache-rebuilt' })` au shell (rafraîchit le badge date)
 
 ### Règles (`/regles`)
 - ✅ CRUD complet des règles
@@ -121,88 +129,94 @@ CONTEXTE-SESSION.md         ← ce fichier
 - ✅ Règles inactives dans une section séparée en bas de la liste
 - ✅ Bouton "Générer le CSV" dans le formulaire (règle en cours uniquement, visible en mode édition)
 - ✅ Bouton "Supprimer" dans le footer **gauche** ; Annuler/Générer/Enregistrer dans le footer **droit**
-- ✅ Modale CSV — arbre hiérarchique de fichiers (global → DO → centre) avec styles distincts :
-  - Fichier global : dégradé gris foncé, texte blanc
-  - Fichier DO : dégradé gris clair, texte sombre
-  - Fichier centre (feuille) : style item classique
+- ✅ Modale CSV — arbre hiérarchique de fichiers (global → DO → centre) avec styles distincts
 - ✅ Modale CSV — en-tête avec critères de sélection (pills verts = include, rouges = exclude)
 - ✅ Sous-modale CSV — tableau Nom + Fonction uniquement (SAM/Mail masqués en prévisualisation)
-- ✅ Sous-modale CSV — lignes alternées gris clair/gris moyen + hover accent
 - ✅ Message en filigrane dans la zone principale vide (texte grand, gradient gris, opacité 55%)
 - ✅ Cartes : une seule ligne `.rule-card-row` (label + badge Inactif si besoin)
 - ✅ Modal JSON (visualiseur brut avec coloration syntaxique)
 - ✅ Modal Aide (8 étapes expliquées)
 - ✅ Tooltips JS `position:fixed` au survol (badges niveau + boutons cartes)
 - ✅ Confirmation avant suppression et avant toggle
-- ✅ Description auto-calculée : `"Par centre · 3 CSV (centre + DO + global) · 2 conditions"` — lecture seule, mise à jour live quand on change le niveau ou les conditions (`metaLabel` + `autoUpdateDesc`)
+- ✅ Description auto-calculée : `"Par centre · 3 CSV (centre + DO + global) · 2 conditions"` — lecture seule, mise à jour live
 - ✅ Description du niveau (bandeau sous le sélecteur 1/2/3, mise à jour au clic)
 - ✅ Préchargement utilisateurs AD en arrière-plan au chargement (barre de statut dans le footer sidebar)
 - ✅ Barre de progression animée dans le footer pendant la génération CSV
-- ✅ **Fix cache** : suppression de la stale-detection (`proxyAddresses`) qui déclenchait 179 re-fetch AD à chaque chargement de page + vidage du cache ancien format
-- ✅ **Fix filtre ADMINISTRATIF** : `Test-UserMatchesRule` — conditions positives (`eq`/`like`) en OR, conditions négatives (`ne`/`notlike`) en AND (auparavant tout en OR → les Formateurs passaient le filtre)
+- ✅ **Fix cache** : suppression de la stale-detection (`proxyAddresses`) qui déclenchait 179 re-fetch AD à chaque chargement de page
+- ✅ **Fix filtre ADMINISTRATIF** : `Test-UserMatchesRule` — conditions positives (`eq`/`like`) en OR, conditions négatives (`ne`/`notlike`) en AND
 - ✅ **Modale "Prévisualiser les groupes"** (`/api/regles/preview-groups`) — layout multi-colonnes :
   - 1/2/3 colonnes selon le niveau (détection par types présents : global/do/centre)
   - Colonne 3 interactive : clic sur un groupe DO → remplace le contenu de la colonne par ses centres
   - Chaque carte centre affiche la liste des membres (nom + fonction, scroll interne max 80px)
-  - Badge de type uniquement en colonne 1 (Global) — supprimé pour DO et Centres (redondant avec l'en-tête)
-  - En-têtes : "Groupe global" / "Groupes DO [count]" / "Centres" (se met à jour avec le nom DO sélectionné)
+  - **Case à cocher "Membres"** dans le header de la modale → masque/affiche toutes les listes de membres
+  - Badge type supprimé pour DO et Centres (nombre affiché uniquement, avec tooltip)
+  - **Entête colonne Centres dynamique** : `FORMATEURS-DO-I2N — 46 Groupes (excluant 5 avec 0 utilisateur) · 477 pers.`
+  - **Sous-catégorisation multiBase** : DO I2N → séparateurs NORD / IDF ; DO SUD → séparateurs SUD / SUD-EST (sticky, masqués si tout filtré)
+  - Barre de recherche en colonne 3 (par nom groupe / utilisateur / fonction) — masque aussi les séparateurs de base si aucun item visible
   - Avertissement ⚠ dans le bandeau méta si un nom dépasse 64 caractères (limite Exchange)
-  - `monoNiveau` n'affecte que la génération CSV, pas la prévisualisation (toujours hiérarchie complète)
-  - Compteur utilisateurs en haut à droite de chaque carte (`.gp-row-top` flex)
-  - Bouton plein écran : la dernière colonne s'élargit davantage (`.gp-box--wide .gp-col:last-child { flex: 2.5 }`)
-  - Cartes avec fond blanc + ombre sur fond gris (`.gp-col-list { background: #efefef }`)
-  - Colonne 3 : grille multi-colonnes responsive (`repeat(auto-fill, minmax(220px, 1fr))`)
-  - Barre de recherche en colonne 3 (par nom groupe / utilisateur / fonction) + bouton clear + select-all au focus
-  - Scroll fix : `.gp-body { display: flex; flex-direction: column }` → `.gp-columns { flex: 1; min-height: 0 }` (**`display:flex` écrase `[hidden]` → toujours ajouter `.gp-body[hidden] { display: none }` pour les flex containers**)
-  - **Onglet "Groupes"** (vue existante) + **onglet "Adresses mail"** (arbre hiérarchique global → DO → centre)
-  - Contrôle AD des adresses mail : `POST /api/regles/check-mail` → LDAP `(|(mail=$addr)(proxyAddresses=*:$addr))`
-  - Barre de progression pendant le contrôle — adresse courante affichée
-  - **Bouton Stop** (rouge) pour annuler le contrôle en cours — flag `container._checkAborted`
-  - Abort automatique à la fermeture de la modale (×, clic fond)
+  - Bouton plein écran : la dernière colonne s'élargit davantage
+  - **Onglet "Groupes"** + **onglet "Adresses mail"** (contrôle AD des adresses)
+  - Contrôle AD des adresses mail via `POST /api/regles/check-mail`
+  - **Bouton Stop** pour annuler le contrôle en cours — flag `container._checkAborted`
 
 ### Modale CSV (après génération)
-- ✅ Onglet **"Fichiers CSV"** (arbre hiérarchique existant) + onglet **"Adresses mail"** (même composant `renderMailTab` / `checkMails` que la modale prévisualisation)
-- ✅ `Invoke-RuleGeneration` retourne maintenant `groups` + `mailDomain` en plus de `files`/`total`/`outDir`
-- ✅ `renderMailTab(data, container)` et `checkMails(groups, container)` : fonctions génériques réutilisables dans les deux contextes (pas d'IDs codés en dur — tout via `container.querySelector`)
+- ✅ Onglet **"Fichiers CSV"** + onglet **"Adresses mail"** (même composant réutilisable)
+- ✅ `renderMailTab` et `checkMails` : fonctions génériques avec `container` (pas d'IDs codés en dur)
 
-### Modèle de données — Règle
-```json
-{
-  "id": "abc123",
-  "label": "Administratif",
-  "niveau": 3,
-  "monoNiveau": false,
-  "active": true,
-  "conditions": {
-    "include": [{ "field": "title", "op": "like", "value": "*Adjoint*" }],
-    "exclude": [{ "field": "department", "op": "eq", "value": "Direction" }]
-  },
-  "createdAt": "2025-01-01T10:00:00",
-  "updatedAt": "2025-01-01T12:00:00"
+---
+
+## Cache global utilisateurs (`_users_global.json`)
+
+**Source de vérité pour le module Règles.** Contient tous les utilisateurs AD actifs avec les champs :
+
+```
+dn, displayName, samAccountName, mail, title, department, office,
+extensionAttribute1, description, userPrincipalName, proxyAddresses,
+manager, company, employeeNumber, postalCode, streetAddress, enabled, builtAt
+```
+
+> **`dn` est indispensable** pour `Get-RegionFromDN`. Si le champ est absent (cache construit avant son ajout), la prévisualisation Règles ne retourne que le groupe global. → Reconstruire avec **↻ Cache** dans l'Explorateur.
+
+**Reconstruction** : `Build-GlobalUsersCache` dans `ad-reader.psm1` — appelée automatiquement au warmup si le fichier n'existe pas, ou manuellement via `↻ Cache`.
+
+---
+
+## Groupement par région — `Get-RegionFromDN`
+
+Remplace `Get-NormalizedDepartment` (basé sur le champ `Department`) pour tous les groupements DO dans `http-server.psm1` et `csv-generator.psm1`.
+
+```powershell
+function Get-RegionFromDN {
+    param([string]$DN)
+    if (-not $DN) { return '' }
+    foreach ($region in $global:parametresJson.ad.regions) {
+        foreach ($base in $region.bases) {
+            if ($DN -like "*,$base") { return $region.label }
+        }
+    }
+    return ''
 }
 ```
 
-> `description` n'est **pas** persisté dans le JSON — il est calculé dynamiquement par `metaLabel(rule)` dans `regles.js` et affiché en lecture seule dans le formulaire et les cartes.
+- Utilisé dans : `Group-Object { Get-RegionFromDN $_.dn } | Where-Object { $_.Name -and $_.Name -ne 'MONCHY' }`
+- `Get-NormalizedDepartment` existe encore dans `csv-generator.psm1` mais n'est plus appelée
 
-**Champs** : `title`, `department`, `office`, `extensionAttribute1`, `description`  
-**Opérateurs** : `eq`, `ne`, `like`, `notlike`
+### Régions multiBase
 
-### Niveaux de groupement CSV
-| Niveau | Label | Fichiers produits |
-|--------|-------|-------------------|
-| 1 | Global | 1 CSV global |
-| 2 | Par DO | 2 CSV (DO + global) |
-| 3 | Par centre | 3 CSV (centre + DO + global) |
+DO I2N et DO SUD ont plusieurs bases AD (`bases: [...]`) :
 
-`monoNiveau: true` + niveau 3 = centre par DO seulement, sans CSV DO ni global.
+| Région | Bases | baseLabel |
+|--------|-------|-----------|
+| DO I2N | NORD + IDF | `NORD` / `IDF` |
+| DO SUD | SUD + SUD-EST | `SUD` / `SUD-EST` |
 
-### Format CSV généré
-```
-"nom";"samaccountname";"mail";"fonction"
-"Dupont Jean";"jdupont";"jdupont@example.com";"FORMATEUR"
-```
+Pour chaque groupe de type `centre`, le backend dérive `baseLabel` en matchant le DN du premier utilisateur contre les bases individuelles de la région. Ce `baseLabel` est retourné dans la réponse JSON et utilisé par le frontend pour afficher les séparateurs dans la colonne Centres.
 
-Colonnes : `DisplayName`, `SamAccountName`, `Mail`, `Title`.
+---
+
+## `_index.json` — Écriture concurrente
+
+`Update-CacheIndex` et `Update-LocalIndex` (warmup) protègent l'écriture par une **boucle retry** (5 tentatives × 50 ms) avec `catch [System.IO.IOException]`. L'index est non-critique (les fichiers individuels par site sont la source de vérité).
 
 ---
 
@@ -226,33 +240,15 @@ function Invoke-WriteJobs { param($Jobs)
 
 Chaque job hashtable : `@{ path = '...'; fname = '...'; content = <string pré-calculée> }`.
 
-### Get-NormalizedDepartment
-
-Normalise le champ `Department` AD vers les labels canoniques des régions (`parametres.json`).
-
-```powershell
-function Get-NormalizedDepartment {
-    param([string]$Department)
-    # Cherche dans $global:parametresJson.ad.regions : label + aliases (insensible à la casse)
-    # Retourne le label canonique (ex. "DO NORD" → "DO I2N") ou la valeur brute si pas de match
-}
-```
-
-Utilisé dans tous les `Group-Object { Get-NormalizedDepartment $_.Department }`.
-
-### parametres.json — régions avec aliases
-
-Chaque région a un tableau `aliases` pour normaliser les valeurs brutes du champ `Department` :
+### parametres.json — régions avec bases et aliases
 
 ```json
-{ "label": "DO I2N",   "aliases": ["DO NORD", "DO IDF", "NORD", "IDF", "I2N", "DO I2N"] }
-{ "label": "DO OUEST", "aliases": ["DO OUEST", "OUEST"] }
-{ "label": "DO EST",   "aliases": ["DO EST", "EST"] }
-{ "label": "DO SUD",   "aliases": ["DO SUD", "DO SUD-EST", "SUD", "SUD-EST", "DO AURASUD", "AURASUD", "DO AURA", "AURA"] }
-{ "label": "MONCHY",   "aliases": ["MONCHY", "DO MONCHY"] }
+{ "label": "DO I2N",   "bases": ["OU=NORD,...", "OU=IDF,..."],     "aliases": ["DO NORD", "DO IDF", "NORD", "IDF", "I2N"] }
+{ "label": "DO OUEST", "bases": ["OU=OUEST,..."],                   "aliases": ["DO OUEST", "OUEST"] }
+{ "label": "DO EST",   "bases": ["OU=EST,..."],                     "aliases": ["DO EST", "EST"] }
+{ "label": "DO SUD",   "bases": ["OU=SUD,...", "OU=SUD-EST,..."],   "aliases": ["DO SUD", "SUD", "SUD-EST"] }
+{ "label": "MONCHY",   "bases": ["OU=MONCHY,..."],                  "aliases": ["MONCHY"] }
 ```
-
-> Si les valeurs de `Department` dans l'AD ne correspondent pas aux aliases, les ajuster directement dans `parametres.json` sans toucher au code PS.
 
 ---
 
@@ -265,6 +261,7 @@ Chaque région a un tableau `aliases` pour normaliser les valeurs brutes du cham
 - `_initGlobalVariables.psm1` auto-découvre TOUS les fichiers de l'arborescence → pas besoin d'enregistrer manuellement de nouveaux fichiers
 - **Parallel runspaces** : ne jamais passer des objets AD à `ForEach-Object -Parallel` — les propriétés étendues (DisplayName, Title, etc.) seront vides après désérialisation. Toujours pré-calculer le contenu dans le thread principal.
 - `Get-ADUser` ne retourne **pas** `DisplayName` par défaut → toujours l'inclure dans `-Properties`
+- **Écriture fichier concurrente** : utiliser boucle retry avec `catch [System.IO.IOException]` plutôt qu'un mutex (plus simple, acceptable pour un index non-critique)
 
 ### CSS / JS
 - `display: flex` sur n'importe quel élément écrase l'attribut `[hidden]` du navigateur → **toujours** ajouter `.element[hidden] { display: none; }` dès qu'on met `display: flex` ou `display: grid` sur un élément qu'on veut pouvoir cacher via `hidden`
@@ -272,6 +269,8 @@ Chaque région a un tableau `aliases` pour normaliser les valeurs brutes du cham
 - Tooltips dans des conteneurs `overflow: hidden` : utiliser `position: fixed` côté JS (système `data-tooltip` + `setupTooltip()`)
 - Dans les iframes, `100vh` = hauteur de l'iframe (pas de la fenêtre parente) → header masqué = layout doit passer à `height: 100vh`
 - Structure d'une carte règle : `.rule-card-row` (label seul, clic = ouvre formulaire)
+- **Séparateurs sticky dans une liste scrollable** : `position: sticky; top: 0; z-index: 1` sur le séparateur, à l'intérieur d'un parent `overflow-y: auto`
+- **Masquer les séparateurs orphelins** après un filtre de recherche : stocker `data-base-hdr` sur le séparateur et `data-base` sur chaque item → après chaque filtre, vérifier si au moins un item de la même base est visible
 
 ### Variables globales
 - `$global:parametresJson` → config depuis `parametres.json`
