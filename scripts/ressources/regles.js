@@ -140,6 +140,8 @@ function buildCard(rule) {
     const sourceRule  = rule.invertOf ? rules.find(r => r.id === rule.invertOf) : null;
     const inverseRule = rules.find(r => r.invertOf === rule.id);
 
+    const linkedRule = sourceRule || inverseRule || null;
+
     let linkBadge = '';
     if (sourceRule) {
         linkBadge = `<span class="rule-link-badge rule-link-sub" title="Subordonné — inverse de « ${esc(sourceRule.label)} »">${SVG_LINK}</span>`;
@@ -156,10 +158,19 @@ function buildCard(rule) {
         `<div class="rule-card-row">` +
             `<span class="rule-card-label">${esc(rule.label || '(sans nom)')}</span>` +
             linkBadge +
+            (linkedRule ? `<button class="btn-card-peer-preview" title="Prévisualiser « ${esc(linkedRule.label)} »" data-peer-id="${esc(linkedRule.id)}"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>` : '') +
             (!isActive ? `<span class="badge-inactive">Inactif</span>` : '') +
         `</div>`;
 
     card.addEventListener('click', () => openEditForm(rule.id));
+
+    if (linkedRule) {
+        card.querySelector('.btn-card-peer-preview').addEventListener('click', e => {
+            e.stopPropagation();
+            fetchAndShowPreview(linkedRule, e.currentTarget);
+        });
+    }
+
     return card;
 }
 
@@ -616,13 +627,8 @@ async function generateCsv(id) {
 
 // ── Prévisualisation groupes AD ───────────────────────────────────────
 
-async function previewGroups() {
-    const rule = readForm();
-    if (!rule) return;
-
-    const btn = document.getElementById('btn-preview-groups');
-    if (btn) { btn.disabled = true; btn.textContent = 'Chargement…'; }
-
+async function fetchAndShowPreview(rule, spinEl = null) {
+    if (spinEl) { spinEl.disabled = true; }
     try {
         const r    = await fetch('/api/regles/preview-groups', {
             method:  'POST',
@@ -634,6 +640,20 @@ async function previewGroups() {
         showGroupsPreviewModal(data);
     } catch {
         showToast('Erreur lors de la prévisualisation', 'error');
+    } finally {
+        if (spinEl) { spinEl.disabled = false; }
+    }
+}
+
+async function previewGroups() {
+    const rule = readForm();
+    if (!rule) return;
+
+    const btn = document.getElementById('btn-preview-groups');
+    if (btn) { btn.disabled = true; btn.textContent = 'Chargement…'; }
+
+    try {
+        await fetchAndShowPreview(rule);
     } finally {
         if (btn) { btn.disabled = false; btn.innerHTML =
             `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg> Prévisualiser les groupes`; }
@@ -826,6 +846,31 @@ function setupGroupsPreviewModal() {
     const expandBtn = document.getElementById('btn-gp-expand');
     const tabsBar   = document.getElementById('gp-tabs');
 
+    // ── Drag ─────────────────────────────────────────────────────────────
+    let _dragActive = false, _dragOx = 0, _dragOy = 0, _dragX = 0, _dragY = 0;
+    const header = box.querySelector('.gp-header');
+
+    header.addEventListener('mousedown', e => {
+        if (e.button !== 0) return;
+        if (e.target.closest('button, input, label')) return;
+        _dragActive = true;
+        _dragOx = e.clientX - _dragX;
+        _dragOy = e.clientY - _dragY;
+        header.style.cursor = 'grabbing';
+        e.preventDefault();
+    });
+    document.addEventListener('mousemove', e => {
+        if (!_dragActive) return;
+        _dragX = e.clientX - _dragOx;
+        _dragY = e.clientY - _dragOy;
+        box.style.transform = `translate(${_dragX}px,${_dragY}px)`;
+    });
+    document.addEventListener('mouseup', () => {
+        if (!_dragActive) return;
+        _dragActive = false;
+        header.style.cursor = '';
+    });
+
     function closeModal() {
         // Annuler un contrôle AD en cours
         const mailPanel = document.getElementById('gp-mail-panel');
@@ -833,6 +878,8 @@ function setupGroupsPreviewModal() {
         box.classList.remove('gp-box--wide');
         expandBtn.innerHTML = SVG_EXPAND;
         expandBtn.title     = 'Agrandir';
+        _dragX = 0; _dragY = 0;
+        box.style.transform = '';
         modal.setAttribute('hidden', '');
     }
 
