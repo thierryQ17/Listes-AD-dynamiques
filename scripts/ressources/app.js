@@ -438,19 +438,26 @@ function renderCsvTable(data) {
     table.className = 'csv-table';
     const thead = table.createTHead();
     const hr = thead.insertRow();
+    const thNum = document.createElement('th');
+    thNum.textContent = '#';
+    thNum.className = 'csv-col-num';
+    hr.appendChild(thNum);
     for (const h of data.headers) {
         const th = document.createElement('th');
         th.textContent = h;
         hr.appendChild(th);
     }
     const tbody = table.createTBody();
-    for (const row of data.rows) {
+    data.rows.forEach((row, i) => {
         const tr = tbody.insertRow();
+        const tdNum = tr.insertCell();
+        tdNum.textContent = i + 1;
+        tdNum.className = 'csv-col-num';
         for (const h of data.headers) {
             const td = tr.insertCell();
             td.textContent = row[h] != null ? row[h] : '';
         }
-    }
+    });
     view.innerHTML = '';
     view.appendChild(table);
 }

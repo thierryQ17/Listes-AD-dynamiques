@@ -72,6 +72,120 @@ const CARD_ICONS = {
     csv:   `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>`,
 };
 
+// ── LDAP & Circuit ───────────────────────────────────────────────────
+
+const LDAP_FIELD_MAP = {
+    title:               'title',
+    department:          'department',
+    office:              'physicalDeliveryOfficeName',
+    extensionAttribute1: 'extensionAttribute1',
+    description:         'description',
+};
+
+function escLdapVal(v) {
+    return String(v || '').replace(/[*()\\\x00]/g, c =>
+        '\\' + c.charCodeAt(0).toString(16).padStart(2, '0'));
+}
+
+function condToLdapHtml(cond) {
+    const f  = LDAP_FIELD_MAP[cond.field] || cond.field;
+    const v  = escLdapVal(cond.value);
+    const p  = s => `<span class="lc-p">${s}</span>`;
+    const op = s => `<span class="lc-op">${s}</span>`;
+    const fH = `<span class="lc-field">${esc(f)}</span>`;
+    const vH = `<span class="lc-val">${esc(v)}</span>`;
+    switch (cond.op) {
+        case 'eq':      return `${p('(')}${fH}=${vH}${p(')')}`;
+        case 'ne':      return `${p('(')}${op('!')}${p('(')}${fH}=${vH}${p(')')}${p(')')}`;
+        case 'like':    return `${p('(')}${fH}=${op('*')}${vH}${op('*')}${p(')')}`;
+        case 'notlike': return `${p('(')}${op('!')}${p('(')}${fH}=${op('*')}${vH}${op('*')}${p(')')}${p(')')}`;
+        default:        return `${p('(')}${fH}=${vH}${p(')')}`;
+    }
+}
+
+function buildLdapHtml() {
+    const p  = s => `<span class="lc-p">${s}</span>`;
+    const op = s => `<span class="lc-op">${s}</span>`;
+    const kw = s => `<span class="lc-kw">${s}</span>`;
+    const cm = s => `<span class="lc-comment">${s}</span>`;
+
+    const staticHtml =
+        p('(') + op('&') + '\n' +
+        '  ' + p('(') + kw('objectClass') + '=' + cm('user') + p(')') + '\n' +
+        '  ' + p('(') + op('!') + p('(') + kw('userAccountControl') +
+            ':1.2.840.113556.1.4.803:=' + cm('2') + p(')') + p(')') + '\n' +
+        p(')');
+
+    const existing   = editingId ? rules.find(r => r.id === editingId) : null;
+    const isInvertOf = !!existing?.invertOf;
+    let dynamicHtml;
+
+    if (isInvertOf) {
+        const srcRule = rules.find(r => r.id === existing.invertOf);
+        if (!srcRule) {
+            dynamicHtml = cm('/* règle source introuvable */');
+        } else {
+            const inc = (srcRule.conditions?.include || []).filter(c => c.value);
+            if (!inc.length) {
+                dynamicHtml = cm('/* source sans conditions */');
+            } else {
+                const parts = inc.map(condToLdapHtml);
+                const inner = parts.length === 1
+                    ? parts[0]
+                    : p('(') + op('|') + '\n  ' + parts.join('\n  ') + '\n' + p(')');
+                dynamicHtml = p('(') + op('!') + inner + p(')');
+            }
+        }
+    } else {
+        const inc = readCondList('cond-include');
+        const exc = readCondList('cond-exclude');
+        if (!inc.length) {
+            dynamicHtml = cm('/* aucune condition — ajouter des critères */');
+        } else {
+            const incHtml = inc.length === 1
+                ? condToLdapHtml(inc[0])
+                : p('(') + op('|') + '\n  ' + inc.map(condToLdapHtml).join('\n  ') + '\n' + p(')');
+            const excHtml = exc.map(c => p('(') + op('!') + condToLdapHtml(c) + p(')')).join('\n');
+            dynamicHtml = excHtml
+                ? p('(') + op('&') + '\n  ' + incHtml + '\n  ' + excHtml + '\n' + p(')')
+                : incHtml;
+        }
+    }
+
+    return { staticHtml, dynamicHtml };
+}
+
+function updateLdapDisplay() {
+    const sEl = document.getElementById('ldap-static');
+    const dEl = document.getElementById('ldap-dynamic');
+    if (!sEl || !dEl) return;
+    const { staticHtml, dynamicHtml } = buildLdapHtml();
+    sEl.innerHTML = staticHtml;
+    dEl.innerHTML = dynamicHtml;
+}
+
+function buildCircuitHtml() {
+    const rows = [
+        ['1', 'ad-reader.psm1',     '245',        'Construction cache AD',  'Lit tous les utilisateurs actifs → <code>scripts/cache/_users_global.json</code>'],
+        ['2', 'ad-reader.psm1',     '237',        'Lecture cache JSON',      '<code>Get-AllUsersFromCache</code> — charge le fichier JSON en RAM'],
+        ['3', 'csv-generator.psm1', '90–111',     'Filtrage règle',          '<code>Test-UserMatchesRule</code> — applique conditions include/exclude'],
+        ['4', 'csv-generator.psm1', '113–125',    'Test condition unitaire', '<code>Test-Condition</code> — compare champ par champ (title, department, office…)'],
+        ['5', 'http-server.psm1',   '234,248–251','Prévisualisation',        'Route <code>POST /api/regles/preview-groups</code> — même logique de filtrage'],
+        ['6', 'csv-generator.psm1', '10,21–27',   'Génération CSV',          '<code>Invoke-RuleGeneration</code> → fichiers dans <code>application/output/</code>'],
+    ];
+    return `<div class="circuit-wrap">` +
+        `<p class="circuit-note">Les conditions sont évaluées <strong>en mémoire</strong> sur le cache JSON local — aucune requête LDAP n'est envoyée à l'AD lors du filtrage.</p>` +
+        `<table class="circuit-table"><thead><tr>` +
+        `<th>#</th><th>Fichier</th><th>Ligne</th><th>Étape</th><th>Détail</th>` +
+        `</tr></thead><tbody>` +
+        rows.map(([n, file, line, role, detail]) =>
+            `<tr><td class="ct-step">${n}</td><td><code class="ct-file">${file}</code></td>` +
+            `<td class="ct-line">${line}</td><td class="ct-role">${role}</td>` +
+            `<td class="ct-detail">${detail}</td></tr>`
+        ).join('') +
+        `</tbody></table></div>`;
+}
+
 // ── Init ─────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
     if (window !== window.top) {
@@ -205,36 +319,37 @@ function renderForm(rule) {
 
     main.innerHTML =
         `<div class="regles-form" id="rule-form">` +
+            `<div class="form-tabs-bar">` +
+                `<button class="form-tab-btn active" data-tab="params">Paramètres</button>` +
+                `<button class="form-tab-btn" data-tab="circuit">Circuit</button>` +
+            `</div>` +
+            `<div class="form-tab-pane" id="tab-params">` +
             `<div class="form-title">${isNew ? 'Nouvelle règle' : 'Modifier — ' + esc(rule.label || '')}</div>` +
 
-            `<div class="form-group">` +
-                `<label class="form-label" for="f-label">Nom de la règle</label>` +
-                `<input id="f-label" class="form-input" type="text" placeholder="ex. Administratif" value="${esc(rule?.label || '')}">` +
-            `</div>` +
-
-            `<div class="form-group">` +
-                `<label class="form-label" for="f-prefix">` +
-                    `Préfixe technique <span class="form-label-opt">(optionnel)</span>` +
-                `</label>` +
-                `<div class="prefix-wrap">` +
-                    `<input id="f-prefix" class="form-input" type="text" ` +
-                        `placeholder="Si vide, dérivé du nom" ` +
-                        `value="${esc(rule?.prefix || '')}">` +
+            `<div class="form-row-top">` +
+                `<div class="form-row-top-col">` +
+                    `<label class="form-label" for="f-label">Nom de la règle</label>` +
+                    `<input id="f-label" class="form-input" type="text" placeholder="ex. Administratif" value="${esc(rule?.label || '')}">` +
                 `</div>` +
-                `<small class="prefix-hint" id="prefix-hint"></small>` +
+                `<div class="form-row-top-col">` +
+                    `<label class="form-label" for="f-prefix">Préfixe technique <span class="form-label-opt">(optionnel)</span></label>` +
+                    `<div class="prefix-wrap">` +
+                        `<input id="f-prefix" class="form-input" type="text" placeholder="Si vide, dérivé du nom" value="${esc(rule?.prefix || '')}">` +
+                    `</div>` +
+                    `<small class="prefix-hint" id="prefix-hint"></small>` +
+                `</div>` +
+                `<div class="form-row-top-toggle">` +
+                    `<label class="toggle-switch">` +
+                        `<input type="checkbox" id="f-active"${activeChecked}>` +
+                        `<span class="toggle-track"></span>` +
+                    `</label>` +
+                    `<span class="toggle-label">Règle active</span>` +
+                `</div>` +
             `</div>` +
 
             `<div class="form-group">` +
                 `<label class="form-label" for="f-desc">Description</label>` +
                 `<input id="f-desc" class="form-input form-input-auto" type="text" value="${esc(metaLabel(rule || {}))}" readonly>` +
-            `</div>` +
-
-            `<div class="form-group form-group-inline">` +
-                `<label class="toggle-switch">` +
-                    `<input type="checkbox" id="f-active"${activeChecked}>` +
-                    `<span class="toggle-track"></span>` +
-                `</label>` +
-                `<span class="toggle-label">Règle active</span>` +
             `</div>` +
 
             `<div class="form-group">` +
@@ -274,24 +389,37 @@ function renderForm(rule) {
                     `</div>`;
                 }
                 return `<div class="form-group">` +
-                    `<div class="cond-section">` +
-                        `<div class="cond-section-hdr">` +
-                            `<span class="cond-section-lbl include">Inclure</span>` +
-                            `<span class="cond-section-hint">utilisateurs répondant à ces critères</span>` +
+                    `<div class="cond-row-2col">` +
+                        `<div class="cond-section">` +
+                            `<div class="cond-section-hdr">` +
+                                `<span class="cond-section-lbl include">Inclure</span>` +
+                                `<span class="cond-section-hint">utilisateurs répondant à ces critères</span>` +
+                            `</div>` +
+                            `<div class="cond-list" id="cond-include"></div>` +
+                            `<button class="btn-add-cond" id="btn-add-include">+ Ajouter une condition</button>` +
                         `</div>` +
-                        `<div class="cond-list" id="cond-include"></div>` +
-                        `<button class="btn-add-cond" id="btn-add-include">+ Ajouter une condition</button>` +
-                    `</div>` +
-                    `<div class="cond-section">` +
-                        `<div class="cond-section-hdr">` +
-                            `<span class="cond-section-lbl exclude">Exclure</span>` +
-                            `<span class="cond-section-hint">parmi les inclus, retirer ces utilisateurs</span>` +
+                        `<div class="cond-section">` +
+                            `<div class="cond-section-hdr">` +
+                                `<span class="cond-section-lbl exclude">Exclure</span>` +
+                                `<span class="cond-section-hint">parmi les inclus, retirer ces utilisateurs</span>` +
+                            `</div>` +
+                            `<div class="cond-list" id="cond-exclude"></div>` +
+                            `<button class="btn-add-cond" id="btn-add-exclude">+ Ajouter une exclusion</button>` +
                         `</div>` +
-                        `<div class="cond-list" id="cond-exclude"></div>` +
-                        `<button class="btn-add-cond" id="btn-add-exclude">+ Ajouter une exclusion</button>` +
                     `</div>` +
                 `</div>`;
             })() +
+            `<div class="ldap-zone" id="ldap-display">` +
+                `<div class="ldap-zone-title">Filtre LDAP équivalent</div>` +
+                `<div class="ldap-cols">` +
+                    `<div class="ldap-col"><div class="ldap-col-label">Partie statique</div><pre class="ldap-code" id="ldap-static"></pre></div>` +
+                    `<div class="ldap-col"><div class="ldap-col-label">Partie dynamique</div><pre class="ldap-code" id="ldap-dynamic"></pre></div>` +
+                `</div>` +
+            `</div>` +
+        `</div>` +
+        `<div class="form-tab-pane" id="tab-circuit" hidden>` +
+            buildCircuitHtml() +
+        `</div>` +
         `</div>` +
         `<div class="form-footer">` +
             `<div class="gen-progress" id="gen-progress" hidden>` +
@@ -368,6 +496,18 @@ function renderForm(rule) {
             e.target.checked = newVal;
         }
     });
+
+    document.querySelectorAll('.form-tab-btn').forEach(btn =>
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('.form-tab-btn').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.form-tab-pane').forEach(p => { p.hidden = true; });
+            btn.classList.add('active');
+            document.getElementById('tab-' + btn.dataset.tab).hidden = false;
+        })
+    );
+    document.getElementById('rule-form')?.addEventListener('input',  updateLdapDisplay);
+    document.getElementById('rule-form')?.addEventListener('change', updateLdapDisplay);
+    updateLdapDisplay();
 
     document.getElementById('f-label').focus();
 }
