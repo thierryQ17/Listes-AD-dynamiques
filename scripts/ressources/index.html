@@ -24,11 +24,17 @@
     <div id="csv-viewer">
         <div class="csv-tree-pane">
             <div class="csv-tree-head">
-                <span>Fichiers générés</span>
+                <span>Dossiers</span>
                 <button id="csv-refresh" class="csv-refresh" title="Actualiser">↻</button>
             </div>
-            <div id="csv-tree" class="csv-tree">
+            <div id="csv-run-list" class="csv-run-list">
                 <p class="csv-tree-hint">Chargement...</p>
+            </div>
+            <div class="csv-file-section">
+                <div class="csv-file-search-wrap">
+                    <input type="text" id="csv-file-search" placeholder="Rechercher un fichier..." autocomplete="off">
+                </div>
+                <div id="csv-file-list" class="csv-file-list"></div>
             </div>
         </div>
         <div id="csv-view" class="csv-view">

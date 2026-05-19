@@ -21,6 +21,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     loadOutputList();
     document.getElementById('csv-refresh').addEventListener('click', loadOutputList);
+    document.getElementById('csv-file-search').addEventListener('input', renderFileList);
 });
 
 async function loadGroups() {
@@ -348,44 +349,67 @@ function updateStatus(s) {
 // ============================================================
 //  CSV Viewer
 // ============================================================
-let csvActiveItem = null;
+let csvActiveItem   = null;
+let allRuns         = [];
+let selectedRunPath = null;
+let currentRunFiles = [];
 
 async function loadOutputList() {
-    const tree = document.getElementById('csv-tree');
-    tree.innerHTML = '<p class="csv-tree-hint">Chargement...</p>';
+    const runList = document.getElementById('csv-run-list');
+    runList.innerHTML = '<p class="csv-tree-hint">Chargement...</p>';
+    document.getElementById('csv-file-list').innerHTML = '';
     try {
-        const runs = await fetchJSON('/api/output/list');
-        renderCsvTree(runs);
+        allRuns = await fetchJSON('/api/output/list');
+        renderRunList(allRuns);
+        if (allRuns.length > 0) selectRun(allRuns[0]);
     } catch (e) {
-        tree.innerHTML = `<p class="csv-tree-hint">Erreur : ${esc(e.message)}</p>`;
+        runList.innerHTML = `<p class="csv-tree-hint">Erreur : ${esc(e.message)}</p>`;
     }
 }
 
-function renderCsvTree(runs) {
-    const tree = document.getElementById('csv-tree');
+function renderRunList(runs) {
+    const runList = document.getElementById('csv-run-list');
     if (!runs || runs.length === 0) {
-        tree.innerHTML = '<p class="csv-tree-hint">Aucun CSV généré</p>';
+        runList.innerHTML = '<p class="csv-tree-hint">Aucun dossier</p>';
         return;
     }
-    tree.innerHTML = '';
+    runList.innerHTML = '';
     for (const run of runs) {
-        const section = document.createElement('div');
-        section.className = 'csv-tree-run';
-        const label = document.createElement('div');
-        label.className = 'csv-tree-run-label';
-        label.textContent = run.run;
-        label.title = run.run;
-        section.appendChild(label);
-        for (const file of run.files) {
-            const item = document.createElement('div');
-            item.className = 'csv-tree-file';
-            item.textContent = file;
-            item.title = file;
-            const fullPath = run.path + '\\' + file;
-            item.addEventListener('click', () => openCsvFile(fullPath, item));
-            section.appendChild(item);
-        }
-        tree.appendChild(section);
+        const item = document.createElement('div');
+        item.className = 'csv-run-item';
+        item.textContent = run.run;
+        item.title = run.run;
+        item.dataset.path = run.path;
+        item.addEventListener('click', () => selectRun(run));
+        runList.appendChild(item);
+    }
+}
+
+function selectRun(run) {
+    selectedRunPath = run.path;
+    currentRunFiles = run.files || [];
+    document.querySelectorAll('.csv-run-item').forEach(el =>
+        el.classList.toggle('active', el.dataset.path === run.path));
+    document.getElementById('csv-file-search').value = '';
+    renderFileList();
+}
+
+function renderFileList() {
+    const q     = document.getElementById('csv-file-search').value.toLowerCase();
+    const list  = document.getElementById('csv-file-list');
+    const files = q ? currentRunFiles.filter(f => f.toLowerCase().includes(q)) : currentRunFiles;
+    if (!files.length) {
+        list.innerHTML = '<p class="csv-tree-hint">Aucun fichier</p>';
+        return;
+    }
+    list.innerHTML = '';
+    for (const file of files) {
+        const item = document.createElement('div');
+        item.className = 'csv-tree-file';
+        item.textContent = file;
+        item.title = file;
+        item.addEventListener('click', () => openCsvFile(selectedRunPath + '\\' + file, item));
+        list.appendChild(item);
     }
 }
 
