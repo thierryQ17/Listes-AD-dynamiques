@@ -359,10 +359,94 @@ Chaque job hashtable : `@{ path = '...'; fname = '...'; content = <string pré-c
 
 ---
 
+## Projet historique : `gestionAutomatiqueGroupesAD`
+
+Appli PowerShell (script interactif, sans interface web) qui servait d'antécédent à ce projet. Elle **écrit** l'AD (création groupes, ajout membres) — tout ce qui est interdit ici. Les informations ci-dessous documentent sa logique pour alimenter la future phase d'écriture.
+
+### Flux général
+
+```
+Active Directory
+  └→ init_adUsers()         — charge tous les utilisateurs filtrés
+       └→ createCSVFiles()  — génère CSV par niveau
+            └→ contrôleDistributionGroups_CSV()  — compare CSV ↔ groupes AD existants
+                 └→ create_DistributionGroups()  — crée les groupes manquants (New-ADGroup)
+                      └→ AddMembersToDistributionGroup()  — alimente depuis le CSV (Set-ADGroup clear + Add-ADGroupMember)
+```
+
+Les CSV sont une **étape intermédiaire**, pas la source de vérité. Tout part de l'AD, les CSV servent de liste de travail.
+
+### Format CSV généré
+
+- Séparateur `;`, encodage UTF-8, 2 colonnes :
+  ```
+  mail;samaccountname
+  utilisateur@aftral.com;jdupont
+  ```
+- CSV feuilles (centres) : contiennent les **utilisateurs**
+- CSV parents (DO, global) : contiennent les **mails des groupes enfants** (récursif)
+
+### Calcul du nom et de l'adresse mail d'un groupe
+
+**Étape 1 — `genereNomGroupe()`** construit le nom du groupe (= nom du fichier CSV) :
+
+| Niveau | Composantes | Exemple résultat |
+|--------|-------------|-----------------|
+| 3 (centre) | type + DO + centre | `Administratif AURASUD CournonDAuvergne` |
+| 2 (DO) | type + DO | `Administratif AURASUD` |
+| 1 (global) | type seul | `Administratif` |
+
+Transformations appliquées à chaque composante :
+- Suppression des accents : encodage Cyrillic → ASCII
+- TitleCase + suppression des espaces internes
+- Pour le DO : supprime le préfixe `"DO"` (`"DO AURASUD"` → `"AURASUD"`)
+
+**Étape 2 — `create_Mail()`** calcule le mail depuis le nom du groupe :
+
+```powershell
+$arg = $arg.ToLower().replace(" ",".")   # espaces → points
+$arg = [supprimer les accents via Cyrillic]
+return "$arg@$domain"
+```
+
+Exemples bout en bout :
+```
+"Administratif AURASUD CournonDAuvergne" → administratif.aurasud.cournondeauvergne@aftral.com
+"Administratif AURASUD"                 → administratif.aurasud@aftral.com
+"Administratif"                         → administratif@aftral.com
+```
+
+**Étape 3 — `create_samAccountName()`** : prend le mail du groupe, supprime domaine + préfixe + espaces + points + tirets.
+
+### Structure hiérarchique complète (niveau 3)
+
+```
+Administratif.csv             ← membres = mails des CSV DO
+  Administratif AURASUD.csv   ← membres = mails des CSV centres AURASUD
+    Administratif AURASUD CournonDAuvergne.csv  ← membres = utilisateurs AD
+    Administratif AURASUD Montlucon.csv
+  Administratif EST.csv       ← membres = mails des CSV centres EST
+    Administratif EST Appoigny.csv
+```
+
+### Écarts avec le projet actuel
+
+| Aspect | Ancienne appli | Projet actuel (`generate-pair`) |
+|--------|---------------|--------------------------------|
+| Séparateur CSV | `;` | `,` |
+| Colonnes CSV | `mail;samaccountname` | `samAccountName,mail` |
+| Mail du groupe | calculé et stocké | non implémenté (CSV contiennent uniquement les utilisateurs) |
+| Groupes récursifs | oui (parents contiennent mails enfants) | non (chaque groupe = liste d'utilisateurs) |
+| Écriture AD | `New-ADGroup` + `Add-ADGroupMember` | interdit (lecture seule) |
+
+> **Point clé** : pour la future phase d'écriture AD, il faudra implémenter les CSVs récursifs (groupes DO et global avec mails des enfants) et le calcul du mail groupe (`nom.tolower().replace(" ",".")@domain`).
+
+---
+
 ## Idées / potentiel futur
 
 - Filtrage / tri des règles dans la sidebar
 - Export/import du fichier `regles.json`
 - Prévisualisation du nombre d'utilisateurs avant génération
 - Pagination ou recherche si beaucoup de règles
-- CSVs récursifs (agréger les mails de groupe DO/global) — à valider avec l'utilisateur
+- CSVs récursifs (agréger les mails de groupe DO/global) — nécessaire pour la phase écriture AD

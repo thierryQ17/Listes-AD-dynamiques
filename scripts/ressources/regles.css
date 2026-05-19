@@ -1093,14 +1093,14 @@ body { overflow: hidden; }
     align-items: center;
 }
 .prefix-wrap .form-input {
-    flex: 1;
+    max-width: 300px;
 }
 .btn-preview-groups {
     display: inline-flex;
     align-items: center;
     gap: 5px;
     padding: 0 12px;
-    height: 34px;
+    height: 32px;
     font-size: 12px;
     font-weight: 500;
     color: var(--accent);

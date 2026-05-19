@@ -201,6 +201,7 @@ function renderForm(rule) {
     const inc          = rule?.conditions?.include || [];
     const exc          = rule?.conditions?.exclude || [];
     const activeChecked = (rule?.active !== false) ? ' checked' : '';
+    const hasPeer = !!editingId && (!!rule?.invertOf || rules.some(r => r.invertOf === editingId));
 
     main.innerHTML =
         `<div class="regles-form" id="rule-form">` +
@@ -219,10 +220,6 @@ function renderForm(rule) {
                     `<input id="f-prefix" class="form-input" type="text" ` +
                         `placeholder="Si vide, dérivé du nom" ` +
                         `value="${esc(rule?.prefix || '')}">` +
-                    `<button class="btn-preview-groups" id="btn-preview-groups" type="button" title="Prévisualiser les groupes AD et adresses mail">` +
-                        `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>` +
-                        ` Prévisualiser les groupes` +
-                    `</button>` +
                 `</div>` +
                 `<small class="prefix-hint" id="prefix-hint"></small>` +
             `</div>` +
@@ -307,7 +304,13 @@ function renderForm(rule) {
                 `</div>` +
                 `<div class="form-footer-right">` +
                     `<button class="btn-secondary" id="btn-cancel">Annuler</button>` +
-                    (editingId ? `<button class="btn-generate-form" id="btn-generate-form">Générer le CSV</button>` : '') +
+                    (editingId
+                        ? `<button class="btn-preview-groups" id="btn-preview-groups" type="button" title="Prévisualiser les groupes AD et adresses mail">` +
+                            `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>` +
+                            ` Prévisualiser les groupes` +
+                          `</button>`
+                        : '') +
+                    (hasPeer ? `<button class="btn-generate-form" id="btn-generate-form">Générer les CSVs FORMATEURS et ADMINISTRATIF</button>` : '') +
                     `<button class="btn-primary" id="btn-save">Enregistrer</button>` +
                 `</div>` +
             `</div>` +
@@ -336,7 +339,7 @@ function renderForm(rule) {
     document.getElementById('btn-add-exclude')?.addEventListener('click', () => { addCondRow('cond-exclude'); autoUpdateDesc(); });
     document.getElementById('btn-save').addEventListener('click', saveRule);
     document.getElementById('btn-cancel').addEventListener('click', closeForm);
-    document.getElementById('btn-preview-groups').addEventListener('click', previewGroups);
+    document.getElementById('btn-preview-groups')?.addEventListener('click', previewGroups);
 
     const prefixInput = document.getElementById('f-prefix');
     const prefixHint  = document.getElementById('prefix-hint');
@@ -352,7 +355,7 @@ function renderForm(rule) {
     prefixInput.addEventListener('input', updatePrefixHint);
     updatePrefixHint();
     const genFormBtn = document.getElementById('btn-generate-form');
-    if (genFormBtn) genFormBtn.addEventListener('click', () => generateCsv(editingId));
+    if (genFormBtn) genFormBtn.addEventListener('click', generatePairCsv);
     const delRuleBtn = document.getElementById('btn-delete-rule');
     if (delRuleBtn) delRuleBtn.addEventListener('click', () => confirmDelete(editingId, document.getElementById('f-label')?.value.trim() || editingId));
 
@@ -643,6 +646,94 @@ async function generateCsv(id) {
         if (progress) progress.setAttribute('hidden', '');
         if (overlay)  overlay.setAttribute('hidden', '');
     }
+}
+
+// ── Génération paire FORMATEURS + ADMINISTRATIF ──────────────────────
+
+const PAIR_LABEL = 'Générer les CSVs FORMATEURS et ADMINISTRATIF';
+
+async function generatePairCsv() {
+    const rule = readForm();
+    if (!rule) return;
+
+    const confirmed = await showConfirm(
+        `Générer tous les CSVs FORMATEURS et ADMINISTRATIF ?\n\nLes fichiers seront écrits dans application/output/.`
+    );
+    if (!confirmed) return;
+
+    const btn         = document.getElementById('btn-generate-form');
+    const progress    = document.getElementById('gen-progress');
+    const msg         = document.getElementById('gen-progress-msg');
+    const overlay     = document.getElementById('gen-overlay');
+    const overlayStep = document.getElementById('gen-overlay-step');
+
+    if (btn)     { btn.disabled = true; btn.textContent = 'Génération…'; }
+    if (progress) progress.removeAttribute('hidden');
+    if (overlay)  overlay.removeAttribute('hidden');
+
+    const steps = getGenSteps();
+    let stepIdx = 0;
+    const showStep = () => {
+        const step = steps[stepIdx % steps.length];
+        if (msg)         msg.textContent      = step;
+        if (overlayStep) overlayStep.textContent = step;
+    };
+    showStep();
+    const ticker = setInterval(() => { stepIdx++; showStep(); }, 2000);
+
+    try {
+        const r    = await fetch('/api/regles/generate-pair', {
+            method:  'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body:    JSON.stringify(rule),
+        });
+        const data = await r.json();
+        if (!data.ok) { showToast(`Erreur : ${data.error}`, 'error'); return; }
+        showPairCsvModal(data);
+    } catch {
+        showToast('Erreur lors de la génération', 'error');
+    } finally {
+        clearInterval(ticker);
+        if (btn)      { btn.disabled = false; btn.textContent = PAIR_LABEL; }
+        if (progress) progress.setAttribute('hidden', '');
+        if (overlay)  overlay.setAttribute('hidden', '');
+    }
+}
+
+function showPairCsvModal(data) {
+    const files  = data.files  || [];
+    const outDir = data.outDir || '';
+
+    const modal    = document.getElementById('csv-modal');
+    const title    = document.getElementById('csv-modal-title');
+    const summary  = document.getElementById('csv-modal-summary');
+    const criteria = document.getElementById('csv-modal-criteria');
+    const tabs     = document.getElementById('csv-modal-tabs');
+    const body     = document.getElementById('csv-modal-body');
+    const mailPnl  = document.getElementById('csv-mail-panel');
+    const footer   = document.getElementById('csv-modal-footer');
+
+    if (!modal) return;
+
+    if (title)    title.textContent   = 'CSV FORMATEURS + ADMINISTRATIF';
+    if (summary)  summary.textContent = `${files.length} fichier${files.length !== 1 ? 's' : ''} générés`;
+    if (criteria) criteria.innerHTML  = '';
+    if (tabs)     tabs.innerHTML      = '';
+    if (mailPnl)  { mailPnl.innerHTML = ''; mailPnl.setAttribute('hidden', ''); }
+    if (footer)   footer.innerHTML    = `<span class="csv-outdir-path" title="${esc(outDir)}">${esc(outDir)}</span>`;
+
+    if (body) {
+        const sorted = [...files].sort();
+        body.innerHTML =
+            `<ul class="csv-file-list">` +
+            sorted.map(f => {
+                const name = f.split(/[/\\]/).pop() || f;
+                return `<li class="csv-file-item csv-file-item--global"><span class="csv-file-name">${esc(name)}</span></li>`;
+            }).join('') +
+            `</ul>`;
+    }
+
+    modal.removeAttribute('hidden');
 }
 
 // ── Prévisualisation groupes AD ───────────────────────────────────────

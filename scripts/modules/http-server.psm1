@@ -320,6 +320,95 @@ function Invoke-RouteHandler {
                 }
             }
         }
+        '^/api/regles/generate-pair$' {
+            if ($Method -eq 'POST') {
+                try {
+                    $rule     = ConvertFrom-Json (Read-RequestBody -Request $Request)
+                    $allUsers = @(Get-AllUsersFromCache)
+                    if ($allUsers.Count -eq 0) {
+                        Send-JsonResponse -Response $Response -Body '{"ok":false,"error":"Cache vide — ouvrez l''Explorateur AD et cliquez sur ↻ Cache."}'
+                    } else {
+                        $rPath  = Join-Path ($global:path."r_settings" -replace '/', '\') "regles.json"
+                        $regles = if (Test-Path $rPath) { @(ConvertFrom-Json ([System.IO.File]::ReadAllText($rPath, [System.Text.Encoding]::UTF8))) } else { @() }
+
+                        $peerRule = if ($rule.invertOf) {
+                            $regles | Where-Object { $_.id -eq $rule.invertOf } | Select-Object -First 1
+                        } else {
+                            $regles | Where-Object { $_.invertOf -eq $rule.id } | Select-Object -First 1
+                        }
+
+                        $outDir   = Get-RunOutputDir -Label 'PAIR'
+                        $allFiles = [System.Collections.Generic.List[string]]::new()
+
+                        foreach ($r in @($rule, $peerRule)) {
+                            if (-not $r) { continue }
+                            $lbl = if ($r.prefix) { Clean-ForFileName $r.prefix } else { Clean-ForFileName $r.label }
+
+                            if ($r.invertOf) {
+                                $srcRule = $regles | Where-Object { $_.id -eq $r.invertOf } | Select-Object -First 1
+                                if (-not $srcRule) { continue }
+                                $srcIds = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+                                @($allUsers | Where-Object { Test-UserMatchesRule -User $_ -Conditions $srcRule.conditions }) | ForEach-Object { [void]$srcIds.Add($_.samAccountName) }
+                                $filtered = @($allUsers | Where-Object { -not $srcIds.Contains($_.samAccountName) })
+                            } else {
+                                $filtered = @($allUsers | Where-Object { Test-UserMatchesRule -User $_ -Conditions $r.conditions })
+                            }
+                            $filtered = @($filtered | Where-Object { -not (Test-UserExcluded $_) })
+
+                            $niveau = if ($r.niveau) { [int]$r.niveau } else { 3 }
+
+                            if ($niveau -ge 3) {
+                                $byDO = $filtered | Group-Object { Get-RegionFromDN $_.dn } | Where-Object { $_.Name -and $_.Name -ne 'MONCHY' }
+                                foreach ($doGrp in $byDO) {
+                                    $doClean = Clean-ForFileName $doGrp.Name
+                                    $doBase  = "$lbl-$doClean"
+                                    foreach ($cGrp in ($doGrp.Group | Group-Object { Get-CentreFromDN $_.dn })) {
+                                        $cClean  = Clean-ForFileName $cGrp.Name
+                                        $cBase   = "$lbl-$doClean-$cClean"
+                                        $cLines  = [System.Collections.Generic.List[string]]::new()
+                                        $cLines.Add("samAccountName,mail")
+                                        foreach ($u in ($cGrp.Group | Sort-Object samAccountName)) { $cLines.Add("$($u.samAccountName),$($u.mail)") }
+                                        $cPath = Join-Path $outDir "$cBase.csv"
+                                        [System.IO.File]::WriteAllText($cPath, ($cLines -join "`r`n"), [System.Text.Encoding]::UTF8)
+                                        [void]$allFiles.Add($cPath)
+                                    }
+                                    $doLines = [System.Collections.Generic.List[string]]::new()
+                                    $doLines.Add("samAccountName,mail")
+                                    foreach ($u in ($doGrp.Group | Sort-Object samAccountName)) { $doLines.Add("$($u.samAccountName),$($u.mail)") }
+                                    $doPath = Join-Path $outDir "$doBase.csv"
+                                    [System.IO.File]::WriteAllText($doPath, ($doLines -join "`r`n"), [System.Text.Encoding]::UTF8)
+                                    [void]$allFiles.Add($doPath)
+                                }
+                            } elseif ($niveau -eq 2) {
+                                $byDO = $filtered | Group-Object { Get-RegionFromDN $_.dn } | Where-Object { $_.Name -and $_.Name -ne 'MONCHY' }
+                                foreach ($doGrp in $byDO) {
+                                    $doClean = Clean-ForFileName $doGrp.Name
+                                    $doBase  = "$lbl-$doClean"
+                                    $doLines = [System.Collections.Generic.List[string]]::new()
+                                    $doLines.Add("samAccountName,mail")
+                                    foreach ($u in ($doGrp.Group | Sort-Object samAccountName)) { $doLines.Add("$($u.samAccountName),$($u.mail)") }
+                                    $doPath = Join-Path $outDir "$doBase.csv"
+                                    [System.IO.File]::WriteAllText($doPath, ($doLines -join "`r`n"), [System.Text.Encoding]::UTF8)
+                                    [void]$allFiles.Add($doPath)
+                                }
+                            }
+                            $glLines = [System.Collections.Generic.List[string]]::new()
+                            $glLines.Add("samAccountName,mail")
+                            foreach ($u in ($filtered | Sort-Object samAccountName)) { $glLines.Add("$($u.samAccountName),$($u.mail)") }
+                            $glPath = Join-Path $outDir "$lbl.csv"
+                            [System.IO.File]::WriteAllText($glPath, ($glLines -join "`r`n"), [System.Text.Encoding]::UTF8)
+                            [void]$allFiles.Add($glPath)
+                        }
+
+                        $resultJson = ConvertTo-Json -InputObject @{ ok = $true; outDir = $outDir; files = @($allFiles); total = $allFiles.Count } -Compress
+                        Send-JsonResponse -Response $Response -Body $resultJson
+                    }
+                } catch {
+                    $errMsg = $_.Exception.Message -replace '"', "'"
+                    Send-JsonResponse -Response $Response -Body "{`"ok`":false,`"error`":`"$errMsg`"}"
+                }
+            }
+        }
         '^/api/regles/check-mail$' {
             if ($Method -eq 'POST') {
                 try {
