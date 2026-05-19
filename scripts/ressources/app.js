@@ -18,8 +18,6 @@ const state = {
 document.addEventListener('DOMContentLoaded', async () => {
     if (window !== window.top) {
         document.querySelector('header').style.display = 'none';
-        const drawer = document.getElementById('csv-drawer');
-        if (drawer) drawer.style.display = 'none';
     }
 
     await loadGroups();
