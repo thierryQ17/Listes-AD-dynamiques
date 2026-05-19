@@ -15,14 +15,12 @@ const state = {
 // ============================================================
 //  Init
 // ============================================================
-document.addEventListener('DOMContentLoaded', async () => {
+document.addEventListener('DOMContentLoaded', () => {
     if (window !== window.top) {
         document.querySelector('header').style.display = 'none';
     }
-
-    await loadGroups();
-    setupSearch();
-    initCsvDrawer();
+    loadOutputList();
+    document.getElementById('csv-refresh').addEventListener('click', loadOutputList);
 });
 
 async function loadGroups() {
@@ -348,18 +346,9 @@ function updateStatus(s) {
 }
 
 // ============================================================
-//  CSV Drawer
+//  CSV Viewer
 // ============================================================
 let csvActiveItem = null;
-
-function initCsvDrawer() {
-    document.getElementById('csv-drawer-toggle').addEventListener('click', () => {
-        const drawer = document.getElementById('csv-drawer');
-        const isOpen = drawer.classList.toggle('open');
-        document.querySelector('.csv-toggle-arrow').textContent = isOpen ? '▾' : '▸';
-        if (isOpen) loadOutputList();
-    });
-}
 
 async function loadOutputList() {
     const tree = document.getElementById('csv-tree');
@@ -367,10 +356,6 @@ async function loadOutputList() {
     try {
         const runs = await fetchJSON('/api/output/list');
         renderCsvTree(runs);
-        const badge = document.getElementById('csv-drawer-badge');
-        const total = runs.reduce((s, r) => s + r.files.length, 0);
-        badge.textContent = total;
-        badge.hidden = (total === 0);
     } catch (e) {
         tree.innerHTML = `<p class="csv-tree-hint">Erreur : ${esc(e.message)}</p>`;
     }
