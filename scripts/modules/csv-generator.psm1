@@ -24,6 +24,7 @@ function Invoke-RuleGeneration {
     } else {
         $filtered = @($allUsers | Where-Object { Test-UserMatchesRule -User $_ -Conditions $Rule.conditions })
     }
+    $filtered = @($filtered | Where-Object { -not (Test-UserExcluded $_) })
     add-msg -msg "  [CSV] $($filtered.Count) utilisateurs correspondent aux conditions." -foregroundColor Cyan -quelType writeHost
 
     $outDir = Get-RunOutputDir -Label $Rule.label
@@ -54,7 +55,7 @@ function Invoke-RuleGeneration {
             $doName  = if ($doGrp.Name) { $doGrp.Name } else { 'SANS-DO' }
             $doClean = Clean-ForFileName $doName
             $doBase  = "$lbl-$doClean"
-            foreach ($cGrp in ($doGrp.Group | Group-Object Office)) {
+            foreach ($cGrp in ($doGrp.Group | Group-Object { Get-CentreFromDN $_.dn })) {
                 $cName  = if ($cGrp.Name) { $cGrp.Name } else { 'SANS-CENTRE' }
                 $cBase  = "$lbl-$doClean-$(Clean-ForFileName $cName)"
                 $gpGroups.Add(@{ name = $cBase; mail = "$($cBase.ToLower())@$mailDomain"; type = 'centre'; count = $cGrp.Group.Count })
@@ -167,7 +168,7 @@ function Write-CsvNiveau3 {
     foreach ($doGrp in $byDO) {
         $doName  = if ($doGrp.Name) { $doGrp.Name } else { 'SANS-DO' }
         $doClean = Clean-ForFileName $doName
-        foreach ($cGrp in ($doGrp.Group | Group-Object Office)) {
+        foreach ($cGrp in ($doGrp.Group | Group-Object { Get-CentreFromDN $_.dn })) {
             $cName  = if ($cGrp.Name) { $cGrp.Name } else { 'SANS-CENTRE' }
             $cClean = Clean-ForFileName $cName
             $fname  = "$lbl-$doClean-$cClean.csv"
@@ -199,7 +200,7 @@ function Write-CsvNiveau3Mono {
     foreach ($doGrp in $byDO) {
         $doName  = if ($doGrp.Name) { $doGrp.Name } else { 'SANS-DO' }
         $doClean = Clean-ForFileName $doName
-        foreach ($cGrp in ($doGrp.Group | Group-Object Office)) {
+        foreach ($cGrp in ($doGrp.Group | Group-Object { Get-CentreFromDN $_.dn })) {
             $cName  = if ($cGrp.Name) { $cGrp.Name } else { 'SANS-CENTRE' }
             $cClean = Clean-ForFileName $cName
             $fname  = "$lbl-$doClean-$cClean.csv"

@@ -262,6 +262,68 @@ body {
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    transition: width .2s ease;
+}
+
+.explorer-right-panel.detail-collapsed {
+    width: 30px;
+}
+
+.explorer-right-panel.detail-collapsed .explorer-right-body,
+.explorer-right-panel.detail-collapsed .detail-tabs {
+    display: none;
+}
+
+.panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 12px 10px 14px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+    gap: 8px;
+    min-height: 40px;
+}
+
+.panel-header h2 {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--text-sub);
+    margin: 0;
+    white-space: nowrap;
+    overflow: hidden;
+}
+
+.btn-detail-toggle {
+    flex-shrink: 0;
+    width: 22px;
+    height: 22px;
+    border: none;
+    background: transparent;
+    color: var(--text-sub);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--radius-sm);
+    padding: 0;
+    transition: background .12s, color .12s;
+}
+
+.btn-detail-toggle:hover {
+    background: var(--border);
+    color: var(--text);
+}
+
+.explorer-right-panel.detail-collapsed .panel-header {
+    padding: 10px 4px;
+    justify-content: center;
+}
+
+.explorer-right-panel.detail-collapsed .panel-header h2 {
+    display: none;
 }
 
 .explorer-right-body {

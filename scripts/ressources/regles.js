@@ -242,16 +242,19 @@ function renderForm(rule) {
 
             `<div class="form-group">` +
                 `<label class="form-label">Niveau de groupement</label>` +
-                `<div class="niveau-options" id="niveau-options">` +
+                `<div class="niveau-options${rule?.invertOf ? ' niveau-locked' : ''}" id="niveau-options">` +
                     [1, 2, 3].map(n =>
                         `<label class="niveau-option${niveau === n ? ' selected' : ''}" data-n="${n}">` +
-                            `<input type="radio" name="f-niveau" value="${n}"${niveau === n ? ' checked' : ''}>` +
+                            `<input type="radio" name="f-niveau" value="${n}"${niveau === n ? ' checked' : ''}${rule?.invertOf ? ' disabled' : ''}>` +
                             `<div class="niveau-opt-num">${n}</div>` +
                             `<div class="niveau-opt-lbl">${NIV_LABELS[n]}</div>` +
                             `<div class="niveau-opt-desc">${NIV_CSV[n]}</div>` +
                         `</label>`
                     ).join('') +
                 `</div>` +
+                (rule?.invertOf
+                    ? `<div class="niveau-locked-note"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>Hérité de « ${esc(rules.find(r => r.id === rule.invertOf)?.label || rule.invertOf)} » — non modifiable</div>`
+                    : '') +
                 `<div class="niveau-desc" id="niveau-desc"></div>` +
             `</div>` +
 
@@ -317,6 +320,7 @@ function renderForm(rule) {
 
     main.querySelectorAll('.niveau-option').forEach(opt => {
         opt.addEventListener('click', () => {
+            if (opt.querySelector('input')?.disabled) return;
             main.querySelectorAll('.niveau-option').forEach(o => o.classList.remove('selected'));
             opt.classList.add('selected');
             opt.querySelector('input').checked = true;
@@ -452,8 +456,24 @@ async function saveRule() {
         });
         editingId = rule.id;
         await loadRules();
+
+        // Propager niveau + monoNiveau aux règles enfants (invertOf)
+        const children = rules.filter(r => r.invertOf === rule.id);
+        const toSync   = children.filter(c => c.niveau !== rule.niveau || c.monoNiveau !== rule.monoNiveau);
+        for (const child of toSync) {
+            await fetch('/api/regles', {
+                method:  'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body:    JSON.stringify({ ...child, niveau: rule.niveau, monoNiveau: rule.monoNiveau, updatedAt: now() }),
+            });
+        }
+        if (toSync.length) await loadRules();
+
         renderForm(rule);
-        showToast('Règle enregistrée', 'success');
+        showToast(toSync.length
+            ? `Règle enregistrée · niveau propagé à ${toSync.map(c => c.label).join(', ')}`
+            : 'Règle enregistrée',
+            'success');
     } catch {
         showToast('Erreur lors de la sauvegarde', 'error');
     }
@@ -849,24 +869,34 @@ function showGroupsPreviewModal(data, sourceRule = null) {
     modal._gpData = data;
 
     // ── Icônes œil sur chaque carte — ouvre la mini-modale de l'autre règle ──
+    if (modal._peerClickListener) {
+        body.removeEventListener('click', modal._peerClickListener);
+        modal._peerClickListener = null;
+    }
     if (peerRule) {
         modal._peerData  = null;
         modal._peerRule  = peerRule;
         modal._curPrefix = data.prefix;
 
-        body.addEventListener('click', async e => {
+        const peerClickListener = async e => {
             const btn = e.target.closest('.btn-gp-eye-peer');
             if (!btn) return;
             e.stopPropagation();
             const card      = btn.closest('.gp-row-item');
             const groupName = card?.dataset.name || '';
 
+            // Surbrillance de la carte active
+            if (modal._peerActiveCard && modal._peerActiveCard !== card) {
+                modal._peerActiveCard.classList.remove('gp-peer-active');
+            }
+            if (card) { card.classList.add('gp-peer-active'); modal._peerActiveCard = card; }
+
             btn.disabled = true;
             if (!modal._peerData) {
                 try {
                     const r = await fetch('/api/regles/preview-groups', {
                         method: 'POST', headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(peerRule),
+                        body: JSON.stringify(modal._peerRule),
                     });
                     const d = await r.json();
                     if (d.error) { showToast(d.error, 'error'); btn.disabled = false; return; }
@@ -881,14 +911,21 @@ function showGroupsPreviewModal(data, sourceRule = null) {
             const peerName   = suffix ? `${peerPrefix}-${suffix}` : peerPrefix;
             const peerGroup  = (modal._peerData.groups || []).find(g => g.name === peerName);
 
-            showPeerGroupMini(peerGroup || null, peerName, peerRule.label, btn);
-        }, { once: false });
+            showPeerGroupMini(peerGroup || null, peerName, modal._peerRule.label, btn, () => {
+                if (modal._peerActiveCard) {
+                    modal._peerActiveCard.classList.remove('gp-peer-active');
+                    modal._peerActiveCard = null;
+                }
+            });
+        };
+        modal._peerClickListener = peerClickListener;
+        body.addEventListener('click', peerClickListener);
     }
 
     modal.removeAttribute('hidden');
 }
 
-function showPeerGroupMini(group, peerName, peerRuleLabel, anchorEl) {
+function showPeerGroupMini(group, peerName, peerRuleLabel, anchorEl, onClose) {
     let mini = document.getElementById('peer-group-mini');
     if (!mini) {
         mini = document.createElement('div');
@@ -896,18 +933,38 @@ function showPeerGroupMini(group, peerName, peerRuleLabel, anchorEl) {
         mini.className = 'peer-mini';
         document.body.appendChild(mini);
 
-        let _dx = 0, _dy = 0, _active = false, _ox = 0, _oy = 0;
-        mini.addEventListener('mousedown', e => {
+        let _dx = 0, _dy = 0, _ox = 0, _oy = 0;
+        mini.addEventListener('pointerdown', e => {
             if (e.button !== 0 || e.target.closest('button')) return;
-            _active = true; _ox = e.clientX - _dx; _oy = e.clientY - _dy;
-            mini.style.cursor = 'grabbing'; e.preventDefault();
+            _ox = e.clientX - _dx; _oy = e.clientY - _dy;
+            mini.style.cursor = 'grabbing';
+            mini.setPointerCapture(e.pointerId);
+            e.preventDefault();
         });
-        document.addEventListener('mousemove', e => {
-            if (!_active) return;
+        mini.addEventListener('pointermove', e => {
+            if (!mini.hasPointerCapture(e.pointerId)) return;
             _dx = e.clientX - _ox; _dy = e.clientY - _oy;
             mini.style.transform = `translate(${_dx}px,${_dy}px)`;
         });
-        document.addEventListener('mouseup', () => { if (_active) { _active = false; mini.style.cursor = ''; } });
+        const stopDrag = () => { mini.style.cursor = ''; };
+        mini.addEventListener('pointerup', stopDrag);
+        mini.addEventListener('pointercancel', stopDrag);
+    }
+
+    // Fonction de fermeture partagée (bouton × + clic extérieur)
+    function closeMini() {
+        if (mini.hidden) return;
+        mini.hidden = true;
+        document.removeEventListener('mousedown', outsideHandler, true);
+        if (typeof onClose === 'function') onClose();
+    }
+
+    // Clic extérieur : ferme si target hors de la mini ET hors du bouton œil
+    function outsideHandler(e) {
+        if (mini.hidden) { document.removeEventListener('mousedown', outsideHandler, true); return; }
+        if (mini.contains(e.target)) return;
+        if (e.target.closest('.btn-gp-eye-peer')) return;
+        closeMini();
     }
 
     const n       = group?.count ?? 0;
@@ -943,7 +1000,7 @@ function showPeerGroupMini(group, peerName, peerRuleLabel, anchorEl) {
         `</div>` +
         `<div class="peer-mini-body">${membersHtml}</div>`;
 
-    mini.querySelector('.peer-mini-close').onclick = () => { mini.remove(); };
+    mini.querySelector('.peer-mini-close').addEventListener('click', closeMini);
     mini.style.transform = '';
 
     // Positionner près du bouton cliqué
@@ -951,6 +1008,9 @@ function showPeerGroupMini(group, peerName, peerRuleLabel, anchorEl) {
     mini.style.top  = Math.min(rect.bottom + 6, window.innerHeight - 300) + 'px';
     mini.style.left = Math.max(0, Math.min(rect.left, window.innerWidth - 300)) + 'px';
     mini.hidden = false;
+
+    // Activer le listener extérieur au prochain tick (évite que le mousedown courant le déclenche)
+    setTimeout(() => document.addEventListener('mousedown', outsideHandler, true), 0);
 }
 
 const SVG_EXPAND   = `<svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true"><path d="M1 5V1h4M9 1h4v4M13 9v4H9M5 13H1V9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
@@ -964,29 +1024,27 @@ function setupGroupsPreviewModal() {
     const tabsBar   = document.getElementById('gp-tabs');
 
     // ── Drag ─────────────────────────────────────────────────────────────
-    let _dragActive = false, _dragOx = 0, _dragOy = 0, _dragX = 0, _dragY = 0;
+    let _dragX = 0, _dragY = 0, _dragOx = 0, _dragOy = 0;
     const header = box.querySelector('.gp-header');
 
-    header.addEventListener('mousedown', e => {
+    header.addEventListener('pointerdown', e => {
         if (e.button !== 0) return;
         if (e.target.closest('button, input, label')) return;
-        _dragActive = true;
         _dragOx = e.clientX - _dragX;
         _dragOy = e.clientY - _dragY;
         header.style.cursor = 'grabbing';
+        header.setPointerCapture(e.pointerId);
         e.preventDefault();
     });
-    document.addEventListener('mousemove', e => {
-        if (!_dragActive) return;
+    header.addEventListener('pointermove', e => {
+        if (!header.hasPointerCapture(e.pointerId)) return;
         _dragX = e.clientX - _dragOx;
         _dragY = e.clientY - _dragOy;
         box.style.transform = `translate(${_dragX}px,${_dragY}px)`;
     });
-    document.addEventListener('mouseup', () => {
-        if (!_dragActive) return;
-        _dragActive = false;
-        header.style.cursor = '';
-    });
+    const stopModalDrag = () => { header.style.cursor = ''; };
+    header.addEventListener('pointerup', stopModalDrag);
+    header.addEventListener('pointercancel', stopModalDrag);
 
     function closeModal() {
         // Annuler un contrôle AD en cours
@@ -997,6 +1055,14 @@ function setupGroupsPreviewModal() {
         expandBtn.title     = 'Agrandir';
         _dragX = 0; _dragY = 0;
         box.style.transform = '';
+        const mini = document.getElementById('peer-group-mini');
+        if (mini) mini.hidden = true;
+        if (modal._peerActiveCard) { modal._peerActiveCard.classList.remove('gp-peer-active'); modal._peerActiveCard = null; }
+        if (modal._peerClickListener) {
+            const gpBody = document.getElementById('gp-body');
+            if (gpBody) gpBody.removeEventListener('click', modal._peerClickListener);
+            modal._peerClickListener = null;
+        }
         modal.setAttribute('hidden', '');
     }
 

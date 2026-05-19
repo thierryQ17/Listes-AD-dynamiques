@@ -59,7 +59,7 @@ scripts/
     regles.html / regles.js / regles.css        ← Règles (/regles)
     index.html / app.js / style.css             ← Groupes Dynamiques (/groupes)
   settings/
-    parametres.json         ← config (searchBase AD, régions avec bases + aliases)
+    parametres.json         ← config (searchBase AD, régions avec bases + aliases, excludeDisplayNamePatterns)
     regles.json             ← règles de filtrage (CRUD)
   cache/
     *.json                  ← cache AD par site (OU)
@@ -103,7 +103,7 @@ CONTEXTE-SESSION.md         ← ce fichier
 - ✅ 3 iframes lazy-load (Explorer chargé immédiatement, autres au premier clic)
 - ✅ Onglet actif marqué `.active` dans le header
 - ✅ Communication postMessage pour le workflow "créer règle depuis Explorer"
-- ✅ **Badge date cache** en haut à droite : `Cache : lundi 18/05 16:33` — jour complet + rafraîchi toutes les 60s + après `cache-rebuilt`
+- ✅ **Badge date cache** format long : `Cache : lundi 18 mai 2026 17:52` — rafraîchi toutes les 60s + polling 10s après `cache-rebuilt` (s'arrête quand `builtAt` change)
 
 ### Explorateur AD (`/explorer`)
 - ✅ Arbre AD par régions/sites (prefetch de tous les sites en arrière-plan)
@@ -119,6 +119,7 @@ CONTEXTE-SESSION.md         ← ce fichier
 - ✅ Actualisation de cache site par site ou par région entière
 - ✅ Snapshot `sessionStorage` (TTL 30 min) pour accès direct sans shell
 - ✅ Après `↻ Cache`, envoie `postMessage({ type: 'cache-rebuilt' })` au shell (rafraîchit le badge date)
+- ✅ **Bouton toggle panneau Détail** : chevron `‹/›` dans le header du panneau, collapse à 30px avec transition CSS `.detail-collapsed`. État du bouton (icône + title) mis à jour dynamiquement.
 
 ### Règles (`/regles`)
 - ✅ CRUD complet des règles
@@ -133,7 +134,7 @@ CONTEXTE-SESSION.md         ← ce fichier
 - ✅ Modale CSV — en-tête avec critères de sélection (pills verts = include, rouges = exclude)
 - ✅ Sous-modale CSV — tableau Nom + Fonction uniquement (SAM/Mail masqués en prévisualisation)
 - ✅ Message en filigrane dans la zone principale vide (texte grand, gradient gris, opacité 55%)
-- ✅ Cartes : une seule ligne `.rule-card-row` (label + badge Inactif si besoin)
+- ✅ Cartes : une seule ligne `.rule-card-row` (label seul, clic = ouvre formulaire)
 - ✅ Modal JSON (visualiseur brut avec coloration syntaxique)
 - ✅ Modal Aide (8 étapes expliquées)
 - ✅ Tooltips JS `position:fixed` au survol (badges niveau + boutons cartes)
@@ -158,6 +159,7 @@ CONTEXTE-SESSION.md         ← ce fichier
   - **Onglet "Groupes"** + **onglet "Adresses mail"** (contrôle AD des adresses)
   - Contrôle AD des adresses mail via `POST /api/regles/check-mail`
   - **Bouton Stop** pour annuler le contrôle en cours — flag `container._checkAborted`
+  - **Drag de la modale** : header `grab`, `setPointerCapture` → impossible de rester bloqué si souris quitte l'iframe
 - ✅ **Liaison maître/subordonné entre règles (`invertOf`)** :
   - Une règle peut être l'**inverse dynamique** d'une autre (ex. ADMINISTRATIF = tous − FORMATEURS)
   - Champ `invertOf` dans `regles.json` stocke l'`id` de la règle source
@@ -167,6 +169,18 @@ CONTEXTE-SESSION.md         ← ce fichier
   - **Icônes dans les cartes** : maître = git-fork bleue (`var(--accent)`), subordonné = ↳ ambrée (`#92400e`)
   - `metaLabel()` affiche `"Inverse de FORMATEURS · Par centre · …"` pour les règles subordonnées
   - `FIELD_LABELS = Object.fromEntries(FIELDS)` — mapping clé → libellé pour les pills du banner
+  - **Niveau de groupement verrouillé** pour les règles `invertOf` : radios `disabled` + `.niveau-locked` (opacity 0.55 + pointer-events none) + note "Hérité de « FORMATEURS » — non modifiable"
+  - **Propagation du niveau** : à la sauvegarde d'une règle maître, toutes les règles enfants (`invertOf === rule.id`) sont mises à jour automatiquement (`niveau` + `monoNiveau`). Toast de confirmation : "Règle enregistrée · niveau propagé à ADMINISTRATIF"
+- ✅ **Mini-modale peer (œil sur cartes de groupe)** :
+  - Icône œil (`.btn-gp-eye-peer`) sur chaque carte `.gp-row-item` dans la modale preview, visible au survol
+  - Clic → ouvre une mini-modale flottante draggable montrant les membres du groupe **inverse** (FORMATEURS → données ADMINISTRATIF et vice-versa)
+  - Membres triés + regroupés par fonction (`peer-mini-fn-hdr` avec compteur)
+  - **Drag** : `setPointerCapture` — impossible de rester bloqué si souris quitte l'iframe
+  - **Fermeture** : bouton ×, **clic extérieur** (`mousedown` capture sur `document`, ajouté via `setTimeout(0)`), ou fermeture de la modale principale
+  - **Surbrillance de la carte active** : `.gp-peer-active` (fond ambré `#fef9ec`, bordure `#f59e0b`, shadow `#fde68a`) — transférée au clic sur un nouvel œil, retirée à la fermeture
+  - Callback `onClose` passé à `showPeerGroupMini` pour nettoyer la surbrillance
+  - **Fix accumulation de listeners** : `modal._peerClickListener` — l'ancien listener est retiré avant d'en ajouter un nouveau ; fermeture de la modale principale nettoie également
+  - **Fix drag bloquant l'UI** : remplacement de `document.addEventListener('mousemove/mouseup')` par `setPointerCapture` sur la mini-modale
 
 ### Modale CSV (après génération)
 - ✅ Onglet **"Fichiers CSV"** + onglet **"Adresses mail"** (même composant réutilisable)
@@ -184,15 +198,15 @@ extensionAttribute1, description, userPrincipalName, proxyAddresses,
 manager, company, employeeNumber, postalCode, streetAddress, enabled, builtAt
 ```
 
-> **`dn` est indispensable** pour `Get-RegionFromDN`. Si le champ est absent (cache construit avant son ajout), la prévisualisation Règles ne retourne que le groupe global. → Reconstruire avec **↻ Cache** dans l'Explorateur.
+> **`dn` est indispensable** pour `Get-RegionFromDN` et `Get-CentreFromDN`. Si le champ est absent (cache construit avant son ajout), la prévisualisation Règles ne retourne que le groupe global. → Reconstruire avec **↻ Cache** dans l'Explorateur.
 
 **Reconstruction** : `Build-GlobalUsersCache` dans `ad-reader.psm1` — appelée automatiquement au warmup si le fichier n'existe pas, ou manuellement via `↻ Cache`.
 
 ---
 
-## Groupement par région — `Get-RegionFromDN`
+## Groupement par région et par centre — fonctions DN
 
-Remplace `Get-NormalizedDepartment` (basé sur le champ `Department`) pour tous les groupements DO dans `http-server.psm1` et `csv-generator.psm1`.
+### `Get-RegionFromDN` — niveau DO
 
 ```powershell
 function Get-RegionFromDN {
@@ -208,7 +222,24 @@ function Get-RegionFromDN {
 ```
 
 - Utilisé dans : `Group-Object { Get-RegionFromDN $_.dn } | Where-Object { $_.Name -and $_.Name -ne 'MONCHY' }`
-- `Get-NormalizedDepartment` existe encore dans `csv-generator.psm1` mais n'est plus appelée
+
+### `Get-CentreFromDN` — niveau centre (remplace `Group-Object Office`)
+
+```powershell
+function Get-CentreFromDN {
+    param([string]$DN)
+    if (-not $DN) { return '' }
+    foreach ($part in ($DN -split ',')) {
+        if ($part -match '^OU=(A\d{5})\s*-\s*(.+)$') { return $Matches[2].Trim() }
+        if ($part -match '^OU=(A\d{5})$')             { return $Matches[1] }
+    }
+    return ''
+}
+```
+
+- Extrait le nom du centre depuis l'OU du DN : `OU=A22100 - Narbonne` → `Narbonne` → après `Clean-ForFileName` → `NARBONNE`
+- **Remplace `Group-Object Office`** dans `http-server.psm1` (1 occurrence) et `csv-generator.psm1` (3 occurrences)
+- Raison : le champ `Office` (Bureau) AD peut être incohérent (ex. "CARCASSONNE" pour un utilisateur dans l'OU Narbonne)
 
 ### Régions multiBase
 
@@ -219,7 +250,37 @@ DO I2N et DO SUD ont plusieurs bases AD (`bases: [...]`) :
 | DO I2N | NORD + IDF | `NORD` / `IDF` |
 | DO SUD | SUD + SUD-EST | `SUD` / `SUD-EST` |
 
-Pour chaque groupe de type `centre`, le backend dérive `baseLabel` en matchant le DN du premier utilisateur contre les bases individuelles de la région. Ce `baseLabel` est retourné dans la réponse JSON et utilisé par le frontend pour afficher les séparateurs dans la colonne Centres.
+---
+
+## Exclusion de comptes techniques (`Test-UserExcluded`)
+
+Comptes techniques (ex. Ricoh, imprimantes) exclus de TOUS les groupes FORMATEURS et ADMINISTRATIF.
+
+**Configuration** dans `parametres.json` :
+```json
+"excludeDisplayNamePatterns": ["ricoh"]
+```
+
+**Fonction** dans `ad-reader.psm1` :
+```powershell
+function Test-UserExcluded {
+    param([object]$User)
+    $patterns = @($global:parametresJson.ad.excludeDisplayNamePatterns | Where-Object { $_ })
+    if (-not $patterns -or $patterns.Count -eq 0) { return $false }
+    $name = "$($User.displayName)"
+    foreach ($p in $patterns) {
+        if ($name -match [regex]::Escape($p)) { return $true }
+    }
+    return $false
+}
+```
+
+Filtre appliqué **après** `$filtered` dans `http-server.psm1` et `csv-generator.psm1` :
+```powershell
+$filtered = @($filtered | Where-Object { -not (Test-UserExcluded $_) })
+```
+
+Pour ajouter d'autres exclusions : `"excludeDisplayNamePatterns": ["ricoh", "scanner", "imprimante"]` — insensible à la casse.
 
 ---
 
@@ -274,6 +335,8 @@ Chaque job hashtable : `@{ path = '...'; fname = '...'; content = <string pré-c
 
 ### CSS / JS
 - `display: flex` sur n'importe quel élément écrase l'attribut `[hidden]` du navigateur → **toujours** ajouter `.element[hidden] { display: none; }` dès qu'on met `display: flex` ou `display: grid` sur un élément qu'on veut pouvoir cacher via `hidden`
+- **Drag et iframes** : utiliser `setPointerCapture` / `pointermove` / `pointerup` sur l'élément draggable plutôt que `document.addEventListener('mousemove')` — si la souris quitte l'iframe, `mouseup` n'est jamais reçu et le drag se bloque. `setPointerCapture` reçoit tous les events même hors de l'élément et hors de la fenêtre.
+- **Clic extérieur sur un popup flottant** : utiliser `document.addEventListener('mousedown', handler, true)` (capture) ajouté via `setTimeout(0)` pour éviter que le clic courant ferme immédiatement. Guard `if (element.hidden) { remove; return; }` pour éviter les doubles appels.
 - Fonctions génériques avec `container` : préférer `container.querySelector('.class')` à `document.getElementById('id')` pour les composants réutilisables dans plusieurs contextes
 - Tooltips dans des conteneurs `overflow: hidden` : utiliser `position: fixed` côté JS (système `data-tooltip` + `setupTooltip()`)
 - Dans les iframes, `100vh` = hauteur de l'iframe (pas de la fenêtre parente) → header masqué = layout doit passer à `height: 100vh`

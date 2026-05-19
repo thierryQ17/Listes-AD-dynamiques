@@ -221,6 +221,18 @@ document.addEventListener('DOMContentLoaded', () => {
         const anyCollapsed = document.querySelector('.tree-region:not(.expanded)');
         setAllRegions(!!anyCollapsed);
     });
+
+    // ── Toggle panneau Détail ─────────────────────────────────────────────
+    const detailPanel  = document.getElementById('detail-panel');
+    const detailToggle = document.getElementById('btn-detail-toggle');
+    const SVG_CHEVRON_LEFT  = '<svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M9 2L5 7L9 12" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+    const SVG_CHEVRON_RIGHT = '<svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M5 2L9 7L5 12" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
+    detailToggle.addEventListener('click', () => {
+        const collapsed = detailPanel.classList.toggle('detail-collapsed');
+        detailToggle.innerHTML = collapsed ? SVG_CHEVRON_RIGHT : SVG_CHEVRON_LEFT;
+        detailToggle.title     = collapsed ? 'Afficher le panneau Détail' : 'Masquer le panneau Détail';
+    });
 });
 
 // ============================================================

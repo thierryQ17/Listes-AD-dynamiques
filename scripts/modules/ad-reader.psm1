@@ -204,6 +204,29 @@ function Get-RegionFromDN {
     return ''
 }
 
+function Test-UserExcluded {
+    # Retourne $true si le displayName de l'utilisateur correspond à un pattern d'exclusion configuré
+    param([object]$User)
+    $patterns = @($global:parametresJson.ad.excludeDisplayNamePatterns | Where-Object { $_ })
+    if (-not $patterns -or $patterns.Count -eq 0) { return $false }
+    $name = "$($User.displayName)"
+    foreach ($p in $patterns) {
+        if ($name -match [regex]::Escape($p)) { return $true }
+    }
+    return $false
+}
+
+function Get-CentreFromDN {
+    # Extrait le nom du centre depuis l'OU du DN (ex: "OU=A22100 - Narbonne" → "Narbonne")
+    param([string]$DN)
+    if (-not $DN) { return '' }
+    foreach ($part in ($DN -split ',')) {
+        if ($part -match '^OU=(A\d{5})\s*-\s*(.+)$') { return $Matches[2].Trim() }
+        if ($part -match '^OU=(A\d{5})$')             { return $Matches[1] }
+    }
+    return ''
+}
+
 function Get-GlobalUsersCachePath {
     $scriptsDir = Split-Path ($global:path."r_settings" -replace '/', '\') -Parent
     $cacheDir   = Join-Path $scriptsDir "cache"

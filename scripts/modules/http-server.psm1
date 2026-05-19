@@ -250,6 +250,7 @@ function Invoke-RouteHandler {
                         } else {
                             $filtered = @($allUsers | Where-Object { Test-UserMatchesRule -User $_ -Conditions $rule.conditions })
                         }
+                        $filtered   = @($filtered | Where-Object { -not (Test-UserExcluded $_) })
                         $groups     = [System.Collections.Generic.List[hashtable]]::new()
 
                         if ($rule.niveau -eq 3) {
@@ -261,7 +262,7 @@ function Invoke-RouteHandler {
                                 $doBase      = "$lbl-$doClean"
                                 $regionCfg   = $global:parametresJson.ad.regions | Where-Object { $_.label -eq $doName } | Select-Object -First 1
                                 $isMultiBase = ($null -ne $regionCfg -and @($regionCfg.bases).Count -gt 1)
-                                foreach ($cGrp in ($doGrp.Group | Group-Object office)) {
+                                foreach ($cGrp in ($doGrp.Group | Group-Object { Get-CentreFromDN $_.dn })) {
                                     $cName  = if ($cGrp.Name) { $cGrp.Name } else { 'SANS-CENTRE' }
                                     $cClean = Clean-ForFileName $cName
                                     $cBase  = "$lbl-$doClean-$cClean"

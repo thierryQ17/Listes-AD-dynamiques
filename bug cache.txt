@@ -1,0 +1,1536 @@
+[$global:fileLog_maintenant] ==> '202605131634' : Acronym de la variable globale '$global:fileLog'
+[$global:fileLog] ==> Accès au fichier de log : 'C:\DEV POWERSHELL\Liste de distribution\scripts\log\202605131634_log.log'
+[$global:path."..."] ==> Initialisation des variables globales : 'C:\DEV POWERSHELL\Liste de distribution\scripts\settings\variablesGlobales.json'
+[$global:path."r_settings"] ==> accès au répertoire (r_) "r_settings" 'C:/DEV POWERSHELL/Liste de distribution/scripts/settings'
+[$global:path."f_settings.json"] ==> accès au fichier (f_) "f_settings" 'C:/DEV POWERSHELL/Liste de distribution/scripts/settings/settings.json'
+[$global:parametresJson] ==> chargé avec succès : 'C:/DEV POWERSHELL/Liste de distribution/scripts/settings/parametres.json'
+
+----------------------------------------- ############## -----------------------------------------
+
+AVERTISSEMENT : Les noms de certaines commandes importées du module « http-server » contiennent des verbes non
+approuvés qui peuvent les rendre moins détectables. Pour trouver les commandes comportant des verbes non approuvés,
+réexécutez la commande Import-Module avec le paramètre Verbose. Pour obtenir la liste des verbes approuvés, tapez
+Get-Verb.
+
+================================================
+     Groupes Dynamiques I2N
+================================================
+
+Connexion AD rÃ©ussie pour 'thgadre.adm'.
+
+Interface disponible sur : http://localhost:8888
+Appuyez sur Ctrl+C dans ce terminal pour arrÃªter le serveur.
+
+Cache warmup demarre en arriere-plan...
+Serveur HTTP actif : http://localhost:8888
+GET /
+GET /explorer
+GET /style.css
+GET /explorer.css
+GET /explorer.js
+GET /api/tree
+GET /api/cache/counts
+GET /api/cache/counts
+
+  [Cache] Warmup demarre - 179 sites
+GET /api/ou/users
+  â†’ cache HIT : OU=A28000 - Rungis,OU=IDF,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A28010 - Trappes,OU=IDF,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A28020 - Garonor,OU=IDF,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [4/179] A28030 - Gennevilliers (39 users)
+  â†’ cache MISS (Ã©crit) : OU=A28000 - Rungis,OU=IDF,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A28030 - Gennevilliers,OU=IDF,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A28010 - Trappes,OU=IDF,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [5/179] A28040 - Paris 13 (10 users)
+  â†’ cache MISS (Ã©crit) : OU=A28040 - Paris 13,OU=IDF,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [6/179] A28050 - Saint-Ouen-l'Aumone (28 users)
+  â†’ cache MISS (Ã©crit) : OU=A28050 - Saint-Ouen-l'Aumone,OU=IDF,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A28020 - Garonor,OU=IDF,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [7/179] A28060 - Le Tremblay-sur-Mauldre (70 users)
+  â†’ cache MISS (Ã©crit) : OU=A28060 - Le Tremblay-sur-Mauldre,OU=IDF,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [8/179] A28070 - Savigny-le-Temple (51 users)
+  â†’ cache MISS (Ã©crit) : OU=A28030 - Gennevilliers,OU=IDF,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A28070 - Savigny-le-Temple,OU=IDF,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [9/179] A28080 - Noisiel (26 users)
+Erreur lecture utilisateurs 'OU=A28080 - Noisiel,OU=IDF,OU=administratif,DC=aft-iftim,DC=france' : Le serveur a retourné l’erreur suivante : contexte d’énumération non valide.
+  â†’ cache MISS (Ã©crit) : OU=A28080 - Noisiel,OU=IDF,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A28040 - Paris 13,OU=IDF,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [10/179] A28090 - Paris Pole Enseignement Superieur (21 users)
+  â†’ cache MISS (Ã©crit) : OU=A28090 - Paris Pole Enseignement Superieur,OU=IDF,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [11/179] A28100 - Bondoufle (32 users)
+  â†’ cache MISS (Ã©crit) : OU=A28050 - Saint-Ouen-l'Aumone,OU=IDF,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A28100 - Bondoufle,OU=IDF,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [12/179] A28110 - Acheres (16 users)
+  â†’ cache MISS (Ã©crit) : OU=A28110 - Acheres,OU=IDF,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [13/179] A28120 - Servon (19 users)
+  â†’ cache MISS (Ã©crit) : OU=A28060 - Le Tremblay-sur-Mauldre,OU=IDF,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A28120 - Servon,OU=IDF,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [14/179] A28130 - Rosny-Sur-Seine (2 users)
+  [Cache] [15/179] A28140 - Villeneuve-le-Roi (8 users)
+  [Cache] [16/179] A28150 - Ennery (0 users)
+  [Cache] [17/179] Groupes (0 users)
+  [Cache] [18/179] Partenaires (0 users)
+  â†’ cache MISS (Ã©crit) : OU=A28070 - Savigny-le-Temple,OU=IDF,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A28130 - Rosny-Sur-Seine,OU=IDF,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A28140 - Villeneuve-le-Roi,OU=IDF,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A28090 - Paris Pole Enseignement Superieur,OU=IDF,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A28150 - Ennery,OU=IDF,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A28100 - Bondoufle,OU=IDF,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=Groupes,OU=IDF,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=Partenaires,OU=IDF,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A28110 - Acheres,OU=IDF,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [19/179] A23000 - Longueau (121 users)
+  [Cache] [20/179] A23020 - Arras (27 users)
+  â†’ cache MISS (Ã©crit) : OU=A23000 - Longueau,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [21/179] A23040 - Caen (40 users)
+  â†’ cache MISS (Ã©crit) : OU=A28120 - Servon,OU=IDF,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A23020 - Arras,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A23040 - Caen,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [22/179] A23041 - Vire (10 users)
+  â†’ cache MISS (Ã©crit) : OU=A28130 - Rosny-Sur-Seine,OU=IDF,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A23041 - Vire,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [23/179] A23050 - Saint-Etienne-du-Rouvray (36 users)
+  â†’ cache MISS (Ã©crit) : OU=A28140 - Villeneuve-le-Roi,OU=IDF,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A23050 - Saint-Etienne-du-Rouvray,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [24/179] A23051 - Montivilliers (17 users)
+  â†’ cache MISS (Ã©crit) : OU=A23051 - Montivilliers,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [25/179] A23060 - Wasquehal (35 users)
+  â†’ cache MISS (Ã©crit) : OU=A23000 - Longueau,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A23060 - Wasquehal,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [26/179] A23070 - Wasquehal ISTELI (10 users)
+  â†’ cache MISS (Ã©crit) : OU=A23020 - Arras,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A23070 - Wasquehal ISTELI,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [27/179] A23090 - Grande-Synthe (15 users)
+  â†’ cache MISS (Ã©crit) : OU=A23090 - Grande-Synthe,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [28/179] A23100 - Henin-Beaumont (63 users)
+  â†’ cache MISS (Ã©crit) : OU=A23040 - Caen,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A23100 - Henin-Beaumont,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [29/179] A23110 - Prouvy (35 users)
+  â†’ cache MISS (Ã©crit) : OU=A23041 - Vire,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A23110 - Prouvy,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [30/179] A23130 - Laon (24 users)
+  â†’ cache MISS (Ã©crit) : OU=A23130 - Laon,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [31/179] A23140 - Saint-Pierre-les-Elbeuf (15 users)
+Erreur lecture utilisateurs 'OU=A23050 - Saint-Etienne-du-Rouvray,OU=NORD,OU=administratif,DC=aft-iftim,DC=france' : Le serveur a retourné l’erreur suivante : contexte d’énumération non valide.
+  â†’ cache MISS (Ã©crit) : OU=A23050 - Saint-Etienne-du-Rouvray,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A23140 - Saint-Pierre-les-Elbeuf,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A23051 - Montivilliers,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [32/179] A23150 - Monchy-Saint-Eloi CF (52 users)
+  [Cache] [33/179] A23160 - Rouvroy (14 users)
+  â†’ cache MISS (Ã©crit) : OU=A23150 - Monchy-Saint-Eloi CF,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A23160 - Rouvroy,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [34/179] A23170 - Fauville (18 users)
+  [Cache] [35/179] A23180 - Roncq (9 users)
+  â†’ cache MISS (Ã©crit) : OU=A23060 - Wasquehal,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A23170 - Fauville,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [36/179] A23190 - Annezin (6 users)
+  â†’ cache MISS (Ã©crit) : OU=A23070 - Wasquehal ISTELI,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A23180 - Roncq,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A23190 - Annezin,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [37/179] A23200 - Clairoix (14 users)
+  â†’ cache MISS (Ã©crit) : OU=A23090 - Grande-Synthe,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A23200 - Clairoix,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [38/179] A23210 - Le Havre ISTELI (10 users)
+  â†’ cache MISS (Ã©crit) : OU=A23100 - Henin-Beaumont,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A23210 - Le Havre ISTELI,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [39/179] A23220 - Haynecourt (16 users)
+  [Cache] [40/179] A23230 - Trith-Saint-Leger (0 users)
+  â†’ cache MISS (Ã©crit) : OU=A23220 - Haynecourt,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [41/179] A23240 - Alencon (7 users)
+  â†’ cache MISS (Ã©crit) : OU=A23110 - Prouvy,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A23230 - Trith-Saint-Leger,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [42/179] A23250 - Lisieux (0 users)
+  â†’ cache MISS (Ã©crit) : OU=A23130 - Laon,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A23240 - Alencon,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A23250 - Lisieux,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [43/179] A23260 - Rots (14 users)
+  [Cache] [44/179] A23270 - Guichainville (0 users)
+  â†’ cache MISS (Ã©crit) : OU=A23140 - Saint-Pierre-les-Elbeuf,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A23260 - Rots,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [45/179] A23280 - Wancourt (5 users)
+  [Cache] [46/179] A23290 - Mondeville (8 users)
+  [Cache] [47/179] A23300 - Cherbourg-en-Cotentin (8 users)
+  [Cache] [48/179] A23310 - Colombelles (5 users)
+  [Cache] [49/179] A23320 - Conde-sur-Sarthe (5 users)
+  [Cache] [50/179] A23330 - Harfleur (10 users)
+  â†’ cache MISS (Ã©crit) : OU=A23150 - Monchy-Saint-Eloi CF,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A23270 - Guichainville,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A23280 - Wancourt,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [51/179] A23340 - Seclin 2 (3 users)
+  â†’ cache MISS (Ã©crit) : OU=A23160 - Rouvroy,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A23290 - Mondeville,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [52/179] A23350 - Coquelles (16 users)
+  [Cache] [53/179] A23360 - Arques (0 users)
+  â†’ cache MISS (Ã©crit) : OU=A23170 - Fauville,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A23300 - Cherbourg-en-Cotentin,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A23310 - Colombelles,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [54/179] Groupes (0 users)
+  â†’ cache MISS (Ã©crit) : OU=A23180 - Roncq,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A23320 - Conde-sur-Sarthe,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [55/179] A24000 - Poitiers (102 users)
+  â†’ cache MISS (Ã©crit) : OU=A23190 - Annezin,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A23330 - Harfleur,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A23340 - Seclin 2,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [56/179] A24001 - Rochefort (25 users)
+  â†’ cache MISS (Ã©crit) : OU=A23200 - Clairoix,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A23350 - Coquelles,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [57/179] A24010 - Artigues-pres-Bordeaux (85 users)
+  â†’ cache MISS (Ã©crit) : OU=A23210 - Le Havre ISTELI,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A23360 - Arques,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=Groupes,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [58/179] A24011 - Lons (16 users)
+  â†’ cache MISS (Ã©crit) : OU=A23220 - Haynecourt,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A24000 - Poitiers,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [59/179] A24012 - Mouguerre (24 users)
+  â†’ cache MISS (Ã©crit) : OU=A23240 - Alencon,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A24001 - Rochefort,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A24010 - Artigues-pres-Bordeaux,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [60/179] A24013 - Sanilhac (16 users)
+  â†’ cache MISS (Ã©crit) : OU=A23260 - Rots,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A24011 - Lons,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [61/179] A24021 - Parcay-Meslay (28 users)
+  â†’ cache MISS (Ã©crit) : OU=A23280 - Wancourt,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A24012 - Mouguerre,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A24013 - Sanilhac,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [62/179] A24031 - Allonnes (39 users)
+  â†’ cache MISS (Ã©crit) : OU=A23290 - Mondeville,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A24021 - Parcay-Meslay,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [63/179] A24032 - Les Herbiers (20 users)
+  â†’ cache MISS (Ã©crit) : OU=A23300 - Cherbourg-en-Cotentin,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A24031 - Allonnes,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A24032 - Les Herbiers,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [64/179] A24040 - Cesson-Sevigne (48 users)
+  â†’ cache MISS (Ã©crit) : OU=A23310 - Colombelles,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A24040 - Cesson-Sevigne,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] Erreur lecture utilisateurs 'OU=A24041 - Ergue-Gaberic,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france' : Le serveur a retourné l'erreur suivante : contexte d'énumération non valide.
+  [Cache] [65/179] A24041 - Ergue-Gaberic (0 users)
+  â†’ cache MISS (Ã©crit) : OU=A23330 - Harfleur,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A24041 - Ergue-Gaberic,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [66/179] A24042 - Vannes (33 users)
+  â†’ cache MISS (Ã©crit) : OU=A24042 - Vannes,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [67/179] A24043 - Ploufragan (19 users)
+  â†’ cache MISS (Ã©crit) : OU=A23340 - Seclin 2,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A24043 - Ploufragan,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [68/179] A24050 - Le Palais-sur-Vienne (27 users)
+  â†’ cache MISS (Ã©crit) : OU=A23350 - Coquelles,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A24050 - Le Palais-sur-Vienne,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [69/179] A24060 - Sainte-Luce-sur-Loire (79 users)
+  â†’ cache MISS (Ã©crit) : OU=A24060 - Sainte-Luce-sur-Loire,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [70/179] A24080 - Semoy (37 users)
+  â†’ cache MISS (Ã©crit) : OU=A24000 - Poitiers,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A24080 - Semoy,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [71/179] A24090 - Puymoyen (18 users)
+  [Cache] [72/179] A24100 - Brive-la-Gaillarde (16 users)
+  â†’ cache MISS (Ã©crit) : OU=A24001 - Rochefort,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A24090 - Puymoyen,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A24100 - Brive-la-Gaillarde,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [73/179] A24120 - Gellainville (24 users)
+  â†’ cache MISS (Ã©crit) : OU=A24010 - Artigues-pres-Bordeaux,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A24120 - Gellainville,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A24011 - Lons,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [74/179] A24130 - La Creche (21 users)
+  â†’ cache MISS (Ã©crit) : OU=A24130 - La Creche,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [75/179] A24140 - Verrieres-en-Anjou (35 users)
+  â†’ cache MISS (Ã©crit) : OU=A24140 - Verrieres-en-Anjou,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [76/179] A24150 - Laval (23 users)
+  â†’ cache MISS (Ã©crit) : OU=A24012 - Mouguerre,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A24150 - Laval,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [77/179] A24160 - Tarbes (14 users)
+  â†’ cache MISS (Ã©crit) : OU=A24013 - Sanilhac,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A24160 - Tarbes,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [78/179] A24170 - Saint-Nazaire (23 users)
+  â†’ cache MISS (Ã©crit) : OU=A24170 - Saint-Nazaire,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [79/179] A24180 - Lorient (15 users)
+  â†’ cache MISS (Ã©crit) : OU=A24021 - Parcay-Meslay,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A24180 - Lorient,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [80/179] A24190 - Cesson-Sevigne ISTELI (7 users)
+  â†’ cache MISS (Ã©crit) : OU=A24031 - Allonnes,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A24190 - Cesson-Sevigne ISTELI,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [81/179] A24210 - Blanquefort (2 users)
+Erreur lecture utilisateurs 'OU=A24210 - Blanquefort,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france' : Le serveur a retourné l’erreur suivante : contexte d’énumération non valide.
+  â†’ cache MISS (Ã©crit) : OU=A24210 - Blanquefort,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [82/179] A24220 - Guiclan (6 users)
+  â†’ cache MISS (Ã©crit) : OU=A24032 - Les Herbiers,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A24220 - Guiclan,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [83/179] A24230 - Brest (20 users)
+  â†’ cache MISS (Ã©crit) : OU=A24040 - Cesson-Sevigne,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A24230 - Brest,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [84/179] A24240 - Saint-Geours-de-Maremne (9 users)
+  â†’ cache MISS (Ã©crit) : OU=A24240 - Saint-Geours-de-Maremne,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [85/179] A24250 - Brie (9 users)
+  â†’ cache MISS (Ã©crit) : OU=A24042 - Vannes,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A24250 - Brie,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [86/179] A24260 - Arnage (8 users)
+  â†’ cache MISS (Ã©crit) : OU=A24043 - Ploufragan,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A24260 - Arnage,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [87/179] A24270 - Auray (12 users)
+  â†’ cache MISS (Ã©crit) : OU=A24270 - Auray,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [88/179] A24280 - Beaucouze (8 users)
+  â†’ cache MISS (Ã©crit) : OU=A24050 - Le Palais-sur-Vienne,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A24280 - Beaucouze,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [89/179] A24290 - Bergerac (13 users)
+  â†’ cache MISS (Ã©crit) : OU=A24060 - Sainte-Luce-sur-Loire,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A24290 - Bergerac,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [90/179] A24300 - Cholet (6 users)
+  â†’ cache MISS (Ã©crit) : OU=A24300 - Cholet,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [91/179] A24310 - Floirac (19 users)
+  [Cache] [92/179] A24320 - Louverne (16 users)
+  â†’ cache MISS (Ã©crit) : OU=A24080 - Semoy,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A24310 - Floirac,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [93/179] A24330 - Saint-Avit (18 users)
+  â†’ cache MISS (Ã©crit) : OU=A24090 - Puymoyen,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A24320 - Louverne,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A24330 - Saint-Avit,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [94/179] A24340 - Sauvagnon (7 users)
+  â†’ cache MISS (Ã©crit) : OU=A24100 - Brive-la-Gaillarde,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A24340 - Sauvagnon,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [95/179] A24350 - Boulazac Isle Manoire (8 users)
+  â†’ cache MISS (Ã©crit) : OU=A24120 - Gellainville,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A24350 - Boulazac Isle Manoire,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [96/179] A24360 - Saint-Jacques-de-la-Lande (20 users)
+  â†’ cache MISS (Ã©crit) : OU=A24360 - Saint-Jacques-de-la-Lande,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A24130 - La Creche,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [97/179] A24370 - Cesson-Sevigne 2 (32 users)
+  â†’ cache MISS (Ã©crit) : OU=A24370 - Cesson-Sevigne 2,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [98/179] A24380 - Brive-la-Gaillarde 2 (1 users)
+  â†’ cache MISS (Ã©crit) : OU=A24140 - Verrieres-en-Anjou,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A24380 - Brive-la-Gaillarde 2,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=Groupes,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [99/179] Groupes (0 users)
+  â†’ cache MISS (Ã©crit) : OU=A24150 - Laval,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [100/179] A25000 - Jarville-la-Malgrange (93 users)
+  â†’ cache MISS (Ã©crit) : OU=A25000 - Jarville-la-Malgrange,OU=EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A28000 - Rungis,OU=IDF,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A24160 - Tarbes,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [101/179] A25010 - Metz (32 users)
+  [Cache] [102/179] A25020 - Serre-les-Sapins (24 users)
+  â†’ cache MISS (Ã©crit) : OU=A25010 - Metz,OU=EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A25020 - Serre-les-Sapins,OU=EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [103/179] A25021 - Etupes (14 users)
+  â†’ cache MISS (Ã©crit) : OU=A24170 - Saint-Nazaire,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A25021 - Etupes,OU=EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [104/179] A25030 - Torvilliers (30 users)
+  â†’ cache MISS (Ã©crit) : OU=A24180 - Lorient,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A25030 - Torvilliers,OU=EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [105/179] A25040 - Sausheim (18 users)
+  â†’ cache MISS (Ã©crit) : OU=A25040 - Sausheim,OU=EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [106/179] A25050 - Reims (31 users)
+  â†’ cache MISS (Ã©crit) : OU=A24190 - Cesson-Sevigne ISTELI,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A25050 - Reims,OU=EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [107/179] A25060 - Longvic (55 users)
+  â†’ cache MISS (Ã©crit) : OU=A24220 - Guiclan,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A25060 - Longvic,OU=EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [108/179] A25062 - Champforgeuil (18 users)
+  â†’ cache MISS (Ã©crit) : OU=A25062 - Champforgeuil,OU=EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [109/179] A25070 - Bischheim (20 users)
+  â†’ cache MISS (Ã©crit) : OU=A24230 - Brest,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A25070 - Bischheim,OU=EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [110/179] A25073 - Schiltigheim (5 users)
+  â†’ cache MISS (Ã©crit) : OU=A24240 - Saint-Geours-de-Maremne,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A25073 - Schiltigheim,OU=EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [111/179] A25090 - Appoigny (16 users)
+  â†’ cache MISS (Ã©crit) : OU=A25090 - Appoigny,OU=EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [112/179] A25100 - Courlaoux (8 users)
+  â†’ cache MISS (Ã©crit) : OU=A24260 - Arnage,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A25100 - Courlaoux,OU=EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [113/179] A25110 - Macon (12 users)
+  â†’ cache MISS (Ã©crit) : OU=A24270 - Auray,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A25110 - Macon,OU=EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [114/179] A25120 - Donchery (12 users)
+  â†’ cache MISS (Ã©crit) : OU=A25120 - Donchery,OU=EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [115/179] A25130 - Chalezeule (0 users)
+  â†’ cache MISS (Ã©crit) : OU=A24280 - Beaucouze,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A25130 - Chalezeule,OU=EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [116/179] A25140 - Chalon-sur-Saone (6 users)
+  â†’ cache MISS (Ã©crit) : OU=A24290 - Bergerac,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A25140 - Chalon-sur-Saone,OU=EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [117/179] A25150 - Champvans (4 users)
+  â†’ cache MISS (Ã©crit) : OU=A25150 - Champvans,OU=EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [118/179] A25160 - Quetigny (1 users)
+  â†’ cache MISS (Ã©crit) : OU=A24300 - Cholet,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A25160 - Quetigny,OU=EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [119/179] A25170 - Moneteau (3 users)
+  â†’ cache MISS (Ã©crit) : OU=A24310 - Floirac,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A25170 - Moneteau,OU=EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [120/179] A25180 - Uxegney (8 users)
+  â†’ cache MISS (Ã©crit) : OU=A25180 - Uxegney,OU=EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [121/179] Groupes (0 users)
+  â†’ cache MISS (Ã©crit) : OU=A24320 - Louverne,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=Groupes,OU=EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A24330 - Saint-Avit,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [122/179] A22000 - Marseille (108 users)
+  â†’ cache MISS (Ã©crit) : OU=A22000 - Marseille,OU=SUD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [123/179] A22010 - Toulouse (85 users)
+  [Cache] [124/179] A22011 - Launaguet (3 users)
+  â†’ cache MISS (Ã©crit) : OU=A22010 - Toulouse,OU=SUD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A24350 - Boulazac Isle Manoire,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A22011 - Launaguet,OU=SUD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [125/179] A22020 - Perols (42 users)
+  â†’ cache MISS (Ã©crit) : OU=A24360 - Saint-Jacques-de-la-Lande,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A22020 - Perols,OU=SUD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [126/179] A22030 - Nice (40 users)
+  â†’ cache MISS (Ã©crit) : OU=A22030 - Nice,OU=SUD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [127/179] A22040 - Nimes (29 users)
+  [Cache] [128/179] A22050 - Lescure-d'Albigeois (16 users)
+  â†’ cache MISS (Ã©crit) : OU=A24370 - Cesson-Sevigne 2,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A22040 - Nimes,OU=SUD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [129/179] A22070 - Sorgues (34 users)
+  [Cache] [130/179] A22080 - Perpignan (41 users)
+  [Cache] [131/179] A22100 - Narbonne (24 users)
+  â†’ cache MISS (Ã©crit) : OU=A25000 - Jarville-la-Malgrange,OU=EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A22050 - Lescure-d'Albigeois,OU=SUD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A22070 - Sorgues,OU=SUD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [132/179] A22110 - Brignoles (23 users)
+  â†’ cache MISS (Ã©crit) : OU=A25010 - Metz,OU=EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A22080 - Perpignan,OU=SUD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [133/179] A22140 - Sainte-Tulle (10 users)
+  â†’ cache MISS (Ã©crit) : OU=A25020 - Serre-les-Sapins,OU=EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A22100 - Narbonne,OU=SUD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A22110 - Brignoles,OU=SUD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [134/179] A22150 - Frontignan (0 users)
+  â†’ cache MISS (Ã©crit) : OU=A25021 - Etupes,OU=EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A22140 - Sainte-Tulle,OU=SUD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [135/179] A22160 - Saint-Paul (26 users)
+  â†’ cache MISS (Ã©crit) : OU=A25030 - Torvilliers,OU=EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A22150 - Frontignan,OU=SUD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A22160 - Saint-Paul,OU=SUD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [136/179] A22170 - Marseille ISTELI (15 users)
+  [Cache] [137/179] A22180 - Beziers (9 users)
+  â†’ cache MISS (Ã©crit) : OU=A25040 - Sausheim,OU=EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A22170 - Marseille ISTELI,OU=SUD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [138/179] A22190 - Montauban (21 users)
+  â†’ cache MISS (Ã©crit) : OU=A25050 - Reims,OU=EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A22180 - Beziers,OU=SUD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A22190 - Montauban,OU=SUD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [139/179] A22200 - Neffes (14 users)
+  â†’ cache MISS (Ã©crit) : OU=A25060 - Longvic,OU=EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A22200 - Neffes,OU=SUD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [140/179] A22210 - Fos-sur-Mer (16 users)
+  â†’ cache MISS (Ã©crit) : OU=A25062 - Champforgeuil,OU=EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A22210 - Fos-sur-Mer,OU=SUD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [141/179] A22220 - Saint-Martin-de-Crau (4 users)
+  â†’ cache MISS (Ã©crit) : OU=A22220 - Saint-Martin-de-Crau,OU=SUD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [142/179] A22230 - Toulouse ISTELI (12 users)
+  â†’ cache MISS (Ã©crit) : OU=A25070 - Bischheim,OU=EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A22230 - Toulouse ISTELI,OU=SUD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [143/179] A22240 - Vendres (11 users)
+  â†’ cache MISS (Ã©crit) : OU=A25073 - Schiltigheim,OU=EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A22240 - Vendres,OU=SUD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [144/179] A22250 - Carpentras (1 users)
+  â†’ cache MISS (Ã©crit) : OU=A22250 - Carpentras,OU=SUD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [145/179] A22260 - Saint-Benoit (4 users)
+  â†’ cache MISS (Ã©crit) : OU=A25090 - Appoigny,OU=EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A22260 - Saint-Benoit,OU=SUD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [146/179] A22270 - Nice AFCR (0 users)
+  â†’ cache MISS (Ã©crit) : OU=A25100 - Courlaoux,OU=EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A22270 - Nice AFCR,OU=SUD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [147/179] A22280 - Lespinasse (3 users)
+  [Cache] [148/179] A22290 - Ollioules (2 users)
+  â†’ cache MISS (Ã©crit) : OU=A22280 - Lespinasse,OU=SUD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [149/179] A22300 - Aubagne (14 users)
+  â†’ cache MISS (Ã©crit) : OU=A25110 - Macon,OU=EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A22290 - Ollioules,OU=SUD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [150/179] A22310 - Villeneuve-les-Bouloc (5 users)
+  [Cache] [151/179] A22320 - Estillac (11 users)
+  [Cache] [152/179] A22330 - Mende (4 users)
+Erreur lecture utilisateurs 'OU=A25120 - Donchery,OU=EST,OU=administratif,DC=aft-iftim,DC=france' : Le serveur a retourné l’erreur suivante : contexte d’énumération non valide.
+  â†’ cache MISS (Ã©crit) : OU=A25120 - Donchery,OU=EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A22300 - Aubagne,OU=SUD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A22310 - Villeneuve-les-Bouloc,OU=SUD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+Erreur lecture utilisateurs 'OU=A25180 - Uxegney,OU=EST,OU=administratif,DC=aft-iftim,DC=france' : Une connexion à l’annuaire sur lequel traiter la demande n’était pas disponible. Il s’agit probablement d’une situation transitoire.
+  â†’ cache MISS (Ã©crit) : OU=A25180 - Uxegney,OU=EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A22320 - Estillac,OU=SUD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [153/179] A22340 - Sainte-Radegonde (8 users)
+  â†’ cache MISS (Ã©crit) : OU=A22000 - Marseille,OU=SUD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A22330 - Mende,OU=SUD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A22340 - Sainte-Radegonde,OU=SUD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [154/179] Groupes (0 users)
+  â†’ cache MISS (Ã©crit) : OU=A22010 - Toulouse,OU=SUD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=Groupes,OU=SUD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [155/179] A26000 - Jonage DO (90 users)
+  â†’ cache MISS (Ã©crit) : OU=A22011 - Launaguet,OU=SUD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A26000 - Jonage DO,OU=SUD-EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [156/179] A26010 - Cournon-d'Auvergne (41 users)
+  â†’ cache MISS (Ã©crit) : OU=A26010 - Cournon-d'Auvergne,OU=SUD-EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [157/179] A26020 - Pringy (17 users)
+  â†’ cache MISS (Ã©crit) : OU=A22020 - Perols,OU=SUD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A26020 - Pringy,OU=SUD-EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [158/179] A26030 - Vaulx-en-Velin (32 users)
+  â†’ cache MISS (Ã©crit) : OU=A22030 - Nice,OU=SUD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A26030 - Vaulx-en-Velin,OU=SUD-EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [159/179] A26040 - Veurey-Voroize (39 users)
+  â†’ cache MISS (Ã©crit) : OU=A26040 - Veurey-Voroize,OU=SUD-EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [160/179] A26050 - Portes-les-Valence (29 users)
+  â†’ cache MISS (Ã©crit) : OU=A22040 - Nimes,OU=SUD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A26050 - Portes-les-Valence,OU=SUD-EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [161/179] A26060 - Saint-Etienne (29 users)
+  â†’ cache MISS (Ã©crit) : OU=A22050 - Lescure-d'Albigeois,OU=SUD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A26060 - Saint-Etienne,OU=SUD-EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [162/179] A26070 - La Motte-Servolex (39 users)
+  â†’ cache MISS (Ã©crit) : OU=A26070 - La Motte-Servolex,OU=SUD-EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [163/179] A26090 - Toulon-sur-Allier (19 users)
+  â†’ cache MISS (Ã©crit) : OU=A22070 - Sorgues,OU=SUD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A26090 - Toulon-sur-Allier,OU=SUD-EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [164/179] A26100 - Chasse-sur-Rhone (7 users)
+  â†’ cache MISS (Ã©crit) : OU=A22080 - Perpignan,OU=SUD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A26100 - Chasse-sur-Rhone,OU=SUD-EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [165/179] A26110 - Bourg-en-Bresse (20 users)
+  â†’ cache MISS (Ã©crit) : OU=A26110 - Bourg-en-Bresse,OU=SUD-EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [166/179] A26120 - Arnas (14 users)
+  â†’ cache MISS (Ã©crit) : OU=A22100 - Narbonne,OU=SUD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A26120 - Arnas,OU=SUD-EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A22110 - Brignoles,OU=SUD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [167/179] A26130 - Saint-Quentin-Fallavier (47 users)
+  [Cache] [168/179] A26140 - Jonage CF (24 users)
+  [Cache] [169/179] A26160 - Malataverne (1 users)
+  â†’ cache MISS (Ã©crit) : OU=A26130 - Saint-Quentin-Fallavier,OU=SUD-EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A26140 - Jonage CF,OU=SUD-EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [170/179] A26170 - Lyon 6 Isteli (2 users)
+  â†’ cache MISS (Ã©crit) : OU=A22140 - Sainte-Tulle,OU=SUD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A26160 - Malataverne,OU=SUD-EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [171/179] A26180 - Ayse (9 users)
+  â†’ cache MISS (Ã©crit) : OU=A22160 - Saint-Paul,OU=SUD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A26170 - Lyon 6 Isteli,OU=SUD-EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A26180 - Ayse,OU=SUD-EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [172/179] A26190 - Montlucon (7 users)
+  â†’ cache MISS (Ã©crit) : OU=A22170 - Marseille ISTELI,OU=SUD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A26190 - Montlucon,OU=SUD-EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [173/179] A26200 - Venissieux (9 users)
+  â†’ cache MISS (Ã©crit) : OU=A22180 - Beziers,OU=SUD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A26200 - Venissieux,OU=SUD-EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [174/179] A26210 - Cournon-d'Auvergne 2 (7 users)
+  â†’ cache MISS (Ã©crit) : OU=A26210 - Cournon-d'Auvergne 2,OU=SUD-EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [175/179] A26220 - Saint-Germain-des-Fosses (2 users)
+  â†’ cache MISS (Ã©crit) : OU=A22190 - Montauban,OU=SUD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A26220 - Saint-Germain-des-Fosses,OU=SUD-EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [176/179] Groupes (0 users)
+  â†’ cache MISS (Ã©crit) : OU=A22200 - Neffes,OU=SUD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=Groupes,OU=SUD-EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [177/179] A21020 - Monchy-Saint-Eloi DPSO (42 users)
+  â†’ cache MISS (Ã©crit) : OU=A21020 - Monchy-Saint-Eloi DPSO,OU=MONCHY,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [178/179] A21030 - Monchy-Saint-Eloi DSI (48 users)
+  â†’ cache MISS (Ã©crit) : OU=A22210 - Fos-sur-Mer,OU=SUD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A21030 - Monchy-Saint-Eloi DSI,OU=MONCHY,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  [Cache] [179/179] A21040 - Wasquehal MTL (6 users)
+  [Cache] Warmup termine - 179/179 sites
+
+  â†’ cache MISS (Ã©crit) : OU=A22220 - Saint-Martin-de-Crau,OU=SUD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A21040 - Wasquehal MTL,OU=MONCHY,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A22230 - Toulouse ISTELI,OU=SUD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A22240 - Vendres,OU=SUD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A22250 - Carpentras,OU=SUD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A22260 - Saint-Benoit,OU=SUD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A22280 - Lespinasse,OU=SUD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A22290 - Ollioules,OU=SUD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A22300 - Aubagne,OU=SUD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A22330 - Mende,OU=SUD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A22340 - Sainte-Radegonde,OU=SUD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A26000 - Jonage DO,OU=SUD-EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A26010 - Cournon-d'Auvergne,OU=SUD-EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A26020 - Pringy,OU=SUD-EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A26030 - Vaulx-en-Velin,OU=SUD-EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A26040 - Veurey-Voroize,OU=SUD-EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A26050 - Portes-les-Valence,OU=SUD-EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A26060 - Saint-Etienne,OU=SUD-EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A26070 - La Motte-Servolex,OU=SUD-EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A26090 - Toulon-sur-Allier,OU=SUD-EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A26100 - Chasse-sur-Rhone,OU=SUD-EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A26110 - Bourg-en-Bresse,OU=SUD-EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A26120 - Arnas,OU=SUD-EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A26130 - Saint-Quentin-Fallavier,OU=SUD-EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A26140 - Jonage CF,OU=SUD-EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A26160 - Malataverne,OU=SUD-EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A26170 - Lyon 6 Isteli,OU=SUD-EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A26180 - Ayse,OU=SUD-EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A26210 - Cournon-d'Auvergne 2,OU=SUD-EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A26220 - Saint-Germain-des-Fosses,OU=SUD-EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A21020 - Monchy-Saint-Eloi DPSO,OU=MONCHY,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A21030 - Monchy-Saint-Eloi DSI,OU=MONCHY,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A21040 - Wasquehal MTL,OU=MONCHY,OU=administratif,DC=aft-iftim,DC=france
+GET /explorer
+GET /style.css
+GET /explorer.css
+GET /explorer.js
+GET /api/tree
+GET /api/cache/counts
+GET /api/cache/counts
+GET /api/ou/users
+  â†’ cache HIT : OU=A28000 - Rungis,OU=IDF,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A28010 - Trappes,OU=IDF,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A28020 - Garonor,OU=IDF,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A28000 - Rungis,OU=IDF,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A28030 - Gennevilliers,OU=IDF,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A28040 - Paris 13,OU=IDF,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A28010 - Trappes,OU=IDF,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A28050 - Saint-Ouen-l'Aumone,OU=IDF,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A28000 - Rungis,OU=IDF,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A28020 - Garonor,OU=IDF,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A28060 - Le Tremblay-sur-Mauldre,OU=IDF,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A28070 - Savigny-le-Temple,OU=IDF,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A28030 - Gennevilliers,OU=IDF,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A28080 - Noisiel,OU=IDF,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A28040 - Paris 13,OU=IDF,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A28090 - Paris Pole Enseignement Superieur,OU=IDF,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A28100 - Bondoufle,OU=IDF,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A28050 - Saint-Ouen-l'Aumone,OU=IDF,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A28110 - Acheres,OU=IDF,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A28060 - Le Tremblay-sur-Mauldre,OU=IDF,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A28120 - Servon,OU=IDF,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A28130 - Rosny-Sur-Seine,OU=IDF,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A28070 - Savigny-le-Temple,OU=IDF,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A28140 - Villeneuve-le-Roi,OU=IDF,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A28090 - Paris Pole Enseignement Superieur,OU=IDF,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A28150 - Ennery,OU=IDF,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=Groupes,OU=IDF,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A28100 - Bondoufle,OU=IDF,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=Partenaires,OU=IDF,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A28110 - Acheres,OU=IDF,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A23000 - Longueau,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A23020 - Arras,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A28120 - Servon,OU=IDF,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A23040 - Caen,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A28130 - Rosny-Sur-Seine,OU=IDF,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A23041 - Vire,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A23050 - Saint-Etienne-du-Rouvray,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A28140 - Villeneuve-le-Roi,OU=IDF,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A23051 - Montivilliers,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A23000 - Longueau,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A23060 - Wasquehal,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A23070 - Wasquehal ISTELI,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A23020 - Arras,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A23090 - Grande-Synthe,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A23040 - Caen,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A23100 - Henin-Beaumont,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A23110 - Prouvy,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A23041 - Vire,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A23130 - Laon,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A23051 - Montivilliers,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A23140 - Saint-Pierre-les-Elbeuf,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A23150 - Monchy-Saint-Eloi CF,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A23060 - Wasquehal,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A23160 - Rouvroy,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A23070 - Wasquehal ISTELI,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A23170 - Fauville,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A23180 - Roncq,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A23090 - Grande-Synthe,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A23190 - Annezin,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A23100 - Henin-Beaumont,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A23200 - Clairoix,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A23210 - Le Havre ISTELI,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A23110 - Prouvy,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A23220 - Haynecourt,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A23130 - Laon,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A23230 - Trith-Saint-Leger,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A23240 - Alencon,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A23140 - Saint-Pierre-les-Elbeuf,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A23250 - Lisieux,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A23150 - Monchy-Saint-Eloi CF,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A23260 - Rots,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A23270 - Guichainville,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A23160 - Rouvroy,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A23280 - Wancourt,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A23170 - Fauville,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A23290 - Mondeville,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A23300 - Cherbourg-en-Cotentin,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A23180 - Roncq,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A23310 - Colombelles,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A23190 - Annezin,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A23320 - Conde-sur-Sarthe,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A23330 - Harfleur,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A23200 - Clairoix,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A23340 - Seclin 2,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A23210 - Le Havre ISTELI,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A23350 - Coquelles,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A23360 - Arques,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A23220 - Haynecourt,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=Groupes,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A23240 - Alencon,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A24000 - Poitiers,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A24001 - Rochefort,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A23260 - Rots,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A24010 - Artigues-pres-Bordeaux,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A23280 - Wancourt,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A24011 - Lons,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A24012 - Mouguerre,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A23290 - Mondeville,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A24013 - Sanilhac,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A23300 - Cherbourg-en-Cotentin,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A24021 - Parcay-Meslay,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A24031 - Allonnes,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A23310 - Colombelles,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A24032 - Les Herbiers,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A23330 - Harfleur,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A24040 - Cesson-Sevigne,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A24041 - Ergue-Gaberic,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A23340 - Seclin 2,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A24042 - Vannes,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A23350 - Coquelles,OU=NORD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A24043 - Ploufragan,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A24050 - Le Palais-sur-Vienne,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A24000 - Poitiers,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A24060 - Sainte-Luce-sur-Loire,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A24001 - Rochefort,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A24080 - Semoy,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A24090 - Puymoyen,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A24010 - Artigues-pres-Bordeaux,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A24100 - Brive-la-Gaillarde,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A24011 - Lons,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A24120 - Gellainville,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A24130 - La Creche,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A24012 - Mouguerre,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A24140 - Verrieres-en-Anjou,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A24013 - Sanilhac,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A24150 - Laval,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A24160 - Tarbes,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A24021 - Parcay-Meslay,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A24170 - Saint-Nazaire,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A24031 - Allonnes,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A24180 - Lorient,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A24190 - Cesson-Sevigne ISTELI,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A24032 - Les Herbiers,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A24210 - Blanquefort,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A24040 - Cesson-Sevigne,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A24220 - Guiclan,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A24230 - Brest,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A24042 - Vannes,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A24240 - Saint-Geours-de-Maremne,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A24043 - Ploufragan,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A24250 - Brie,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A24260 - Arnage,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A24050 - Le Palais-sur-Vienne,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A24270 - Auray,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A24060 - Sainte-Luce-sur-Loire,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A24280 - Beaucouze,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A24290 - Bergerac,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A24080 - Semoy,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A24300 - Cholet,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A24090 - Puymoyen,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A24310 - Floirac,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A24320 - Louverne,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A24100 - Brive-la-Gaillarde,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A24330 - Saint-Avit,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A24120 - Gellainville,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A24340 - Sauvagnon,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A24350 - Boulazac Isle Manoire,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A24130 - La Creche,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A24360 - Saint-Jacques-de-la-Lande,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A24140 - Verrieres-en-Anjou,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A24370 - Cesson-Sevigne 2,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A24380 - Brive-la-Gaillarde 2,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A24150 - Laval,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=Groupes,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A24160 - Tarbes,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A25000 - Jarville-la-Malgrange,OU=EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A25010 - Metz,OU=EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A24170 - Saint-Nazaire,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A25020 - Serre-les-Sapins,OU=EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A24180 - Lorient,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A25021 - Etupes,OU=EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A25030 - Torvilliers,OU=EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A24190 - Cesson-Sevigne ISTELI,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A25040 - Sausheim,OU=EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A24220 - Guiclan,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A25050 - Reims,OU=EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A25060 - Longvic,OU=EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A24230 - Brest,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A25062 - Champforgeuil,OU=EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A24240 - Saint-Geours-de-Maremne,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A25070 - Bischheim,OU=EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A25073 - Schiltigheim,OU=EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A24260 - Arnage,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A25090 - Appoigny,OU=EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A24270 - Auray,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A25100 - Courlaoux,OU=EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A25110 - Macon,OU=EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A24280 - Beaucouze,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A25120 - Donchery,OU=EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A24290 - Bergerac,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A25130 - Chalezeule,OU=EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A25140 - Chalon-sur-Saone,OU=EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A24300 - Cholet,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A25150 - Champvans,OU=EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A24310 - Floirac,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A25160 - Quetigny,OU=EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A25170 - Moneteau,OU=EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A24320 - Louverne,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A25180 - Uxegney,OU=EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A24330 - Saint-Avit,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=Groupes,OU=EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A22000 - Marseille,OU=SUD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A24350 - Boulazac Isle Manoire,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A22010 - Toulouse,OU=SUD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A24360 - Saint-Jacques-de-la-Lande,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A22011 - Launaguet,OU=SUD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A22020 - Perols,OU=SUD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A24370 - Cesson-Sevigne 2,OU=OUEST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A22030 - Nice,OU=SUD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A25000 - Jarville-la-Malgrange,OU=EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A22040 - Nimes,OU=SUD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A22050 - Lescure-d'Albigeois,OU=SUD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A25010 - Metz,OU=EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A22070 - Sorgues,OU=SUD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A25020 - Serre-les-Sapins,OU=EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A22080 - Perpignan,OU=SUD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A22100 - Narbonne,OU=SUD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A25021 - Etupes,OU=EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A22110 - Brignoles,OU=SUD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A25030 - Torvilliers,OU=EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A22140 - Sainte-Tulle,OU=SUD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A22150 - Frontignan,OU=SUD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A25040 - Sausheim,OU=EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A22160 - Saint-Paul,OU=SUD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A25050 - Reims,OU=EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A22170 - Marseille ISTELI,OU=SUD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A22180 - Beziers,OU=SUD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A25060 - Longvic,OU=EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A22190 - Montauban,OU=SUD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A25062 - Champforgeuil,OU=EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A22200 - Neffes,OU=SUD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A22210 - Fos-sur-Mer,OU=SUD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A25070 - Bischheim,OU=EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A22220 - Saint-Martin-de-Crau,OU=SUD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A25073 - Schiltigheim,OU=EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A22230 - Toulouse ISTELI,OU=SUD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A22240 - Vendres,OU=SUD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A25090 - Appoigny,OU=EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A22250 - Carpentras,OU=SUD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A25100 - Courlaoux,OU=EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A22260 - Saint-Benoit,OU=SUD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A22270 - Nice AFCR,OU=SUD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A25110 - Macon,OU=EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A22280 - Lespinasse,OU=SUD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A22000 - Marseille,OU=SUD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A22290 - Ollioules,OU=SUD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A22300 - Aubagne,OU=SUD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A22010 - Toulouse,OU=SUD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A22310 - Villeneuve-les-Bouloc,OU=SUD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A22011 - Launaguet,OU=SUD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A22320 - Estillac,OU=SUD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A22330 - Mende,OU=SUD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A22020 - Perols,OU=SUD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A22340 - Sainte-Radegonde,OU=SUD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A22030 - Nice,OU=SUD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=Groupes,OU=SUD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A26000 - Jonage DO,OU=SUD-EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A22040 - Nimes,OU=SUD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A26010 - Cournon-d'Auvergne,OU=SUD-EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A22050 - Lescure-d'Albigeois,OU=SUD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A26020 - Pringy,OU=SUD-EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A26030 - Vaulx-en-Velin,OU=SUD-EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A22070 - Sorgues,OU=SUD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A26040 - Veurey-Voroize,OU=SUD-EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A22080 - Perpignan,OU=SUD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A26050 - Portes-les-Valence,OU=SUD-EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A26060 - Saint-Etienne,OU=SUD-EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A22100 - Narbonne,OU=SUD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A26070 - La Motte-Servolex,OU=SUD-EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A22110 - Brignoles,OU=SUD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A26090 - Toulon-sur-Allier,OU=SUD-EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A26100 - Chasse-sur-Rhone,OU=SUD-EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A22140 - Sainte-Tulle,OU=SUD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A26110 - Bourg-en-Bresse,OU=SUD-EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A22160 - Saint-Paul,OU=SUD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A26120 - Arnas,OU=SUD-EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A26130 - Saint-Quentin-Fallavier,OU=SUD-EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A22170 - Marseille ISTELI,OU=SUD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A26140 - Jonage CF,OU=SUD-EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A22180 - Beziers,OU=SUD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A26160 - Malataverne,OU=SUD-EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A26170 - Lyon 6 Isteli,OU=SUD-EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A22190 - Montauban,OU=SUD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A26180 - Ayse,OU=SUD-EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A22200 - Neffes,OU=SUD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A26190 - Montlucon,OU=SUD-EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A26200 - Venissieux,OU=SUD-EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A22210 - Fos-sur-Mer,OU=SUD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A26210 - Cournon-d'Auvergne 2,OU=SUD-EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A22220 - Saint-Martin-de-Crau,OU=SUD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A26220 - Saint-Germain-des-Fosses,OU=SUD-EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=Groupes,OU=SUD-EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A22230 - Toulouse ISTELI,OU=SUD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A21020 - Monchy-Saint-Eloi DPSO,OU=MONCHY,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A22240 - Vendres,OU=SUD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A21030 - Monchy-Saint-Eloi DSI,OU=MONCHY,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache HIT : OU=A21040 - Wasquehal MTL,OU=MONCHY,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A22250 - Carpentras,OU=SUD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A22260 - Saint-Benoit,OU=SUD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A22280 - Lespinasse,OU=SUD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A22290 - Ollioules,OU=SUD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A22300 - Aubagne,OU=SUD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A22330 - Mende,OU=SUD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A22340 - Sainte-Radegonde,OU=SUD,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A26000 - Jonage DO,OU=SUD-EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A26010 - Cournon-d'Auvergne,OU=SUD-EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A26020 - Pringy,OU=SUD-EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A26030 - Vaulx-en-Velin,OU=SUD-EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A26040 - Veurey-Voroize,OU=SUD-EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A26050 - Portes-les-Valence,OU=SUD-EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A26060 - Saint-Etienne,OU=SUD-EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A26070 - La Motte-Servolex,OU=SUD-EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A26090 - Toulon-sur-Allier,OU=SUD-EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A26100 - Chasse-sur-Rhone,OU=SUD-EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A26110 - Bourg-en-Bresse,OU=SUD-EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A26120 - Arnas,OU=SUD-EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A26130 - Saint-Quentin-Fallavier,OU=SUD-EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A26140 - Jonage CF,OU=SUD-EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A26160 - Malataverne,OU=SUD-EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A26170 - Lyon 6 Isteli,OU=SUD-EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A26180 - Ayse,OU=SUD-EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A26210 - Cournon-d'Auvergne 2,OU=SUD-EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A26220 - Saint-Germain-des-Fosses,OU=SUD-EST,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A21020 - Monchy-Saint-Eloi DPSO,OU=MONCHY,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A21030 - Monchy-Saint-Eloi DSI,OU=MONCHY,OU=administratif,DC=aft-iftim,DC=france
+GET /api/ou/users
+  â†’ cache MISS (Ã©crit) : OU=A21040 - Wasquehal MTL,OU=MONCHY,OU=administratif,DC=aft-iftim,DC=france

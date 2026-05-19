@@ -4,6 +4,7 @@
     "searchBase": "DC=aft-iftim,DC=france",
     "groupsOU":   "%%_OU_GROUPES_I2N_%%",
     "mailDomain": "aftral.com",
+    "excludeDisplayNamePatterns": ["ricoh"],
     "regions": [
       {
         "label": "DO I2N",
