@@ -489,3 +489,162 @@ footer {
 .list-container::-webkit-scrollbar-track { background: transparent; }
 .list-container::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 .list-container::-webkit-scrollbar-thumb:hover { background: #c9c4be; }
+
+/* ============================================================
+   CSV Drawer
+   ============================================================ */
+#csv-drawer {
+    flex-shrink: 0;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    height: 32px;
+    transition: height .22s ease;
+    box-shadow: 0 -1px 3px rgba(0,0,0,.04);
+    z-index: 5;
+}
+
+#csv-drawer.open { height: 280px; }
+
+.csv-drawer-toggle {
+    flex-shrink: 0;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 0 14px;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 12.5px;
+    font-weight: 500;
+    color: var(--text-sub);
+    text-align: left;
+    width: 100%;
+    transition: color .12s, background .12s;
+}
+.csv-drawer-toggle:hover { color: var(--text); background: #f0ede8; }
+
+.csv-toggle-arrow { font-size: 10px; }
+
+.csv-drawer-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 18px;
+    height: 16px;
+    padding: 0 5px;
+    background: var(--accent);
+    color: #fff;
+    border-radius: 8px;
+    font-size: 10px;
+    font-weight: 600;
+    line-height: 1;
+}
+.csv-drawer-badge[hidden] { display: none; }
+
+.csv-drawer-body {
+    flex: 1;
+    display: flex;
+    min-height: 0;
+    overflow: hidden;
+    border-top: 1px solid var(--border-lt);
+}
+
+.csv-tree {
+    width: 220px;
+    flex-shrink: 0;
+    border-right: 1px solid var(--border-lt);
+    overflow-y: auto;
+    padding: 4px 0;
+    background: var(--surface-alt);
+}
+.csv-tree::-webkit-scrollbar       { width: 4px; }
+.csv-tree::-webkit-scrollbar-track { background: transparent; }
+.csv-tree::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+.csv-tree-run { margin-bottom: 4px; }
+
+.csv-tree-run-label {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    color: var(--text-sub);
+    padding: 6px 10px 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.csv-tree-file {
+    padding: 4px 8px 4px 16px;
+    font-size: 11.5px;
+    color: var(--text);
+    cursor: pointer;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    border-radius: 4px;
+    margin: 1px 4px;
+    transition: background .1s;
+}
+.csv-tree-file:hover  { background: #f0ede8; }
+.csv-tree-file.active { background: var(--accent-lt); color: var(--accent); font-weight: 500; }
+
+.csv-tree-hint {
+    font-size: 11.5px;
+    color: #c4bdb5;
+    text-align: center;
+    padding: 14px 10px;
+    font-style: italic;
+}
+
+.csv-view {
+    flex: 1;
+    overflow: auto;
+    min-width: 0;
+    background: var(--surface);
+}
+.csv-view::-webkit-scrollbar        { width: 5px; height: 5px; }
+.csv-view::-webkit-scrollbar-track  { background: transparent; }
+.csv-view::-webkit-scrollbar-thumb  { background: var(--border); border-radius: 3px; }
+
+.csv-view-hint {
+    font-size: 12px;
+    color: #c4bdb5;
+    text-align: center;
+    padding: 24px 16px;
+    font-style: italic;
+}
+
+.csv-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+}
+.csv-table th {
+    position: sticky;
+    top: 0;
+    background: var(--surface-alt);
+    border-bottom: 2px solid var(--border);
+    padding: 6px 12px;
+    text-align: left;
+    font-weight: 600;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    color: var(--text-sub);
+    white-space: nowrap;
+    z-index: 2;
+}
+.csv-table td {
+    padding: 5px 12px;
+    border-bottom: 1px solid var(--border-lt);
+    color: var(--text);
+    white-space: nowrap;
+}
+.csv-table tbody tr:hover td { background: #f8f6f3; }

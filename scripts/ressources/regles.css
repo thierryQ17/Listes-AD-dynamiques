@@ -1218,6 +1218,7 @@ body { overflow: hidden; }
     overflow: hidden;
     cursor: grab;
 }
+.peer-mini[hidden] { display: none; }
 .peer-mini-hdr {
     display: flex;
     align-items: center;

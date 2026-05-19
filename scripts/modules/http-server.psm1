@@ -357,6 +357,8 @@ function Invoke-RouteHandler {
 
                             $niveau = if ($r.niveau) { [int]$r.niveau } else { 3 }
 
+                            $utf8Bom = New-Object System.Text.UTF8Encoding($true)
+
                             if ($niveau -ge 3) {
                                 $byDO = $filtered | Group-Object { Get-RegionFromDN $_.dn } | Where-Object { $_.Name -and $_.Name -ne 'MONCHY' }
                                 foreach ($doGrp in $byDO) {
@@ -366,17 +368,17 @@ function Invoke-RouteHandler {
                                         $cClean  = Clean-ForFileName $cGrp.Name
                                         $cBase   = "$lbl-$doClean-$cClean"
                                         $cLines  = [System.Collections.Generic.List[string]]::new()
-                                        $cLines.Add("samAccountName,mail")
-                                        foreach ($u in ($cGrp.Group | Sort-Object samAccountName)) { $cLines.Add("$($u.samAccountName),$($u.mail)") }
+                                        $cLines.Add("samAccountName;mail")
+                                        foreach ($u in ($cGrp.Group | Sort-Object samAccountName)) { $cLines.Add("$($u.samAccountName);$($u.mail)") }
                                         $cPath = Join-Path $outDir "$cBase.csv"
-                                        [System.IO.File]::WriteAllText($cPath, ($cLines -join "`r`n"), [System.Text.Encoding]::UTF8)
+                                        [System.IO.File]::WriteAllText($cPath, ($cLines -join "`r`n"), $utf8Bom)
                                         [void]$allFiles.Add($cPath)
                                     }
                                     $doLines = [System.Collections.Generic.List[string]]::new()
-                                    $doLines.Add("samAccountName,mail")
-                                    foreach ($u in ($doGrp.Group | Sort-Object samAccountName)) { $doLines.Add("$($u.samAccountName),$($u.mail)") }
+                                    $doLines.Add("samAccountName;mail")
+                                    foreach ($u in ($doGrp.Group | Sort-Object samAccountName)) { $doLines.Add("$($u.samAccountName);$($u.mail)") }
                                     $doPath = Join-Path $outDir "$doBase.csv"
-                                    [System.IO.File]::WriteAllText($doPath, ($doLines -join "`r`n"), [System.Text.Encoding]::UTF8)
+                                    [System.IO.File]::WriteAllText($doPath, ($doLines -join "`r`n"), $utf8Bom)
                                     [void]$allFiles.Add($doPath)
                                 }
                             } elseif ($niveau -eq 2) {
@@ -385,18 +387,18 @@ function Invoke-RouteHandler {
                                     $doClean = Clean-ForFileName $doGrp.Name
                                     $doBase  = "$lbl-$doClean"
                                     $doLines = [System.Collections.Generic.List[string]]::new()
-                                    $doLines.Add("samAccountName,mail")
-                                    foreach ($u in ($doGrp.Group | Sort-Object samAccountName)) { $doLines.Add("$($u.samAccountName),$($u.mail)") }
+                                    $doLines.Add("samAccountName;mail")
+                                    foreach ($u in ($doGrp.Group | Sort-Object samAccountName)) { $doLines.Add("$($u.samAccountName);$($u.mail)") }
                                     $doPath = Join-Path $outDir "$doBase.csv"
-                                    [System.IO.File]::WriteAllText($doPath, ($doLines -join "`r`n"), [System.Text.Encoding]::UTF8)
+                                    [System.IO.File]::WriteAllText($doPath, ($doLines -join "`r`n"), $utf8Bom)
                                     [void]$allFiles.Add($doPath)
                                 }
                             }
                             $glLines = [System.Collections.Generic.List[string]]::new()
-                            $glLines.Add("samAccountName,mail")
-                            foreach ($u in ($filtered | Sort-Object samAccountName)) { $glLines.Add("$($u.samAccountName),$($u.mail)") }
+                            $glLines.Add("samAccountName;mail")
+                            foreach ($u in ($filtered | Sort-Object samAccountName)) { $glLines.Add("$($u.samAccountName);$($u.mail)") }
                             $glPath = Join-Path $outDir "$lbl.csv"
-                            [System.IO.File]::WriteAllText($glPath, ($glLines -join "`r`n"), [System.Text.Encoding]::UTF8)
+                            [System.IO.File]::WriteAllText($glPath, ($glLines -join "`r`n"), $utf8Bom)
                             [void]$allFiles.Add($glPath)
                         }
 
@@ -406,6 +408,52 @@ function Invoke-RouteHandler {
                 } catch {
                     $errMsg = $_.Exception.Message -replace '"', "'"
                     Send-JsonResponse -Response $Response -Body "{`"ok`":false,`"error`":`"$errMsg`"}"
+                }
+            }
+        }
+        '^/api/output/list$' {
+            $settingsDir = $global:path."r_settings" -replace '/', '\'
+            $outputDir   = [System.IO.Path]::GetFullPath((Join-Path (Split-Path (Split-Path $settingsDir -Parent) -Parent) "application\output"))
+            $runs        = [System.Collections.Generic.List[PSCustomObject]]::new()
+            if (Test-Path $outputDir) {
+                foreach ($d in (Get-ChildItem -Path $outputDir -Directory | Sort-Object Name -Descending)) {
+                    $csvFiles = @(Get-ChildItem -Path $d.FullName -Filter "*.csv" -ErrorAction SilentlyContinue | Sort-Object Name | ForEach-Object { $_.Name })
+                    $runs.Add([PSCustomObject]@{ run = $d.Name; path = $d.FullName; files = $csvFiles })
+                }
+            }
+            Send-JsonResponse -Response $Response -Body (ConvertTo-Json -InputObject @($runs) -Depth 3 -Compress)
+        }
+        '^/api/output/read$' {
+            $reqPath    = [uri]::UnescapeDataString($Request.QueryString["path"])
+            $settingsDir = $global:path."r_settings" -replace '/', '\'
+            $normalBase = [System.IO.Path]::GetFullPath((Join-Path (Split-Path (Split-Path $settingsDir -Parent) -Parent) "application\output")).TrimEnd('\') + '\'
+            $resolved   = [System.IO.Path]::GetFullPath($reqPath)
+            if (-not $resolved.StartsWith($normalBase, [System.StringComparison]::OrdinalIgnoreCase)) {
+                $Response.StatusCode = 403
+                Send-JsonResponse -Response $Response -Body '{"error":"Chemin non autorisé"}'
+            } elseif (-not (Test-Path $resolved)) {
+                $Response.StatusCode = 404
+                Send-JsonResponse -Response $Response -Body '{"error":"Fichier introuvable"}'
+            } else {
+                $lines = @([System.IO.File]::ReadAllLines($resolved, [System.Text.Encoding]::UTF8))
+                if ($lines.Count -eq 0) {
+                    Send-JsonResponse -Response $Response -Body '{"headers":[],"rows":[]}'
+                } else {
+                    $sep  = if ($lines[0] -match ';') { ';' } else { ',' }
+                    $hdrs = @($lines[0] -split [regex]::Escape($sep) | ForEach-Object { $_.Trim().Trim('"') })
+                    $rows = [System.Collections.Generic.List[PSCustomObject]]::new()
+                    for ($i = 1; $i -lt $lines.Count; $i++) {
+                        $line = $lines[$i].Trim()
+                        if (-not $line) { continue }
+                        $parts = @($line -split [regex]::Escape($sep) | ForEach-Object { $_.Trim('"') })
+                        $row   = [ordered]@{}
+                        for ($j = 0; $j -lt $hdrs.Count; $j++) {
+                            $row[$hdrs[$j]] = if ($j -lt $parts.Count) { $parts[$j] } else { '' }
+                        }
+                        $rows.Add([PSCustomObject]$row)
+                    }
+                    $result = [PSCustomObject]@{ headers = $hdrs; rows = @($rows) }
+                    Send-JsonResponse -Response $Response -Body (ConvertTo-Json -InputObject $result -Depth 4 -Compress)
                 }
             }
         }

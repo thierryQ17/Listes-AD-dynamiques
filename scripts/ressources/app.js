@@ -18,12 +18,13 @@ const state = {
 document.addEventListener('DOMContentLoaded', async () => {
     if (window !== window.top) {
         document.querySelector('header').style.display = 'none';
-        const main = document.querySelector('main');
-        if (main) main.style.height = '100vh';
+        const drawer = document.getElementById('csv-drawer');
+        if (drawer) drawer.style.display = 'none';
     }
 
     await loadGroups();
     setupSearch();
+    initCsvDrawer();
 });
 
 async function loadGroups() {
@@ -346,6 +347,105 @@ function updateStatus(s) {
     const [text, cls] = map[s] || map.loading;
     el.textContent = text;
     el.className   = `conn-status ${cls}`;
+}
+
+// ============================================================
+//  CSV Drawer
+// ============================================================
+let csvActiveItem = null;
+
+function initCsvDrawer() {
+    document.getElementById('csv-drawer-toggle').addEventListener('click', () => {
+        const drawer = document.getElementById('csv-drawer');
+        const isOpen = drawer.classList.toggle('open');
+        document.querySelector('.csv-toggle-arrow').textContent = isOpen ? '▾' : '▸';
+        if (isOpen) loadOutputList();
+    });
+}
+
+async function loadOutputList() {
+    const tree = document.getElementById('csv-tree');
+    tree.innerHTML = '<p class="csv-tree-hint">Chargement...</p>';
+    try {
+        const runs = await fetchJSON('/api/output/list');
+        renderCsvTree(runs);
+        const badge = document.getElementById('csv-drawer-badge');
+        const total = runs.reduce((s, r) => s + r.files.length, 0);
+        badge.textContent = total;
+        badge.hidden = (total === 0);
+    } catch (e) {
+        tree.innerHTML = `<p class="csv-tree-hint">Erreur : ${esc(e.message)}</p>`;
+    }
+}
+
+function renderCsvTree(runs) {
+    const tree = document.getElementById('csv-tree');
+    if (!runs || runs.length === 0) {
+        tree.innerHTML = '<p class="csv-tree-hint">Aucun CSV généré</p>';
+        return;
+    }
+    tree.innerHTML = '';
+    for (const run of runs) {
+        const section = document.createElement('div');
+        section.className = 'csv-tree-run';
+        const label = document.createElement('div');
+        label.className = 'csv-tree-run-label';
+        label.textContent = run.run;
+        label.title = run.run;
+        section.appendChild(label);
+        for (const file of run.files) {
+            const item = document.createElement('div');
+            item.className = 'csv-tree-file';
+            item.textContent = file;
+            item.title = file;
+            const fullPath = run.path + '\\' + file;
+            item.addEventListener('click', () => openCsvFile(fullPath, item));
+            section.appendChild(item);
+        }
+        tree.appendChild(section);
+    }
+}
+
+async function openCsvFile(filePath, itemEl) {
+    if (csvActiveItem) csvActiveItem.classList.remove('active');
+    csvActiveItem = itemEl;
+    itemEl.classList.add('active');
+
+    const view = document.getElementById('csv-view');
+    view.innerHTML = '<p class="csv-view-hint">Chargement...</p>';
+    try {
+        const data = await fetchJSON('/api/output/read?path=' + encodeURIComponent(filePath));
+        renderCsvTable(data);
+    } catch (e) {
+        view.innerHTML = `<p class="csv-view-hint">Erreur : ${esc(e.message)}</p>`;
+    }
+}
+
+function renderCsvTable(data) {
+    const view = document.getElementById('csv-view');
+    if (!data.headers || data.headers.length === 0) {
+        view.innerHTML = '<p class="csv-view-hint">Fichier vide</p>';
+        return;
+    }
+    const table = document.createElement('table');
+    table.className = 'csv-table';
+    const thead = table.createTHead();
+    const hr = thead.insertRow();
+    for (const h of data.headers) {
+        const th = document.createElement('th');
+        th.textContent = h;
+        hr.appendChild(th);
+    }
+    const tbody = table.createTBody();
+    for (const row of data.rows) {
+        const tr = tbody.insertRow();
+        for (const h of data.headers) {
+            const td = tr.insertCell();
+            td.textContent = row[h] != null ? row[h] : '';
+        }
+    }
+    view.innerHTML = '';
+    view.appendChild(table);
 }
 
 let toastTimer;
