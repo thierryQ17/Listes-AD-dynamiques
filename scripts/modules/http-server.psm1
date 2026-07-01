@@ -297,19 +297,35 @@ function Invoke-RouteHandler {
                                 $doBase      = "$lbl-$doClean"
                                 $regionCfg   = $global:parametresJson.ad.regions | Where-Object { $_.label -eq $doName } | Select-Object -First 1
                                 $isMultiBase = ($null -ne $regionCfg -and @($regionCfg.bases).Count -gt 1)
-                                $groups.Add(@{ name = $doBase; mail = "$($doBase.ToLower())@$mailDomain"; type = 'do'; count = $doGrp.Group.Count; multiBase = $isMultiBase })
+                                $doMembers = @($doGrp.Group | Sort-Object displayName | ForEach-Object {
+                                    [ordered]@{
+                                        name  = if ($_.displayName) { "$($_.displayName)" } else { "$($_.samAccountName)" }
+                                        title = if ($_.title)       { "$($_.title)"        } else { '' }
+                                    }
+                                })
+                                $groups.Add(@{ name = $doBase; mail = "$($doBase.ToLower())@$mailDomain"; type = 'do'; count = $doGrp.Group.Count; members = $doMembers; multiBase = $isMultiBase })
                             }
                             $groups.Add(@{ name = $lbl; mail = "$($lbl.ToLower())@$mailDomain"; type = 'global'; count = $filtered.Count })
                         } else {
-                            $groups.Add(@{ name = $lbl; mail = "$($lbl.ToLower())@$mailDomain"; type = 'global'; count = $filtered.Count })
+                            $globalMembers = @($filtered | Sort-Object displayName | ForEach-Object {
+                                [ordered]@{
+                                    name  = if ($_.displayName) { "$($_.displayName)" } else { "$($_.samAccountName)" }
+                                    title = if ($_.title)       { "$($_.title)"        } else { '' }
+                                }
+                            })
+                            $groups.Add(@{ name = $lbl; mail = "$($lbl.ToLower())@$mailDomain"; type = 'global'; count = $filtered.Count; members = $globalMembers })
                         }
 
+                        $cacheTs = ''
+                        $gcp     = Get-GlobalUsersCachePath
+                        if (Test-Path $gcp) { $cacheTs = ([System.IO.FileInfo]$gcp).LastWriteTime.ToString('dd/MM/yyyy HH:mm') }
                         $result = [PSCustomObject]@{
                             prefix     = $lbl
                             mailDomain = $mailDomain
                             total      = $filtered.Count
                             niveau     = [int]$rule.niveau
                             monoNiveau = ($rule.monoNiveau -eq $true)
+                            cacheTs    = $cacheTs
                             groups     = @($groups)
                         }
                         Send-JsonResponse -Response $Response -Body (ConvertTo-Json -InputObject $result -Depth 5 -Compress)
@@ -669,6 +685,19 @@ function Get-OUCachePath {
 
 function Get-ADFieldValues {
     param([string]$Field)
+
+    # Champ "OU" : mêmes sites (A#####) que l'arborescence de l'Explorateur,
+    # lus en direct dans l'AD via Get-OUTree — indépendant du cache utilisateurs.
+    if ($Field -eq 'ou') {
+        $sites = [System.Collections.Generic.List[string]]::new()
+        foreach ($region in @(Get-OUTree)) {
+            foreach ($site in @($region.children)) {
+                if ($site.name) { [void]$sites.Add("$($site.name)") }
+            }
+        }
+        return @($sites | Sort-Object -Unique)
+    }
+
     $scriptsDir = Split-Path ($global:path."r_settings" -replace '/', '\') -Parent
     $cacheDir   = Join-Path $scriptsDir "cache"
     if (-not (Test-Path $cacheDir)) { return @() }
@@ -710,7 +739,7 @@ function Serve-StaticFile {
     $Response.ContentType     = "$ContentType; charset=utf-8"
     $Response.ContentLength64 = $bytes.Length
     $Response.Headers.Add("Cache-Control", "no-cache, no-store, must-revalidate")
-    $Response.OutputStream.Write($bytes, 0, $bytes.Length)
+    try { $Response.OutputStream.Write($bytes, 0, $bytes.Length) } catch { }
 }
 
 function Send-JsonResponse {
@@ -720,5 +749,5 @@ function Send-JsonResponse {
     $Response.ContentType = "application/json; charset=utf-8"
     $bytes = [System.Text.Encoding]::UTF8.GetBytes($Body)
     $Response.ContentLength64 = $bytes.Length
-    $Response.OutputStream.Write($bytes, 0, $bytes.Length)
+    try { $Response.OutputStream.Write($bytes, 0, $bytes.Length) } catch { }
 }

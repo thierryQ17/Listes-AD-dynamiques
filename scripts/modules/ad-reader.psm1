@@ -205,14 +205,27 @@ function Get-RegionFromDN {
 }
 
 function Test-UserExcluded {
-    # Retourne $true si le displayName de l'utilisateur correspond à un pattern d'exclusion configuré
+    # Retourne $true si l'utilisateur doit être exclu de toutes les listes :
+    #   - son DN traverse une OU listée dans ad.excludeOUs (ex. comptes génériques)
+    #   - ou son displayName correspond à un motif de ad.excludeDisplayNamePatterns
     param([object]$User)
-    $patterns = @($global:parametresJson.ad.excludeDisplayNamePatterns | Where-Object { $_ })
-    if (-not $patterns -or $patterns.Count -eq 0) { return $false }
-    $name = "$($User.displayName)"
-    foreach ($p in $patterns) {
-        if ($name -match [regex]::Escape($p)) { return $true }
+
+    $excludeOUs = @($global:parametresJson.ad.excludeOUs | Where-Object { $_ })
+    if ($excludeOUs.Count -gt 0) {
+        $comps = @(Get-OUComponents -DN "$($User.dn)")
+        foreach ($ou in $excludeOUs) {
+            if ($comps -contains $ou) { return $true }
+        }
     }
+
+    $patterns = @($global:parametresJson.ad.excludeDisplayNamePatterns | Where-Object { $_ })
+    if ($patterns.Count -gt 0) {
+        $name = "$($User.displayName)"
+        foreach ($p in $patterns) {
+            if ($name -match [regex]::Escape($p)) { return $true }
+        }
+    }
+
     return $false
 }
 
@@ -225,6 +238,18 @@ function Get-CentreFromDN {
         if ($part -match '^OU=(A\d{5})$')             { return $Matches[1] }
     }
     return ''
+}
+
+function Get-OUComponents {
+    # Retourne la liste des noms d'OU traversés par un DN
+    # (ex: "CN=X,OU=Utilisateurs,OU=A22100 - Narbonne,OU=SUD,..." → Utilisateurs, A22100 - Narbonne, SUD)
+    param([string]$DN)
+    if (-not $DN) { return @() }
+    $out = [System.Collections.Generic.List[string]]::new()
+    foreach ($part in ($DN -split ',')) {
+        if ($part -match '^\s*OU=(.+)$') { [void]$out.Add($Matches[1].Trim()) }
+    }
+    return @($out)
 }
 
 function Get-GlobalUsersCachePath {

@@ -16,6 +16,32 @@ const state = {
 const warmupDone    = new Set();
 const prefetchedDns = new Set();
 const allSiteUsers  = {};   // { dn: [users] }  — index cross-site pour la recherche
+
+// Critères sur lesquels le champ Recherche filtre (configurable via le menu déroulant)
+const SEARCH_CRITERIA = [
+    { key: 'site',           label: 'Nom du site',     user: false },
+    { key: 'ouDn',           label: 'OU (arborescence)', user: true },
+    { key: 'displayName',    label: 'Nom',             user: true  },
+    { key: 'samAccountName', label: 'Login (SAM)',     user: true  },
+    { key: 'mail',           label: 'Mail',            user: true  },
+    { key: 'department',     label: 'Service',         user: true  },
+    { key: 'title',          label: 'Fonction',        user: true  },
+    { key: 'description',    label: 'Description',      user: true  },
+    { key: 'office',         label: 'Bureau',          user: true  },
+];
+const CRIT_STORAGE = 'explorer_search_criteria';
+function defaultCriteria() {
+    const d = {};
+    SEARCH_CRITERIA.forEach(c => { d[c.key] = !['samAccountName', 'office', 'ouDn'].includes(c.key); });
+    return d;
+}
+let searchCriteria = (() => {
+    try {
+        const s = JSON.parse(localStorage.getItem(CRIT_STORAGE));
+        if (s && typeof s === 'object') return { ...defaultCriteria(), ...s };
+    } catch { /* défaut */ }
+    return defaultCriteria();
+})();
 const dnNameMap     = {};   // { dn: siteName }
 
 // File d'attente de prefetch — max 3 requêtes simultanées
@@ -1049,6 +1075,72 @@ function setupSearch() {
         filterUsers('');
         userInput.focus();
     });
+
+    setupSearchCriteria();
+}
+
+function setupSearchCriteria() {
+    const btn       = document.getElementById('tree-search-criteria');
+    const dropdown  = document.getElementById('search-criteria-dropdown');
+    const list      = document.getElementById('crit-list');
+    const toggleAll = document.getElementById('crit-toggle-all');
+    if (!btn || !dropdown || !list) return;
+
+    const allChecked = () => SEARCH_CRITERIA.every(c => searchCriteria[c.key]);
+    const save       = () => { try { localStorage.setItem(CRIT_STORAGE, JSON.stringify(searchCriteria)); } catch { /* ignore */ } };
+    const rerun      = () => { const q = document.getElementById('tree-search').value.trim(); if (q) filterTree(q); };
+
+    function updateBadge() {
+        const total  = SEARCH_CRITERIA.length;
+        const active = SEARCH_CRITERIA.filter(c => searchCriteria[c.key]).length;
+        btn.classList.toggle('active', active < total);
+        btn.title = `Critères de recherche (${active}/${total})`;
+        if (toggleAll) toggleAll.textContent = allChecked() ? 'Tout décocher' : 'Tout cocher';
+    }
+
+    function renderList() {
+        list.innerHTML = SEARCH_CRITERIA.map(c =>
+            `<label class="crit-item"><input type="checkbox" data-key="${c.key}"${searchCriteria[c.key] ? ' checked' : ''}><span>${c.label}</span></label>`
+        ).join('');
+    }
+
+    renderList();
+    updateBadge();
+
+    btn.addEventListener('click', e => {
+        e.stopPropagation();
+        dropdown.hidden = !dropdown.hidden;
+    });
+
+    list.addEventListener('change', e => {
+        const cb = e.target.closest('input[type="checkbox"]');
+        if (!cb) return;
+        searchCriteria[cb.dataset.key] = cb.checked;
+        save();
+        updateBadge();
+        rerun();
+    });
+
+    if (toggleAll) {
+        toggleAll.addEventListener('click', e => {
+            e.stopPropagation();
+            const target = !allChecked();
+            SEARCH_CRITERIA.forEach(c => { searchCriteria[c.key] = target; });
+            renderList();
+            save();
+            updateBadge();
+            rerun();
+        });
+    }
+
+    document.addEventListener('click', e => {
+        if (!dropdown.hidden && !dropdown.contains(e.target) && e.target !== btn && !btn.contains(e.target)) {
+            dropdown.hidden = true;
+        }
+    });
+    document.addEventListener('keydown', e => {
+        if (e.key === 'Escape' && !dropdown.hidden) dropdown.hidden = true;
+    });
 }
 
 function filterTree(q) {
@@ -1083,7 +1175,7 @@ function renderCrossSiteResults(q, preserveScroll) {
     // Sites cachés : match par utilisateur OU par nom de site
     for (const [dn, users] of Object.entries(allSiteUsers)) {
         const siteName    = dnNameMap[dn] || dn;
-        const siteMatches = siteName.toLowerCase().includes(lq);
+        const siteMatches = searchCriteria.site && siteName.toLowerCase().includes(lq);
         const matchUsers  = siteMatches ? users : users.filter(u => matchesFilter(u, lq));
         if (siteMatches || matchUsers.length > 0) {
             results.push({ dn, siteName, users: matchUsers, uncached: false });
@@ -1093,7 +1185,7 @@ function renderCrossSiteResults(q, preserveScroll) {
 
     // Sites non cachés : match par nom de site uniquement
     for (const [dn, siteName] of Object.entries(dnNameMap)) {
-        if (!seenDns.has(dn) && siteName.toLowerCase().includes(lq)) {
+        if (searchCriteria.site && !seenDns.has(dn) && siteName.toLowerCase().includes(lq)) {
             results.push({ dn, siteName, users: [], uncached: true });
         }
     }
@@ -1213,11 +1305,8 @@ function hlText(text, q) {
 }
 
 function matchesFilter(u, lq) {
-    return (u.displayName  || '').toLowerCase().includes(lq) ||
-           (u.mail         || '').toLowerCase().includes(lq) ||
-           (u.department   || '').toLowerCase().includes(lq) ||
-           (u.title        || '').toLowerCase().includes(lq) ||
-           (u.description  || '').toLowerCase().includes(lq);
+    return SEARCH_CRITERIA.some(c =>
+        c.user && searchCriteria[c.key] && (u[c.key] || '').toLowerCase().includes(lq));
 }
 
 function filterUsers(q) {

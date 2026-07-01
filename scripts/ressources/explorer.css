@@ -77,6 +77,71 @@ body {
     color: #fff;
 }
 
+/* Bouton + menu déroulant des critères de recherche */
+.tree-search-wrap input { padding-right: 58px; }
+.tree-search-clear { right: 34px; }
+.tree-search-criteria {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 22px; height: 22px;
+    border: none; background: transparent;
+    color: var(--text-sub); cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 4px; padding: 0;
+}
+.tree-search-criteria:hover { background: var(--border-lt); color: var(--text); }
+.tree-search-criteria.active { color: var(--accent); }
+.crit-dropdown {
+    position: absolute;
+    top: calc(100% - 4px);
+    left: 12px; right: 12px;
+    z-index: 60;
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    box-shadow: 0 6px 20px rgba(0,0,0,.16);
+    padding: 8px;
+}
+.crit-dropdown[hidden] { display: none; }
+.crit-dropdown-head {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 8px; padding: 2px 4px 7px;
+}
+.crit-dropdown-hint {
+    font-size: 10px; text-transform: uppercase; letter-spacing: .05em;
+    color: var(--text-sub); font-weight: 700;
+}
+.crit-toggle-all {
+    background: none; border: none; color: var(--accent);
+    cursor: pointer; font-size: 11px; font-weight: 600; padding: 0;
+    white-space: nowrap;
+}
+.crit-toggle-all:hover { text-decoration: underline; }
+.crit-list { display: flex; flex-direction: column; gap: 1px; }
+.crit-item {
+    display: flex; align-items: center; gap: 8px;
+    padding: 5px 6px; border-radius: 4px; cursor: pointer;
+    font-size: 12.5px; color: var(--text); user-select: none;
+}
+.crit-item:hover { background: var(--accent-lt); }
+/* Réinitialise le style hérité de « .tree-search-wrap input » (le menu est dans ce conteneur) */
+.crit-item input[type="checkbox"] {
+    flex: 0 0 auto;
+    width: 15px;
+    height: 15px;
+    min-width: 0;
+    padding: 0;
+    margin: 0;
+    border: none;
+    background: none;
+    box-shadow: none;
+    cursor: pointer;
+    accent-color: var(--accent);
+}
+.crit-item span { flex: 0 1 auto; }
+
 .tree-container {
     flex: 1;
     overflow-y: auto;

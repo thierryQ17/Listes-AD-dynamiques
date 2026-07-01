@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Analyse — Approche actuelle vs New-DynamicDistributionGroup</title>
+<style>
+  :root{
+    --ink:#1f2430; --ink-soft:#4b5568; --line:#e6e8ef;
+    --bg:#f6f7fb; --card:#ffffff;
+    --grad1:#4f46e5; --grad2:#7c3aed; --grad3:#2563eb;
+    --ok:#16a34a; --ok-bg:#e9f9ef;
+    --mid:#c2820a; --mid-bg:#fdf5e3;
+    --no:#dc2626; --no-bg:#fdecec;
+    --accent:#eef1fb;
+    --shadow:0 10px 30px rgba(31,36,48,.08);
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:"Segoe UI",system-ui,-apple-system,Roboto,Helvetica,Arial,sans-serif;
+    line-height:1.55; -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1400px; margin:0 auto; padding:0 32px 80px;}
+
+  header.hero{
+    background:linear-gradient(120deg,var(--grad1) 0%,var(--grad2) 55%,var(--grad3) 100%);
+    color:#fff; padding:54px 24px 60px; text-align:center;
+    box-shadow:var(--shadow);
+  }
+  header.hero .inner{max-width:1400px;margin:0 auto;}
+  header.hero .kicker{
+    text-transform:uppercase; letter-spacing:.18em; font-size:.72rem;
+    opacity:.85; font-weight:600; margin-bottom:12px;
+  }
+  header.hero h1{margin:0 0 14px; font-size:2.05rem; font-weight:700; line-height:1.2;}
+  header.hero p{margin:0 auto; max-width:760px; opacity:.94; font-size:1.02rem;}
+  .meta-badges{margin-top:22px; display:flex; gap:10px; justify-content:center; flex-wrap:wrap;}
+  .badge{
+    background:rgba(255,255,255,.16); border:1px solid rgba(255,255,255,.28);
+    padding:6px 14px; border-radius:999px; font-size:.8rem; backdrop-filter:blur(4px);
+  }
+
+  section{margin-top:40px;}
+  h2{
+    font-size:1.3rem; margin:0 0 16px; display:flex; align-items:center; gap:10px;
+    padding-bottom:10px; border-bottom:2px solid var(--line);
+  }
+  h2 .num{
+    display:inline-flex; align-items:center; justify-content:center;
+    width:30px; height:30px; border-radius:9px; font-size:.9rem; color:#fff;
+    background:linear-gradient(135deg,var(--grad1),var(--grad3));
+  }
+
+  .card{
+    background:var(--card); border:1px solid var(--line); border-radius:16px;
+    padding:22px 26px; box-shadow:var(--shadow);
+  }
+  .lead{color:var(--ink-soft);}
+  code{
+    background:var(--accent); color:#3730a3; padding:2px 7px; border-radius:6px;
+    font-family:"Cascadia Code",Consolas,monospace; font-size:.86em;
+  }
+
+  .cols{display:grid; grid-template-columns:1fr 1fr; gap:20px;}
+  @media(max-width:820px){.cols{grid-template-columns:1fr;}}
+  .mini h3{margin:0 0 10px; font-size:1.02rem;}
+  .mini ul{margin:0; padding-left:18px;}
+  .mini li{margin:6px 0;}
+
+  /* ---- Tableau comparatif ---- */
+  .table-shell{
+    background:var(--card); border:1px solid var(--line); border-radius:16px;
+    overflow-x:auto; box-shadow:var(--shadow);
+  }
+  table{border-collapse:collapse; width:100%; min-width:760px; table-layout:fixed; font-size:.93rem;}
+  col.c-crit{width:20%;} col.c-cur{width:40%;} col.c-ddg{width:40%;}
+  thead th{
+    background:linear-gradient(120deg,var(--grad1),var(--grad3)); color:#fff;
+    text-align:left; padding:16px 18px; font-weight:600; vertical-align:bottom;
+  }
+  td, th{overflow-wrap:break-word;}
+  code{white-space:nowrap;}
+  thead th small{display:block; font-weight:400; opacity:.85; font-size:.76rem; margin-top:3px;}
+  tbody td{padding:13px 18px; border-top:1px solid var(--line); vertical-align:top;}
+  tbody tr:nth-child(even){background:#fafbfe;}
+  tbody tr:hover{background:#f2f4fd;}
+  td.crit{font-weight:600; color:var(--ink);}
+  .pill{font-weight:500;}
+  .dot{margin-right:5px; font-size:.95em;}
+  .ok{color:var(--ok);} .mid{color:var(--mid);} .no{color:var(--no);}
+  tr.bilan td{background:#111827; color:#fff; font-weight:700; border-top:3px solid var(--grad2);}
+  tr.bilan td .score{display:inline-flex; gap:14px; flex-wrap:wrap;}
+  tr.bilan td .s-ok{color:#4ade80;} tr.bilan td .s-mid{color:#fbbf24;} tr.bilan td .s-no{color:#f87171;}
+
+  /* ---- Verdict ---- */
+  .verdict{
+    margin-top:34px; border-radius:20px; overflow:hidden; box-shadow:var(--shadow);
+    border:1px solid #bbf7d0;
+  }
+  .verdict .top{
+    background:linear-gradient(120deg,#15803d,#16a34a 60%,#22c55e);
+    color:#fff; padding:26px 30px;
+  }
+  .verdict .top .trophy{font-size:2.2rem; line-height:1;}
+  .verdict .top .kick{text-transform:uppercase; letter-spacing:.16em; font-size:.72rem; opacity:.9; font-weight:600;}
+  .verdict .top h2{border:none; padding:0; margin:6px 0 0; color:#fff; font-size:1.5rem;}
+  .verdict .body{background:#f2fdf5; padding:24px 30px; color:#14532d;}
+  .verdict .body p{margin:0 0 14px;}
+  .verdict .body p:last-child{margin-bottom:0;}
+  .verdict .body b{color:#166534;}
+
+  .callout{
+    margin-top:22px; background:var(--mid-bg); border:1px solid #f3d98b;
+    border-left:5px solid var(--mid); border-radius:12px; padding:16px 20px; color:#7a5a08;
+  }
+  .callout b{color:#7a5a08;}
+  .callout ol{margin:8px 0 0; padding-left:20px;}
+  .callout li{margin:5px 0;}
+
+  footer{margin-top:46px; text-align:center; color:var(--ink-soft); font-size:.85rem;}
+  .noedit{
+    display:inline-block; margin-top:10px; background:var(--accent); color:#3730a3;
+    padding:6px 16px; border-radius:999px; font-weight:600; font-size:.82rem;
+  }
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="inner">
+    <div class="kicker">Groupes Dynamiques I2N · Note d'analyse</div>
+    <h1>Approche actuelle (automatisée) &nbsp;vs&nbsp; <code style="background:rgba(255,255,255,.18);color:#fff;">New-DynamicDistributionGroup</code></h1>
+    <p>Comparaison de la génération de listes de distribution par moteur de règles + groupes AD statiques rafraîchis quotidiennement, face aux groupes de distribution dynamiques Exchange.</p>
+    <div class="meta-badges">
+      <span class="badge">AD on-prem · lecture seule</span>
+      <span class="badge">Automatisation quotidienne (tâche planifiée / VTOM)</span>
+      <span class="badge">01/07/2026</span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <!-- Contexte -->
+  <section>
+    <h2><span class="num">1</span> Contexte &amp; approche actuelle</h2>
+    <div class="card lead">
+      <p>Le tuyau actuel est un <b>moteur de listes statiques piloté par règles</b> :</p>
+      <ul>
+        <li><b>Source</b> : AD on-premises <code>DC=aft-iftim,DC=france</code>, en <b>lecture seule</b>.</li>
+        <li><b>Filtrage</b> sur <code>title</code>, <code>department</code>, <code>office</code>, <code>extensionAttribute1</code>, <code>description</code> (<code>eq/ne/like/notlike</code>), avec include <b>OR</b> / négatifs <b>AND</b> / <code>exclude</code> / <code>invertOf</code>.</li>
+        <li><b>Hiérarchie DO / centre</b> déduite de l'<b>OU du DN</b> (<code>OU=A22100 - Narbonne</code> → <code>Narbonne</code>), génération niveau 1/2/3.</li>
+        <li><b>Étape 1</b> : génération des CSV horodatés. <b>Étape 2</b> (à venir) : création/actualisation quotidienne des groupes AD depuis ces CSV via <b>tâche planifiée ou VTOM</b>.</li>
+      </ul>
+      <p style="margin-bottom:0;">L'automatisation quotidienne supprime la seule vraie faiblesse de l'approche : la maintenance manuelle.</p>
+    </div>
+  </section>
+
+  <!-- Forces / faiblesses DDG -->
+  <section>
+    <h2><span class="num">2</span> Ce que le DDG apporte &amp; ce qu'il fait perdre</h2>
+    <div class="cols">
+      <div class="card mini">
+        <h3 class="ok">✅ Plus-value du DDG</h3>
+        <p class="lead" style="margin-top:0;background:var(--accent);padding:12px 14px;border-radius:10px;color:#3730a3;"><b>Principe — construit à la demande :</b> un DDG ne stocke <b>aucune liste de membres</b>. L'appartenance est une <b>requête</b> (<code>RecipientFilter</code>) <b>évaluée à la demande</b> : à chaque envoi, Exchange rejoue le filtre sur l'annuaire et résout les destinataires à cet instant.</p>
+        <ul>
+          <li><b>Zéro maintenance</b> — membres recalculés à chaque envoi.</li>
+          <li><b>Toujours à jour</b> — un changement de site/fonction est pris en compte immédiatement.</li>
+          <li><b>Objet Exchange natif</b>, utilisable tel quel dans Outlook.</li>
+          <li><b>Création triviale</b> — une seule cmdlet.</li>
+        </ul>
+      </div>
+      <div class="card mini">
+        <h3 class="no">❌ Ce que le DDG fait perdre</h3>
+        <ul>
+          <li><b>Visualisation</b> des membres (boîte noire jusqu'à l'envoi).</li>
+          <li><b>Exceptions nominatives</b> ad hoc — le DDG gère bien l'exclusion <i>par attribut</i> (<code>-ne</code>/<code>-notlike</code>) mais pas le retrait de personnes nommées sans empiler des conditions.</li>
+          <li><b>Imbrication de groupes dans des groupes</b> — <b>le DDG ne sait pas faire</b> : il ne peut ni contenir un autre groupe, ni être membre d'un groupe (pas de hiérarchie global ▸ DO ▸ centre).</li>
+          <li><b>Découpage par OU</b> non exprimable en filtre OPATH.</li>
+          <li><b>Dépendance totale</b> à la qualité de <code>CustomAttribute</code>/<code>Office</code> (impose un nettoyage AD préalable).</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- Forces / faiblesses approche actuelle -->
+  <section>
+    <h2><span class="num">3</span> Ce que l'approche actuelle apporte &amp; ce qu'elle coûte</h2>
+    <div class="cols">
+      <div class="card mini">
+        <h3 class="ok">✅ Plus-value de l'approche actuelle</h3>
+        <ul>
+          <li><b>Visualisation &amp; contrôle</b> — membres visibles (Explorer, comptages, CSV) et validés <b>avant</b> envoi.</li>
+          <li><b>Imbrication de groupes dans des groupes</b> — hiérarchie <code>global ▸ DO ▸ centre ▸ membres</code> (le DDG ne sait pas faire).</li>
+          <li><b>Exceptions riches</b> — <code>exclude</code>, <code>excludeDisplayNamePatterns</code>, <code>invertOf</code> (par attribut <b>et</b> nominatives).</li>
+          <li><b>Découpage par OU</b> — DO/centre déduits de la structure AD, robuste aux anomalies d'attributs.</li>
+          <li><b>Traçabilité / audit</b> — CSV horodatés, diff jour à jour, rollback possible.</li>
+          <li><b>Indépendant d'Exchange</b> — fonctionne sur l'AD on-prem actuel.</li>
+        </ul>
+      </div>
+      <div class="card mini">
+        <h3 class="no">❌ Ce que l'approche actuelle coûte</h3>
+        <ul>
+          <li><b>Fraîcheur à J+1</b> — à jour seulement après le job quotidien, pas en temps réel.</li>
+          <li><b>Charge batch</b> — recalcul complet + écritures AD chaque jour.</li>
+          <li><b>Supervision requise</b> — un job en échec laisse des groupes périmés <i>en silence</i>.</li>
+          <li><b>Provisioning à activer</b> — écriture AD aujourd'hui désactivée (règle read-only) ; nécessite les droits <code>Add/Remove-ADGroupMember</code>.</li>
+          <li><b>Réconciliation à gérer</b> — retirer les partants, pas seulement ajouter les nouveaux.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- Tableau comparatif -->
+  <section>
+    <h2><span class="num">4</span> Tableau comparatif</h2>
+    <div class="table-shell">
+      <table>
+        <colgroup>
+          <col class="c-crit"><col class="c-cur"><col class="c-ddg">
+        </colgroup>
+        <thead>
+          <tr>
+            <th>Critère</th>
+            <th>Approche actuelle<small>Règles → CSV → groupes AD statiques, rafraîchis chaque jour (tâche planifiée / VTOM)</small></th>
+            <th>New-DynamicDistributionGroup<small>Groupe de distribution dynamique Exchange</small></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="crit">Nature de l'objet</td>
+            <td>Groupe AD <b>statique</b>, membres réécrits à chaque run quotidien</td>
+            <td>Groupe <b>dynamique</b> Exchange — <b>aucune liste stockée</b> ; l'appartenance est une requête (<code>RecipientFilter</code>) <b>construite à la demande</b>, à chaque envoi</td>
+          </tr>
+          <tr>
+            <td class="crit">Infrastructure</td>
+            <td>AD on-prem <code>DC=aft-iftim,DC=france</code> uniquement</td>
+            <td><span class="pill mid"><span class="dot">🟡</span><span><b>Exchange</b> requis (EMS on-prem ou EXO) — à confirmer</span></span></td>
+          </tr>
+          <tr>
+            <td class="crit">Maintenance de l'appartenance</td>
+            <td><span class="pill ok"><span class="dot">✅</span> Automatisée (job quotidien)</span></td>
+            <td><span class="pill ok"><span class="dot">✅</span> Zéro (recalcul implicite)</span></td>
+          </tr>
+          <tr>
+            <td class="crit">Fraîcheur des membres</td>
+            <td><span class="pill mid"><span class="dot">🟡</span> À J+1 max (fenêtre du job)</span></td>
+            <td><span class="pill ok"><span class="dot">✅</span> Live à l'envoi</span></td>
+          </tr>
+          <tr>
+            <td class="crit">Visualisation des membres</td>
+            <td><span class="pill ok"><span class="dot">✅</span> Native (Explorer, comptages, CSV horodatés)</span></td>
+            <td><span class="pill no"><span class="dot">❌</span> Boîte noire (<code>Get-Recipient -RecipientPreviewFilter</code>)</span></td>
+          </tr>
+          <tr>
+            <td class="crit">Exceptions par attribut</td>
+            <td><span class="pill ok"><span class="dot">✅</span> <code>ne</code>/<code>notlike</code> + include OR / négatifs AND</span></td>
+            <td><span class="pill ok"><span class="dot">✅</span> <code>-ne</code>/<code>-notlike</code> dans le filtre (ex. <code>title -notlike "RESPONSABLE*"</code>)</span></td>
+          </tr>
+          <tr>
+            <td class="crit">Exceptions nominatives (ad hoc)</td>
+            <td><span class="pill ok"><span class="dot">✅</span> <code>exclude</code>, <code>excludeDisplayNamePatterns</code> (ex. <code>ricoh</code>), <code>invertOf</code></span></td>
+            <td><span class="pill mid"><span class="dot">🟡</span> Possible mais lourd — empilage de <code>-and (Name -ne '…')</code> dans le filtre</span></td>
+          </tr>
+          <tr>
+            <td class="crit">Imbrication de groupes dans des groupes</td>
+            <td><span class="pill ok"><span class="dot">✅</span> <b>Oui</b> — un groupe contient d'autres groupes (<code>global ▸ DO ▸ centre ▸ membres</code>), niveaux 1/2/3</span></td>
+            <td><span class="pill no"><span class="dot">❌</span> Impossible — un DDG ne contient pas / n'est pas membre d'un groupe</span></td>
+          </tr>
+          <tr>
+            <td class="crit">Découpage centre / DO</td>
+            <td><span class="pill ok"><span class="dot">✅</span> Déduit de l'<b>OU du DN</b></span></td>
+            <td><span class="pill no"><span class="dot">❌</span> Non exprimable en filtre</span></td>
+          </tr>
+          <tr>
+            <td class="crit">Critères de filtrage</td>
+            <td>5 champs + <code>eq/ne/like/notlike</code>, OR/AND</td>
+            <td>RecipientFilter OPATH + <code>RecipientContainer</code></td>
+          </tr>
+          <tr>
+            <td class="crit">Sensibilité aux anomalies de données<br><span style="font-weight:400;color:var(--ink-soft);font-size:.82em;">le nettoyage AD profite aux deux</span></td>
+            <td><span class="pill mid"><span class="dot">🟡</span><b>Réelle mais atténuée</b> — DO/centre déduits de l'<b>OU</b> (pas de <code>Office</code>), opérateurs <code>like</code>/<code>exclude</code>, et anomalies <b>visibles avant</b> provisioning.</span></td>
+            <td><span class="pill no"><span class="dot">❌</span><b>Forte et aveugle</b> — filtre strict <code>-eq</code> sur <code>Office</code>/<code>CustomAttribute</code>, appliqué sans visualisation : une anomalie (<code>INTERIM</code>/<code>IINTERIM</code>, Office tronqué) passe inaperçue.</span></td>
+          </tr>
+          <tr>
+            <td class="crit">Traçabilité / audit</td>
+            <td><span class="pill ok"><span class="dot">✅</span> Forte — CSV horodatés, diff jour à jour</span></td>
+            <td><span class="pill no"><span class="dot">❌</span> Aucune liste figée</span></td>
+          </tr>
+          <tr>
+            <td class="crit">Réversibilité / rollback</td>
+            <td><span class="pill ok"><span class="dot">✅</span> Possible (rejouer un run)</span></td>
+            <td><span class="pill mid"><span class="dot">🟡</span> Difficile</span></td>
+          </tr>
+          <tr>
+            <td class="crit">Charge d'exécution</td>
+            <td><span class="pill mid"><span class="dot">🟡</span> Batch quotidien (lecture + écritures AD)</span></td>
+            <td><span class="pill ok"><span class="dot">✅</span> Aucun batch (délégué à Exchange)</span></td>
+          </tr>
+          <tr>
+            <td class="crit">Robustesse</td>
+            <td><span class="pill mid"><span class="dot">🟡</span> Supervision du job requise</span></td>
+            <td><span class="pill ok"><span class="dot">✅</span> Rien à surveiller</span></td>
+          </tr>
+          <tr>
+            <td class="crit">Cas d'usage idéal</td>
+            <td>Listes complexes : hiérarchie, exceptions, audit</td>
+            <td>Listes simples, mono-dimension, bien attribuées</td>
+          </tr>
+          <tr class="bilan">
+            <td>Bilan</td>
+            <td><span class="score"><span class="s-ok">✅ 8 forts</span><span class="s-mid">🟡 4</span><span class="s-no">❌ 0</span></span></td>
+            <td><span class="score"><span class="s-ok">✅ 5 forts</span><span class="s-mid">🟡 3</span><span class="s-no">❌ 5</span></span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- Verdict -->
+  <div class="verdict">
+    <div class="top">
+      <div class="trophy">🏆</div>
+      <div class="kick">Verdict</div>
+      <h2>L'approche actuelle (automatisée) est la meilleure pour ce contexte</h2>
+    </div>
+    <div class="body">
+      <p>Une fois le batch quotidien en place, le DDG perd son <b>seul</b> avantage décisif (maintenance zéro), tandis que l'approche actuelle <b>conserve</b> les atouts que le DDG ne sait pas faire : <b>visualisation des membres, imbrication de groupes dans des groupes, exceptions nominatives ad hoc, et détection des anomalies avant envoi</b> (audit via CSV horodatés).</p>
+      <p style="background:#dcfce7;border-left:5px solid #16a34a;padding:14px 18px;border-radius:12px;margin:0 0 14px;">
+        <b>⛓️ Point clé — imbrication de groupes dans des groupes :</b> l'approche actuelle crée des groupes AD <b>imbriqués</b> — un groupe <b>global</b> contient des sous-groupes <b>DO</b>, qui contiennent des sous-groupes <b>centre</b>, qui contiennent les utilisateurs (<code>global ▸ DO ▸ centre ▸ membres</code>). On peut donc écrire à un seul groupe et toucher toute la hiérarchie. <b>Le DDG en est structurellement incapable</b> : un groupe de distribution dynamique ne peut <b>ni contenir un autre groupe, ni être membre d'un groupe</b>.
+      </p>
+      <p><b>Nuance honnête :</b> la dépendance à la qualité de donnée existe <b>dans les deux cas</b> — le nettoyage AD est un prérequis partagé. Mais il est <b>plus bloquant et plus silencieux</b> côté DDG (filtre strict, appliqué en aveugle), alors que l'approche actuelle l'amortit (hiérarchie par OU, opérateurs <code>like</code>/<code>exclude</code>, anomalies visibles avant provisioning).</p>
+      <p><b>Le seul prix à payer :</b> une fraîcheur à J+1 (négligeable pour de la diffusion) et la supervision du job.</p>
+      <p>👉 <b>Le DDG reste utile en complément</b> pour les quelques listes vraiment simples, sans exception ni hiérarchie, où la donnée <code>CustomAttribute</code>/<code>Office</code> est déjà fiable — exactement la logique 3-niveaux du post Teams.</p>
+    </div>
+  </div>
+
+  <!-- Compléments fil Teams -->
+  <section>
+    <h2><span class="num">5</span> Précisions et prérequis complémentaires</h2>
+    <div class="cols">
+      <div class="card mini" style="border-left:5px solid var(--grad3);">
+        <h3>✏️ Correction — le DDG <i>sait</i> exclure par attribut</h3>
+        <p class="lead" style="margin-top:0;">Le « pas d'exceptions » du premier post était exagéré. C. LEGROS le rectifie lui-même : l'exclusion par attribut est possible via <code>-ne</code> (strict) ou <code>-notlike</code> :</p>
+        <p style="background:var(--accent);padding:12px 14px;border-radius:10px;font-family:'Cascadia Code',Consolas,monospace;font-size:.82rem;color:#3730a3;margin:0;">
+          set-DynamicDistributionGroup -Identity "TEST-DSI INFRA MONCHY" -RecipientFilter {(RecipientTypeDetails -eq "UserMailbox") -and (CustomAttribute1 -eq "DOMAINE INFRA") -and (Office -eq "MONCHY SAINT ELOI") <b style="color:#dc2626;">-and (title -notlike "RESPONSABLE*")</b>}
+        </p>
+        <p class="lead" style="margin-bottom:0;">Limite réelle restante : les exceptions <b>nominatives ad hoc</b> (retirer telles personnes nommées) → empilage de <code>-and (Name -ne '…')</code> ingérable. D'où la scission de la ligne « Exceptions » du tableau en deux.</p>
+      </div>
+      <div class="card mini" style="border-left:5px solid var(--mid);">
+        <h3>🧹 Prérequis confirmé — nettoyage / harmonisation AD</h3>
+        <p class="lead" style="margin-top:0;">Pour provisionner les listes, il faut <b>en parallèle nettoyer l'AD</b> (attributs non issus de la RH). Anomalies réelles constatées :</p>
+        <ul>
+          <li><code>INTERIM</code> / <code>IINTERIM</code> (faute) / <code>INTERIMAIRE</code> — à harmoniser pour inclure les intérimaires dans les listes formateurs.</li>
+          <li><code>Office</code> tronqué : « MONCHY SAINT EL » au lieu de « …ELOI ».</li>
+          <li><code>CompanyName</code> incohérent.</li>
+        </ul>
+        <p class="lead" style="margin-bottom:0;">« Sinon les filtres seront difficilement maintenables. » → <b>confirme et renforce</b> la ligne « sensibilité aux anomalies » ci-dessus : prérequis partagé, mais plus critique côté DDG.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Points d'attention -->
+  <div class="callout">
+    <b>⚠️ Points d'attention introduits par le batch quotidien</b> (à traiter, non acquis) :
+    <ol>
+      <li><b>Activer le provisioning</b> aujourd'hui commenté (<code>Invoke-GroupProvisioning</code>) → sortir du périmètre AD lecture seule, avec droits <code>Add/Remove-ADGroupMember</code> — <b>demande explicite requise</b>.</li>
+      <li><b>Réconciliation</b> : gérer les <b>départs</b> (retirer les membres qui ne matchent plus), pas seulement les ajouts.</li>
+      <li><b>Supervision</b> : un échec de job non alerté laisse des groupes périmés en silence → logs + alerting (natif dans VTOM).</li>
+      <li><b>Idempotence / diff</b> : ne réécrire que les deltas (membres AD actuels vs CSV) pour limiter la charge et tracer les changements.</li>
+    </ol>
+    <p style="margin:12px 0 0;"><b>Réserves non levées</b> (hypothèses, pas faits) : cible Exchange des BAL (on-prem vs Exchange Online) et peuplement réel de <code>CustomAttribute1</code> — elles ne pèsent que sur la faisabilité du DDG, pas sur le plan d'automatisation.</p>
+  </div>
+
+  <footer>
+    Note d'analyse — Groupes Dynamiques I2N · générée le 01/07/2026<br>
+    <span class="noedit">Analyse — aucune modification du code effectuée</span>
+  </footer>
+
+</div>
+</body>
+</html>

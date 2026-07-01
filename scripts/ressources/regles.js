@@ -9,16 +9,22 @@ const FIELDS = [
     ['office',             'Bureau (office)'],
     ['extensionAttribute1','Attribut ext. 1'],
     ['description',        'Description'],
+    ['ou',                 "Unité d'organisation (OU)"],
 ];
 
 const FIELD_LABELS = Object.fromEntries(FIELDS);
 
 const OPS = [
-    ['eq',      'est exactement'],
-    ['ne',      "n'est pas"],
-    ['like',    'contient'],
-    ['notlike', 'ne contient pas'],
+    ['eq',       'est exactement'],
+    ['ne',       "n'est pas"],
+    ['like',     'contient'],
+    ['notlike',  'ne contient pas'],
+    ['empty',    'est vide'],
+    ['notempty', "n'est pas vide"],
 ];
+
+// Opérateurs qui ne nécessitent aucune valeur
+const NO_VALUE_OPS = new Set(['empty', 'notempty']);
 
 const NIV_LABELS = { 1: 'Global', 2: 'Par DO', 3: 'Par centre' };
 const NIV_CSV    = { 1: '1 CSV global', 2: '2 CSV (DO + global)', 3: '3 CSV (centre + DO + global)' };
@@ -80,6 +86,7 @@ const LDAP_FIELD_MAP = {
     office:              'physicalDeliveryOfficeName',
     extensionAttribute1: 'extensionAttribute1',
     description:         'description',
+    ou:                  'ou',
 };
 
 function escLdapVal(v) {
@@ -99,6 +106,8 @@ function condToLdapHtml(cond) {
         case 'ne':      return `${p('(')}${op('!')}${p('(')}${fH}=${vH}${p(')')}${p(')')}`;
         case 'like':    return `${p('(')}${fH}=${op('*')}${vH}${op('*')}${p(')')}`;
         case 'notlike': return `${p('(')}${op('!')}${p('(')}${fH}=${op('*')}${vH}${op('*')}${p(')')}${p(')')}`;
+        case 'notempty':return `${p('(')}${fH}=${op('*')}${p(')')}`;
+        case 'empty':   return `${p('(')}${op('!')}${p('(')}${fH}=${op('*')}${p(')')}${p(')')}`;
         default:        return `${p('(')}${fH}=${vH}${p(')')}`;
     }
 }
@@ -125,7 +134,7 @@ function buildLdapHtml() {
         if (!srcRule) {
             dynamicHtml = cm('/* règle source introuvable */');
         } else {
-            const inc = (srcRule.conditions?.include || []).filter(c => c.value);
+            const inc = (srcRule.conditions?.include || []).filter(c => c.value || NO_VALUE_OPS.has(c.op));
             if (!inc.length) {
                 dynamicHtml = cm('/* source sans conditions */');
             } else {
@@ -142,13 +151,26 @@ function buildLdapHtml() {
         if (!inc.length) {
             dynamicHtml = cm('/* aucune condition — ajouter des critères */');
         } else {
-            const incHtml = inc.length === 1
-                ? condToLdapHtml(inc[0])
-                : p('(') + op('|') + '\n  ' + inc.map(condToLdapHtml).join('\n  ') + '\n' + p(')');
-            const excHtml = exc.map(c => p('(') + op('!') + condToLdapHtml(c) + p(')')).join('\n');
-            dynamicHtml = excHtml
-                ? p('(') + op('&') + '\n  ' + incHtml + '\n  ' + excHtml + '\n' + p(')')
-                : incHtml;
+            // Reflète la vraie logique du moteur (Test-UserMatchesRule) :
+            //  - positifs (eq / like)      → combinés en OU
+            //  - négatifs (ne / notlike / empty / notempty) → contraintes ET
+            //  - exclusions                → chacune niée, en ET
+            const POS       = new Set(['eq', 'like']);
+            const positives = inc.filter(c => POS.has(c.op));
+            const negatives = inc.filter(c => !POS.has(c.op));
+            const posHtml = positives.length
+                ? (positives.length === 1
+                    ? condToLdapHtml(positives[0])
+                    : p('(') + op('|') + '\n  ' + positives.map(condToLdapHtml).join('\n  ') + '\n' + p(')'))
+                : null;
+            const andParts = [
+                posHtml,
+                ...negatives.map(condToLdapHtml),
+                ...exc.map(c => p('(') + op('!') + condToLdapHtml(c) + p(')')),
+            ].filter(Boolean);
+            dynamicHtml = andParts.length === 1
+                ? andParts[0]
+                : p('(') + op('&') + '\n  ' + andParts.join('\n  ') + '\n' + p(')');
         }
     }
 
@@ -156,11 +178,9 @@ function buildLdapHtml() {
 }
 
 function updateLdapDisplay() {
-    const sEl = document.getElementById('ldap-static');
     const dEl = document.getElementById('ldap-dynamic');
-    if (!sEl || !dEl) return;
-    const { staticHtml, dynamicHtml } = buildLdapHtml();
-    sEl.innerHTML = staticHtml;
+    if (!dEl) return;
+    const { dynamicHtml } = buildLdapHtml();
     dEl.innerHTML = dynamicHtml;
 }
 
@@ -412,9 +432,9 @@ function renderForm(rule) {
             `<div class="ldap-zone" id="ldap-display">` +
                 `<div class="ldap-zone-title">Filtre LDAP équivalent</div>` +
                 `<div class="ldap-cols">` +
-                    `<div class="ldap-col"><div class="ldap-col-label">Partie statique</div><pre class="ldap-code" id="ldap-static"></pre></div>` +
-                    `<div class="ldap-col"><div class="ldap-col-label">Partie dynamique</div><pre class="ldap-code" id="ldap-dynamic"></pre></div>` +
+                    `<div class="ldap-col"><pre class="ldap-code" id="ldap-dynamic"></pre></div>` +
                 `</div>` +
+                `<div class="ldap-note">Appliqué aux comptes utilisateurs <strong>activés</strong> uniquement (comptes désactivés exclus en amont).</div>` +
             `</div>` +
         `</div>` +
         `<div class="form-tab-pane" id="tab-circuit" hidden>` +
@@ -537,6 +557,19 @@ function createCondRow(cond = null) {
 
     row.querySelector('.btn-remove-cond').addEventListener('click', () => { row.remove(); autoUpdateDesc(); });
     initPicker(row.querySelector('.cond-val'), row.querySelector('.cond-field'), row.querySelector('.cond-val-wrap'));
+
+    // "est vide" / "n'est pas vide" : aucune valeur à saisir → champ désactivé
+    const opSel  = row.querySelector('.cond-op');
+    const valInp = row.querySelector('.cond-val');
+    const syncValState = () => {
+        const noVal = NO_VALUE_OPS.has(opSel.value);
+        valInp.disabled = noVal;
+        if (noVal) { valInp.value = ''; valInp.placeholder = '(aucune valeur)'; }
+        else if (valInp.placeholder === '(aucune valeur)') { valInp.placeholder = 'valeur…'; }
+    };
+    opSel.addEventListener('change', syncValState);
+    syncValState();
+
     return row;
 }
 
@@ -549,7 +582,7 @@ function readCondList(listId) {
         field: row.querySelector('.cond-field').value,
         op:    row.querySelector('.cond-op').value,
         value: row.querySelector('.cond-val').value.trim(),
-    })).filter(c => c.value !== '');
+    })).filter(c => c.value !== '' || NO_VALUE_OPS.has(c.op));
 }
 
 function cleanForFileName(name) {
@@ -946,7 +979,8 @@ function showGroupsPreviewModal(data, sourceRule = null) {
         `<span class="gp-meta-item"><strong>Préfixe :</strong> ${esc(data.prefix)}</span>` +
         `<span class="gp-meta-item"><strong>Domaine :</strong> @${esc(data.mailDomain)}</span>` +
         (niveauLabel ? `<span class="gp-meta-item">${esc(niveauLabel)}</span>` : '') +
-        (warnings ? `<span class="gp-meta-warn">⚠ ${warnings} nom${warnings > 1 ? 's' : ''} dépasse${warnings > 1 ? 'nt' : ''} 64 caractères</span>` : '');
+        (warnings ? `<span class="gp-meta-warn">⚠ ${warnings} nom${warnings > 1 ? 's' : ''} dépasse${warnings > 1 ? 'nt' : ''} 64 caractères</span>` : '') +
+        (data.cacheTs ? `<span class="gp-meta-cache" title="Liste issue du cache local, pas d'une lecture AD en direct — rafraîchir le cache dans l'Explorateur AD (↻) pour des données à jour">🕓 Cache du ${esc(data.cacheTs)} — pensez à rafraîchir</span>` : '');
 
     const peerRule = sourceRule
         ? (sourceRule.invertOf
@@ -1304,6 +1338,7 @@ function setupGroupsPreviewModal() {
     });
     closeBtn.addEventListener('click', closeModal);
     modal.addEventListener('click', e => { if (e.target === modal) closeModal(); });
+    document.addEventListener('keydown', e => { if (e.key === 'Escape' && !modal.hidden) closeModal(); });
 
     // Checkbox affichage membres
     const chkMembers = document.getElementById('chk-gp-members');

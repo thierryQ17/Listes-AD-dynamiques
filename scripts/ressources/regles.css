@@ -1394,6 +1394,18 @@ body { overflow: hidden; }
 .gp-meta-item  { color: var(--text-sub); }
 .gp-meta-item strong { color: var(--text); font-weight: 600; }
 .gp-meta-warn  { color: #c05000; font-weight: 600; margin-left: auto; }
+.gp-meta-cache {
+    margin-left: auto;
+    color: #92400e;
+    background: #fef3c7;
+    border: 1px solid #fcd34d;
+    padding: 2px 10px;
+    border-radius: 999px;
+    font-weight: 600;
+    font-size: 11px;
+    white-space: nowrap;
+}
+.gp-meta-warn ~ .gp-meta-cache { margin-left: 10px; }
 
 /* Corps : colonnes côte à côte */
 .gp-body { flex: 1; min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
@@ -1600,6 +1612,34 @@ body { overflow: hidden; }
 .gp-members-list::-webkit-scrollbar-track { background: transparent; }
 .gp-members-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
 
+/* Niveau 1 : carte globale pleine largeur ; membres en colonnes « journal » */
+/* Ordre alphabétique VERTICAL : on remplit la colonne 1 de haut en bas, puis la 2, puis la 3 (continuité) */
+/* Spécificité (0,4,0) pour battre « .gp-col:last-child .gp-col-list » (0,3,0) qui force une grille de 220px */
+.gp-cols-1 .gp-col:last-child .gp-col-list { display: block; }
+.gp-cols-1 .gp-col:last-child .gp-row-item { width: 100%; }
+.gp-cols-1 .gp-members-list {
+    max-height: 550px;   /* ≈ 25 lignes ; au-delà, ascenseur vertical */
+    overflow-y: auto;
+    display: block;
+    column-count: 2;
+    column-gap: 32px;
+    column-fill: balance;
+}
+/* Chaque membre sur UNE ligne, en sous-colonnes alignées : [ Prénom NOM (largeur fixe) ] [ FONCTION ] */
+.gp-cols-1 .gp-member {
+    display: grid;
+    grid-template-columns: 150px 1fr;
+    column-gap: 10px;
+    align-items: baseline;
+    min-height: 0;
+    padding: 2px 0;
+    border-bottom: 1px solid var(--border-lt);
+    break-inside: avoid;
+    -webkit-column-break-inside: avoid;
+}
+.gp-cols-1 .gp-member-name  { max-width: none; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gp-cols-1 .gp-member-title { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
 .gp-member {
     display: flex;
     align-items: baseline;
@@ -1623,6 +1663,7 @@ body { overflow: hidden; }
     overflow: hidden;
     text-overflow: ellipsis;
     flex: 1;
+    text-transform: uppercase;
 }
 
 .gp-row-chevron {
@@ -2329,6 +2370,14 @@ body { overflow: hidden; }
     color: #cdd6f4;
     min-height: 52px;
 }
+.ldap-note {
+    padding: 6px 12px;
+    font-size: 11px;
+    color: #7f8ba3;
+    background: #181825;
+    border-top: 1px solid #2d2d3f;
+}
+.ldap-note strong { color: #a6e3a1; }
 
 /* Couleurs syntaxiques LDAP */
 .lc-p       { color: #89b4fa; }   /* parenthèses  — bleu */

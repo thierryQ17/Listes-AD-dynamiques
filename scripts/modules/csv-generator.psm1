@@ -93,7 +93,7 @@ function Test-UserMatchesRule {
     $inc = @($Conditions.include)
     if ($inc.Count -gt 0) {
         $positive = @($inc | Where-Object { $_.op -in @('eq','like') })
-        $negative = @($inc | Where-Object { $_.op -in @('ne','notlike') })
+        $negative = @($inc | Where-Object { $_.op -in @('ne','notlike','empty','notempty') })
         # Conditions positives : OR (au moins une doit correspondre)
         $matchPos = ($positive.Count -eq 0) -or ($null -ne ($positive | Where-Object { Test-Condition -User $User -Cond $_ } | Select-Object -First 1))
         # Conditions négatives : AND (toutes doivent correspondre)
@@ -112,6 +112,21 @@ function Test-UserMatchesRule {
 
 function Test-Condition {
     param($User, $Cond)
+
+    # Champ "OU" : match sur les noms d'OU traversés par le DN de l'utilisateur
+    if ($Cond.field -eq 'ou') {
+        $components = @(Get-OUComponents -DN "$($User.dn)")
+        switch ($Cond.op) {
+            'eq'      { return [bool]@($components | Where-Object { $_ -eq   $Cond.value }).Count }
+            'ne'      { return -not [bool]@($components | Where-Object { $_ -eq   $Cond.value }).Count }
+            'like'    { return [bool]@($components | Where-Object { $_ -like "*$($Cond.value)*" }).Count }
+            'notlike' { return -not [bool]@($components | Where-Object { $_ -like "*$($Cond.value)*" }).Count }
+            'empty'    { return -not [bool]@($components).Count }
+            'notempty' { return [bool]@($components).Count }
+            default   { return $false }
+        }
+    }
+
     $raw = switch ($Cond.field) {
         'title'               { $User.Title }
         'department'          { $User.Department }
@@ -124,8 +139,10 @@ function Test-Condition {
     switch ($Cond.op) {
         'eq'      { return $val -eq      $Cond.value }
         'ne'      { return $val -ne      $Cond.value }
-        'like'    { return $val -like    $Cond.value }
-        'notlike' { return $val -notlike $Cond.value }
+        'like'    { return $val -like    "*$($Cond.value)*" }
+        'notlike' { return $val -notlike "*$($Cond.value)*" }
+        'empty'    { return [string]::IsNullOrWhiteSpace($val) }
+        'notempty' { return -not [string]::IsNullOrWhiteSpace($val) }
         default   { return $false }
     }
 }
