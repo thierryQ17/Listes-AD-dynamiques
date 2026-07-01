@@ -65,6 +65,7 @@ scripts/
     *.json                  ← cache AD par site (OU)
     _index.json             ← index DN → count (EXCLU du scan de champs, write protégé par retry)
     _users_global.json      ← cache global tous utilisateurs actifs (source de vérité pour Règles)
+    _ous_global.json        ← cache global des OUs (arbre des sites) — lu par Get-OUTree, jamais l'AD en direct
 application/
   output/                   ← CSV générés (sous-dossiers horodatés)
 _initGlobalVariables.psm1   ← auto-découverte des chemins ($global:path)
@@ -94,6 +95,7 @@ CONTEXTE-SESSION.md         ← ce fichier
 | `/api/cache/counts` | Index des compteurs de cache |
 | `/api/cache/info` | `{ builtAt: "2026-05-18T16:33:39" }` — date de MAJ de `_users_global.json` |
 | `/api/cache/refresh-all` | Vide tout le cache + relance le warmup |
+| `/api/users/preload` (`↻ Cache`) | Reconstruit **TOUS** les caches : `Build-OUsCache` + `Build-GlobalUsersCache` + purge des `*.json` par site + warmup |
 
 ---
 
@@ -185,6 +187,42 @@ CONTEXTE-SESSION.md         ← ce fichier
 ### Modale CSV (après génération)
 - ✅ Onglet **"Fichiers CSV"** + onglet **"Adresses mail"** (même composant réutilisable)
 - ✅ `renderMailTab` et `checkMails` : fonctions génériques avec `container` (pas d'IDs codés en dur)
+
+---
+
+## Évolutions récentes — architecture cache + page HTML des groupes (juillet 2026)
+
+### Architecture « tout passe par le cache » (renforcée)
+- **Règle projet (CLAUDE.md)** : aucune recherche (utilisateurs, OUs, valeurs de champ…) n'interroge l'AD en direct. Seules les fonctions `Build-*Cache` (dans `ad-reader.psm1`) ont le droit d'appeler `Get-AD*`.
+- **Cache OUs** `_ous_global.json` : construit par `Build-OUsCache`, lu par `Get-OUsFromCache`. **`Get-OUTree` lit ce cache** (lazy-build si absent), jamais l'AD.
+- Le sélecteur de valeurs du champ **OU** (`Get-ADFieldValues` field `ou`) et l'arbre des sites lisent ce cache.
+- **↻ Cache** (`/api/users/preload`) reconstruit **TOUS** les caches (OUs + utilisateurs + sites) et le footer se rafraîchit.
+
+### Règles — champ OU + opérateurs
+- Champ condition **« Unité d'organisation (OU) »** avec **sélecteur avancé** listant les OUs depuis le cache (recherche intégrée). Sites au format `A#####`.
+- Opérateurs **« est vide » / « n'est pas vide »** (`empty`/`notempty`, sans valeur).
+- `Test-Condition` (csv-generator) : `like`/`notlike` utilisent des wildcards `*valeur*` (fix ISTELI niveaux 2/3 qui remontaient 0 utilisateur).
+- Exclusion OU-based via `parametres.json` → `ad.excludeOUs` (ex. « Comptes generiques »).
+
+### Verrouillage des règles
+- Une règle validée peut être **verrouillée** (`locked: true`) : bloque modification/suppression (garde-fous serveur **403** sur `DELETE /api/regles/:id` et `POST /api/regles`), page grisée, bouton **Déverrouiller**.
+- Cadenas 🔒 dans la liste et dans le **mini-menu** (sidebar repliée).
+
+### Sidebar Règles repliable
+- Bouton chevron replie/déplie la sidebar (état mémorisé `localStorage`).
+- Repliée (~58 px) : règles en **initiales** (2 lettres, nom complet en infobulle), rubriques de niveau en mini-badges **N1/N2/N3**, actions en icônes, cadenas overlay.
+
+### Page HTML autonome des groupes — `buildGroupsHtmlDoc` (regles.js)
+- Bouton **« Afficher page HTML »** + onglet **« Aperçu groupes »** (après Paramètres) qui affiche **exactement la même page** via un **`<iframe srcdoc>`** (rendu strictement identique), mis en cache par signature de règle.
+- Thème gris, **recherche + auto-complétion** (+ bouton vider), **filtre par DO**, **Tout replier**, **Masquer les membres**, **Plein écran**.
+- Niveau 3 : **une colonne par DO** (grille pleine largeur, **centrée si < 4 DO** via `cols-N`). Membres en 2 sous-colonnes alignées (`Prénom NOM | FONCTION`).
+- **Zone figée (sticky)** : en-tête (nom du groupe seul) + barre d'outils + **carte globale + rangée des en-têtes DO** intégrés dans `.topbar` sticky ; seuls les centres défilent.
+- En-tête épuré : **nom du groupe seul** + icône **ⓘ** ouvrant une modale (méta `préfixe · domaine · niveau · N groupe(s) · N utilisateur(s) · cache` + détail du filtre, badges INCLURE/EXCLURE colorés).
+- **Compteurs** : badge « N gr. » (sous-groupes) par en-tête global/DO + badge utilisateurs ; total groupes/utilisateurs dans la méta.
+
+### Modales de la page groupes (embarquées, `window.MAILTREE` / `window.GROUPMEMBERS`)
+- **Clic sur un mail de niveau 1/2 (conteneur)** → modale **arbre des adresses/groupes** : colonnes **2/3/4** par DO, en-têtes de colonne + titre **sticky**, bascule d'affichage **Tout / Noms seuls / Mails seuls** (icône œil), compteur « N groupe(s) » par colonne, pastille du nb de membres par entrée.
+- **Clic sur un centre DANS cette modale** → modale de ses **membres** (une colonne `Prénom NOM | FONCTION`). La modale membres ne s'ouvre **pas** depuis la page principale (drill-down uniquement). `z-index` membres (1001) > adresses (1000) ; Échap ferme d'abord les membres.
 
 ---
 
