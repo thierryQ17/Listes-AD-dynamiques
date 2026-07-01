@@ -1144,6 +1144,9 @@ function buildGroupsHtmlDoc(data, rule) {
     for (const dg of doGroups) {
         dg._centres = centres.filter(c => c.name.startsWith(dg.name + '-')).sort((a, b) => a.name.localeCompare(b.name, 'fr'));
     }
+    // Nombre de sous-groupes : global → nb de DO ; DO → nb de centres
+    if (global) global._grpCount = doGroups.length;
+    doGroups.forEach(dg => { dg._grpCount = dg._centres.length; });
 
     const memHtml = g => {
         if (!g.members || !g.members.length) return '';
@@ -1154,17 +1157,27 @@ function buildGroupsHtmlDoc(data, rule) {
             '</li>'
         ).join('') + '</ul>';
     };
-    const card = (g, lvl, badge, cls, toggle) =>
-        '<div class="grp lvl' + lvl + (cls ? ' ' + cls : '') + '" data-name="' + esc((g.name || '').toLowerCase()) + '">' +
+    const card = (g, lvl, badge, cls, toggle) => {
+        // Conteneur = a des sous-groupes → clic sur le mail ouvre l'arbre des adresses/groupes
+        const isContainer = lvl < 3 && g._grpCount > 0;
+        const nameHtml = '<span class="grp-name">' + esc(g.name) + '</span>';
+        const mailHtml = g.mail
+            ? (isContainer
+                ? '<div class="grp-mail grp-mail-link grp-mail-cta" data-key="' + esc(g.name || '') + '" title="Voir les groupes et leurs membres">' + esc(g.mail) + '</div>'
+                : '<div class="grp-mail">' + esc(g.mail) + '</div>')
+            : '';
+        return '<div class="grp lvl' + lvl + (cls ? ' ' + cls : '') + '" data-name="' + esc((g.name || '').toLowerCase()) + '">' +
             '<div class="grp-hd">' +
                 (toggle ? '<span class="do-toggle">▾</span>' : '') +
                 (badge ? '<span class="grp-badge">' + badge + '</span>' : '') +
-                '<span class="grp-name">' + esc(g.name) + '</span>' +
-                '<span class="grp-count">' + (g.count ?? 0) + '</span>' +
+                nameHtml +
+                ((lvl < 3 && g._grpCount) ? '<span class="grp-gcount" title="Nombre de groupes">' + g._grpCount + ' gr.</span>' : '') +
+                '<span class="grp-count" title="Nombre d\'utilisateurs">' + (g.count ?? 0) + '</span>' +
             '</div>' +
-            (g.mail ? '<div class="grp-mail">' + esc(g.mail) + '</div>' : '') +
+            mailHtml +
             memHtml(g) +
         '</div>';
+    };
 
     const n     = doGroups.length;
     const isN3  = (data.niveau === 3) && n > 0;
@@ -1201,6 +1214,18 @@ function buildGroupsHtmlDoc(data, rule) {
         ? '<div class="do-columns cols-' + n + '">' + centreColumns + '</div>'
         : (globalCardHtml + branchesHtml);
     if (!mainBody) mainBody = '<p class="empty">Aucun groupe — la règle ne correspond à aucun utilisateur.</p>';
+
+    // Arborescence des mails — modale au clic sur un mail de niveau 1 (global) ou 2 (DO)
+    const mailNode = g => ({ name: g.name, mail: g.mail || '', count: g.count ?? 0 });
+    const mailTree = {};
+    doGroups.forEach(dg => { mailTree[dg.name] = Object.assign(mailNode(dg), { children: (dg._centres || []).map(mailNode) }); });
+    if (global) mailTree[global.name] = Object.assign(mailNode(global), {
+        children: doGroups.map(dg => Object.assign(mailNode(dg), { children: (dg._centres || []).map(mailNode) }))
+    });
+
+    // Membres par groupe — modale au clic sur un groupe/mail qui possède des membres
+    const groupMembers = {};
+    groups.forEach(g => { if (g.members && g.members.length) groupMembers[g.name] = g.members.map(m => ({ n: m.name, t: m.title || '' })); });
 
     // Auto-complétion : noms de membres + de groupes
     const nameSet = new Set();
@@ -1241,6 +1266,17 @@ function buildGroupsHtmlDoc(data, rule) {
     const nivMap = { 1: 'Global (1 groupe)', 2: 'Par DO (DO + global)', 3: 'Par centre (centre + DO + global)' };
     filterHtml += '<div class="fl-row fl-note">Groupement niveau ' + (data.niveau || '?') + ' · ' + esc(nivMap[data.niveau] || '') + ' — comptes activés uniquement, OU « Comptes generiques » exclues.</div>';
 
+    // Ligne compacte du filtre — affichée dans l'en-tête
+    let filterLine;
+    if (rule && rule.invertOf) {
+        filterLine = 'Règle inverse (tous sauf la règle source)';
+    } else {
+        const fp = [];
+        if (inc.length) fp.push('INCLURE ' + inc.map(condText).join(' ou '));
+        if (exc.length) fp.push('EXCLURE ' + exc.map(condText).join(' et '));
+        filterLine = (fp.length ? fp.join(' · ') : 'Aucune condition') + ' · comptes activés, OU génériques exclues';
+    }
+
     const css = `
         *{box-sizing:border-box;}
         body{font-family:"Segoe UI",system-ui,-apple-system,sans-serif;margin:0;background:#f4f5f7;color:#1f2430;}
@@ -1250,14 +1286,87 @@ function buildGroupsHtmlDoc(data, rule) {
         .doc-hd-txt{min-width:0;}
         .fs-btn{display:inline-flex;align-items:center;gap:7px;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.3);color:#fff;padding:7px 13px;border-radius:8px;font-size:12.5px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap;}
         .fs-btn:hover{background:rgba(255,255,255,.28);}
+        .doc-eyebrow{font-size:.68rem;text-transform:uppercase;letter-spacing:.09em;opacity:.82;margin-bottom:2px;}
+        .doc-hd-actions{display:flex;align-items:center;gap:8px;flex:none;}
+        .info-btn{display:inline-flex;align-items:center;justify-content:center;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.3);color:#fff;width:34px;height:34px;border-radius:8px;cursor:pointer;padding:0;}
+        .info-btn:hover{background:rgba(255,255,255,.28);}
+        .info-modal{position:fixed;inset:0;z-index:1000;background:rgba(15,23,42,.45);display:flex;align-items:center;justify-content:center;padding:20px;}
+        .info-modal[hidden]{display:none;}
+        .info-box{background:#fff;color:#1f2430;border-radius:12px;border-top:4px solid #2563eb;box-shadow:0 16px 50px rgba(0,0,0,.3);width:min(760px,94vw);max-height:85vh;overflow:auto;padding:22px 24px;position:relative;}
+        .info-close{position:absolute;top:8px;right:12px;background:none;border:none;font-size:22px;line-height:1;color:#6b7280;cursor:pointer;}
+        .info-close:hover{color:#111827;}
+        .info-meta{font-size:.85rem;color:#4b5568;margin:2px 30px 14px 0;padding-bottom:12px;border-bottom:1px solid #e2e5ea;}
+        .info-meta b{color:#1e293b;}
+        .info-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#2563eb;margin-bottom:8px;}
+        .grp-mail-link{cursor:pointer;}
+        .grp-mail-link:hover{color:#2563eb;text-decoration:underline;}
+        .grp-name-click,.grp-mail-mem{cursor:pointer;}
+        .grp-name-click:hover,.grp-mail-mem:hover{color:#2563eb;text-decoration:underline;}
+        .grp-mail-cta{color:#2563eb;font-weight:600;text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:2px;}
+        .grp-mail-cta:hover{background:#eff6ff;}
+        .mail-hint{margin-left:8px;font-size:.66rem;font-weight:700;color:#1d4ed8;background:#eff6ff;border:1px solid #bfdbfe;border-radius:999px;padding:1px 7px;text-decoration:none;white-space:nowrap;vertical-align:middle;}
+        .mem-modal{position:fixed;inset:0;z-index:1001;background:rgba(15,23,42,.45);display:flex;align-items:center;justify-content:center;padding:20px;}
+        .mem-modal[hidden]{display:none;}
+        .mem-box{background:#fff;color:#1f2430;border-radius:12px;border-top:4px solid #2563eb;box-shadow:0 16px 50px rgba(0,0,0,.3);width:min(620px,95vw);max-height:88vh;overflow:auto;padding:22px 26px;position:relative;}
+        .mem-close{position:absolute;top:10px;right:14px;background:none;border:none;font-size:22px;line-height:1;color:#6b7280;cursor:pointer;}
+        .mem-close:hover{color:#111827;}
+        .mem-title{font-size:14px;font-weight:700;color:#1e3a5f;margin:0 30px 14px 0;}
+        .mem-tc{background:#dbeafe;color:#1d4ed8;border-radius:999px;padding:1px 9px;font-size:.72rem;font-weight:700;margin-left:6px;}
+        .mem-list{display:flex;flex-direction:column;}
+        .memr{display:grid;grid-template-columns:150px 1fr;gap:8px;padding:3px 0;break-inside:avoid;border-bottom:1px dashed #eef1f5;}
+        .memr-n{font-weight:600;color:#1e3a5f;font-size:.8rem;word-break:break-word;}
+        .memr-t{color:#6b7280;font-size:.72rem;text-transform:uppercase;}
+        .mails-modal{position:fixed;inset:0;z-index:1000;background:rgba(15,23,42,.45);display:flex;align-items:center;justify-content:center;padding:20px;}
+        .mails-modal[hidden]{display:none;}
+        .mails-box{background:#fff;color:#1f2430;border-radius:12px;border-top:4px solid #2563eb;box-shadow:0 16px 50px rgba(0,0,0,.3);width:min(1680px,97vw);max-height:90vh;overflow:auto;padding:0 26px 20px;position:relative;}
+        .mails-head{position:sticky;top:0;background:#fff;z-index:5;padding:18px 0 8px;border-bottom:1px solid #e2e5ea;}
+        .mails-actions{position:absolute;top:16px;right:0;display:flex;align-items:center;gap:6px;z-index:6;}
+        .mails-icon{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border:1px solid #d5dbe4;background:#f6f8fb;color:#4b5568;border-radius:6px;cursor:pointer;padding:0;}
+        .mails-icon:hover{background:#e8eef6;color:#1e3a5f;}
+        .mm-tcount{background:#dbeafe;color:#1d4ed8;border-radius:999px;padding:1px 9px;font-size:.72rem;font-weight:700;margin-left:8px;vertical-align:middle;}
+        .mails-btn{background:#eef2f8;border:1px solid #c3d0e0;color:#374151;padding:7px 14px;border-radius:6px;font-size:12.5px;font-weight:600;cursor:pointer;}
+        .mails-btn:hover{background:#e2e8f0;}
+        .mails-tree.mode-names .mm-item .mm-mail{display:none;}
+        .mails-tree.mode-mails .mm-item .mm-cname{display:none;}
+        .mm-colcount{font-size:.7rem;font-weight:700;color:#3730a3;background:#eef2ff;padding:4px 10px;border-bottom:1px solid #e2e5ea;}
+        .mails-close{background:none;border:none;font-size:22px;line-height:1;color:#6b7280;cursor:pointer;padding:0 2px;}
+        .mails-close:hover{color:#111827;}
+        .mails-title{font-size:14px;font-weight:700;color:#1e3a5f;margin:0 80px 0 0;}
+        .mails-title .mm-tmail{font-family:"Cascadia Code",Consolas,monospace;font-size:.78rem;color:#6b7280;font-weight:400;margin-left:8px;}
+        .mm-cols{display:grid;gap:18px;align-items:start;}
+        .mm-cols-1{grid-template-columns:minmax(0,1fr);}
+        .mm-cols-2{grid-template-columns:repeat(2,minmax(0,1fr));}
+        .mm-cols-3{grid-template-columns:repeat(3,minmax(0,1fr));}
+        .mm-cols-4{grid-template-columns:repeat(4,minmax(0,1fr));}
+        .mm-col{border:1px solid #e2e5ea;border-radius:8px;}
+        .mm-colhead{position:sticky;top:56px;background:#fff;z-index:3;border-radius:8px 8px 0 0;overflow:hidden;}
+        .mm-do{background:#f0f5fc;border-bottom:1px solid #d5dbe4;border-left:4px solid #2563eb;padding:8px 10px;display:flex;align-items:center;flex-wrap:wrap;gap:6px;}
+        .mm-do .mm-cname{font-weight:700;font-size:.82rem;color:#1e3a5f;flex-basis:100%;word-break:break-word;}
+        .mm-do .mm-count{background:#374151;color:#fff;border-radius:999px;padding:0 7px;font-size:.7rem;font-weight:700;}
+        .mm-list{padding:6px 8px;display:flex;flex-direction:column;gap:2px;}
+        .mm-item{display:flex;align-items:center;gap:8px;padding:3px 2px;border-bottom:1px dashed #eef1f5;}
+        .mm-item-txt{display:flex;flex-direction:column;min-width:0;flex:1;}
+        .mm-icount{flex:none;background:#374151;color:#fff;border-radius:999px;padding:0 8px;font-size:.66rem;font-weight:700;}
+        .mm-item-mem{cursor:pointer;border-radius:4px;}
+        .mm-item-mem:hover{background:#eef1f5;}
+        .mm-cname{font-weight:600;font-size:.78rem;color:#334155;word-break:break-word;}
+        .mm-mail{font-family:"Cascadia Code",Consolas,monospace;font-size:.72rem;color:#6b7280;word-break:break-all;}
+        .mails-foot{margin-top:14px;display:flex;align-items:center;gap:12px;}
+        .mails-copy{background:#2563eb;border:none;color:#fff;padding:7px 14px;border-radius:6px;font-size:12.5px;font-weight:600;cursor:pointer;}
+        .mails-copy:hover{background:#1d4ed8;}
+        .mails-copied{font-size:.8rem;color:#16a34a;}
         .doc-hd h1{margin:0 0 6px;font-size:1.35rem;}
-        .doc-meta{opacity:.94;font-size:.88rem;}
+        .doc-meta{opacity:.94;font-size:.72rem;}
         .doc-meta b{color:#fff;}
+        .doc-filter{opacity:.9;font-size:.72rem;margin-top:3px;color:#e5e7eb;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;}
+        .doc-filter b{color:#fff;font-weight:700;}
         .wrap{max-width:none;margin:0 auto;padding:14px 28px 60px;}
         .filter-box{background:#fff;border:1px solid #e2e5ea;border-left:4px solid #6b7280;border-radius:10px;padding:10px 16px;margin:0 0 10px;}
         .filter-title{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#6b7280;margin-bottom:6px;}
         .fl-row{font-size:.86rem;margin:5px 0;}
         .fl-tag{display:inline-block;font-size:9px;font-weight:700;padding:2px 8px;border-radius:999px;margin-right:6px;background:#e5e7eb;color:#374151;vertical-align:middle;}
+        .fl-tag.inc{background:#dcfce7;color:#166534;}
+        .fl-tag.exc{background:#fee2e2;color:#991b1b;}
         .fl-list{margin:5px 0 0;padding-left:24px;}
         .fl-list li{margin:2px 0;}
         .fl-note{color:#6b7280;font-size:.8rem;margin-top:9px;}
@@ -1299,6 +1408,8 @@ function buildGroupsHtmlDoc(data, rule) {
         .grp-badge{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;padding:2px 9px;border-radius:999px;background:#e5e7eb;color:#4b5563;white-space:nowrap;}
         .grp-name{font-weight:700;font-size:.97rem;color:#1e3a5f;letter-spacing:.01em;word-break:normal;overflow-wrap:break-word;}
         .grp-count{margin-left:auto;background:#374151;color:#fff;border-radius:999px;padding:1px 10px;font-size:.78rem;font-weight:700;}
+        .grp-gcount{margin-left:auto;background:#e0e7ff;color:#3730a3;border-radius:999px;padding:1px 9px;font-size:.72rem;font-weight:700;}
+        .grp-gcount + .grp-count{margin-left:6px;}
         .grp-mail{font-family:"Cascadia Code",Consolas,monospace;font-size:.78rem;color:#6b7280;margin-top:3px;}
         .members{list-style:none;margin:9px 0 0;padding:8px 0 0;border-top:1px dashed #d5dae1;columns:2;column-gap:30px;}
         .members li{break-inside:avoid;display:grid;grid-template-columns:155px 1fr;column-gap:8px;align-items:baseline;padding:1px 0;font-size:.82rem;}
@@ -1311,7 +1422,7 @@ function buildGroupsHtmlDoc(data, rule) {
     `;
     const meta =
         `Préfixe <b>${esc(data.prefix || '')}</b> · Domaine <b>@${esc(data.mailDomain || '')}</b> · ` +
-        `Niveau <b>${data.niveau}</b> · <b>${data.total}</b> utilisateur(s)` +
+        `Niveau <b>${data.niveau}</b> · <b>${groups.length}</b> groupe(s) · <b>${data.total}</b> utilisateur(s)` +
         (data.cacheTs ? ` · Cache du <b>${esc(data.cacheTs)}</b>` : '');
 
     const pageScript =
@@ -1376,6 +1487,86 @@ function buildGroupsHtmlDoc(data, rule) {
   if(cb)cb.addEventListener('click',function(){ col=!col; branches.forEach(function(b){b.classList.toggle('collapsed',col);}); cb.textContent=col?'Tout deplier':'Tout replier'; });
   var fsBtn=document.getElementById('fsBtn');
   if(fsBtn)fsBtn.addEventListener('click',function(){ if(document.fullscreenElement){document.exitFullscreen();}else{document.documentElement.requestFullscreen();} });
+  var infoBtn=document.getElementById('infoBtn');
+  var infoModal=document.getElementById('infoModal');
+  var infoClose=document.getElementById('infoClose');
+  function closeInfo(){ if(infoModal)infoModal.hidden=true; }
+  if(infoBtn)infoBtn.addEventListener('click',function(){ if(infoModal)infoModal.hidden=false; });
+  if(infoClose)infoClose.addEventListener('click',closeInfo);
+  if(infoModal)infoModal.addEventListener('click',function(e){ if(e.target===infoModal)closeInfo(); });
+  document.addEventListener('keydown',function(e){ if(e.key==='Escape')closeInfo(); });
+
+  // Modale des adresses mail sous-jacentes (clic sur un mail de niveau 1/2)
+  var MT=window.MAILTREE||{};
+  function eh(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'})[c];});}
+  function mmItem(c){
+    var hasMem=(window.GROUPMEMBERS||{})[c.name];
+    return '<div class="mm-item'+(hasMem?' mm-item-mem':'')+'"'+(hasMem?' data-gkey="'+eh(c.name)+'" title="Voir les membres"':'')+'>'+
+      '<div class="mm-item-txt"><span class="mm-cname">'+eh(c.name)+'</span><span class="mm-mail">'+eh(c.mail)+'</span></div>'+
+      (c.count!=null?'<span class="mm-icount" title="Membres">'+c.count+'</span>':'')+
+      '</div>';
+  }
+  function renderMails(node){
+    var hasGC=node.children&&node.children.some(function(c){return c.children&&c.children.length;});
+    if(hasGC){
+      var n=Math.min(node.children.length,4);
+      var h='<div class="mm-cols mm-cols-'+n+'">';
+      node.children.forEach(function(dg){
+        h+='<div class="mm-col"><div class="mm-colhead"><div class="mm-do"><span class="mm-cname">'+eh(dg.name)+'</span><span class="mm-count">'+(dg.count!=null?dg.count:'')+'</span><span class="mm-mail">'+eh(dg.mail)+'</span></div>'+
+           '<div class="mm-colcount">'+((dg.children||[]).length)+' groupe(s)</div></div>'+
+           '<div class="mm-list">'+(dg.children||[]).map(mmItem).join('')+'</div></div>';
+      });
+      return h+'</div>';
+    }
+    return '<div class="mm-list">'+(node.children||[]).map(mmItem).join('')+'</div>';
+  }
+  function collectMails(node,arr){ if(node.mail)arr.push(node.mail); if(node.children)node.children.forEach(function(c){collectMails(c,arr);}); }
+  var mailsModal=document.getElementById('mailsModal'); var currentMails=[];
+  function openMails(key){
+    var node=MT[key]; if(!node||!mailsModal)return;
+    currentMails=[]; collectMails(node,currentMails);
+    document.getElementById('mailsTitle').innerHTML=eh(node.name)+' <span class="mm-tmail">'+eh(node.mail)+'</span> <span class="mm-tcount">'+currentMails.length+' groupe(s)</span>';
+    document.getElementById('mailsTree').innerHTML=renderMails(node);
+    var cp=document.getElementById('mailsCopied'); if(cp)cp.textContent='';
+    applyMmMode();
+    mailsModal.hidden=false;
+    var head=mailsModal.querySelector('.mails-head');
+    var hh=head?head.offsetHeight:0;
+    var chs=mailsModal.querySelectorAll('.mm-colhead');
+    for(var i=0;i<chs.length;i++)chs[i].style.top=(hh-1)+'px';
+  }
+  function closeMails(){ if(mailsModal)mailsModal.hidden=true; }
+  [].slice.call(document.querySelectorAll('.grp-mail-link')).forEach(function(el){ el.addEventListener('click',function(){ openMails(el.getAttribute('data-key')); }); });
+  var mailsClose=document.getElementById('mailsClose'); if(mailsClose)mailsClose.addEventListener('click',closeMails);
+  if(mailsModal)mailsModal.addEventListener('click',function(e){ if(e.target===mailsModal)closeMails(); });
+  document.addEventListener('keydown',function(e){ if(e.key==='Escape'&&(!memModal||memModal.hidden))closeMails(); });
+  var mailsCopy=document.getElementById('mailsCopy');
+  if(mailsCopy)mailsCopy.addEventListener('click',function(){
+    var txt=currentMails.join('; ');
+    try{ if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(txt); }catch(e){}
+    var cp=document.getElementById('mailsCopied'); if(cp)cp.textContent=currentMails.length+' adresse(s) copiee(s)';
+  });
+  var mmModes=['both','names','mails'], mmLbl={both:'Tout',names:'Noms seuls',mails:'Mails seuls'}, mmIdx=0;
+  function applyMmMode(){ var t=document.getElementById('mailsTree'); if(t)t.className='mails-tree mode-'+mmModes[mmIdx]; var b=document.getElementById('mailsMode'); if(b)b.title='Affichage : '+mmLbl[mmModes[mmIdx]]; }
+  var mailsMode=document.getElementById('mailsMode'); if(mailsMode)mailsMode.addEventListener('click',function(){ mmIdx=(mmIdx+1)%mmModes.length; applyMmMode(); });
+  applyMmMode();
+
+  // Modale des membres (clic sur un groupe/mail qui possede des membres)
+  var GM=window.GROUPMEMBERS||{};
+  var memModal=document.getElementById('memModal');
+  function openMembers(key){
+    var mem=GM[key]; if(!mem||!memModal)return;
+    document.getElementById('memTitle').innerHTML=eh(key)+' <span class="mem-tc">'+mem.length+' membre(s)</span>';
+    document.getElementById('memList').innerHTML=mem.map(function(m){return '<div class="memr"><span class="memr-n">'+eh(m.n)+'</span><span class="memr-t">'+eh(m.t)+'</span></div>';}).join('');
+    memModal.hidden=false;
+  }
+  function closeMembers(){ if(memModal)memModal.hidden=true; }
+  // Clic sur un groupe (centre) DANS la modale des adresses → sa liste de membres
+  var mailsTreeEl=document.getElementById('mailsTree');
+  if(mailsTreeEl)mailsTreeEl.addEventListener('click',function(e){ var it=e.target.closest?e.target.closest('.mm-item-mem'):null; if(it)openMembers(it.getAttribute('data-gkey')); });
+  var memClose=document.getElementById('memClose'); if(memClose)memClose.addEventListener('click',closeMembers);
+  if(memModal)memModal.addEventListener('click',function(e){ if(e.target===memModal)closeMembers(); });
+  document.addEventListener('keydown',function(e){ if(e.key==='Escape')closeMembers(); });
   var tmBtn=document.getElementById('toggleMembers');
   var treeEl=document.getElementById('tree');
   if(tmBtn&&treeEl)tmBtn.addEventListener('click',function(){ var h=treeEl.classList.toggle('hide-members'); tmBtn.textContent=h?'Afficher les membres':'Masquer les membres'; });
@@ -1386,19 +1577,47 @@ function buildGroupsHtmlDoc(data, rule) {
         '<title>Groupes — ' + esc(data.prefix || '') + '</title><style>' + css + '</style></head><body>' +
         '<div class="topbar">' +
             '<header class="doc-hd">' +
-            '<div class="doc-hd-txt"><h1>Prévisualisation des groupes AD</h1><div class="doc-meta">' + meta + '</div></div>' +
-            '<button id="fsBtn" class="fs-btn" type="button" title="Plein écran (F11)">' +
-                '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M16 21h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>' +
-                '<span>Plein écran</span>' +
-            '</button>' +
-        '</header>' +
+                '<div class="doc-hd-txt"><div class="doc-eyebrow">Prévisualisation des groupes AD</div><h1>' + esc(data.prefix || 'Groupe') + '</h1></div>' +
+                '<div class="doc-hd-actions">' +
+                    '<button id="infoBtn" class="info-btn" type="button" title="Détails et filtre du groupe">' +
+                        '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>' +
+                    '</button>' +
+                    '<button id="fsBtn" class="fs-btn" type="button" title="Plein écran (F11)">' +
+                        '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M16 21h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>' +
+                        '<span>Plein écran</span>' +
+                    '</button>' +
+                '</div>' +
+            '</header>' +
             '<div class="topbar-inner">' +
-                '<section class="filter-box"><div class="filter-title">Comment ce groupe est filtré</div>' + filterHtml + '</section>' +
                 toolbar + datalistHtml +
             '</div>' +
             stickyGroups +
         '</div>' +
         '<div class="wrap"><main id="tree">' + mainBody + '</main></div>' +
+        '<div class="info-modal" id="infoModal" hidden><div class="info-box">' +
+            '<button class="info-close" id="infoClose" type="button" aria-label="Fermer">×</button>' +
+            '<div class="info-meta">' + meta + '</div>' +
+            '<div class="info-title">Comment ce groupe est filtré</div>' +
+            filterHtml +
+        '</div></div>' +
+        '<div class="mails-modal" id="mailsModal" hidden><div class="mails-box">' +
+            '<div class="mails-head">' +
+                '<div class="mails-actions">' +
+                    '<button id="mailsMode" class="mails-icon" type="button" title="Affichage : Tout">' +
+                        '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>' +
+                    '</button>' +
+                    '<button class="mails-close" id="mailsClose" type="button" aria-label="Fermer">×</button>' +
+                '</div>' +
+                '<div class="mails-title" id="mailsTitle"></div>' +
+            '</div>' +
+            '<div class="mails-tree" id="mailsTree"></div>' +
+        '</div></div>' +
+        '<div class="mem-modal" id="memModal" hidden><div class="mem-box">' +
+            '<button class="mem-close" id="memClose" type="button" aria-label="Fermer">×</button>' +
+            '<div class="mem-title" id="memTitle"></div>' +
+            '<div class="mem-list" id="memList"></div>' +
+        '</div></div>' +
+        '<script>window.MAILTREE=' + JSON.stringify(mailTree).replace(/</g, '\\u003c') + ';window.GROUPMEMBERS=' + JSON.stringify(groupMembers).replace(/</g, '\\u003c') + ';</script>' +
         '<script>' + pageScript + '</script>' +
         '</body></html>';
 }
