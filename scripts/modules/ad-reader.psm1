@@ -151,46 +151,64 @@ function Search-ADObjects {
     return @($results | Sort-Object displayName | Select-Object -First $MaxResults)
 }
 
-function Get-OUTree {
+function Build-OUsCache {
+    # SEULE fonction autorisée à interroger l'AD pour les OUs (lecture seule).
+    # Construit l'arborescence régions/sites et l'enregistre dans le cache JSON.
     $regions = $global:parametresJson.ad.regions
-    if (-not $regions) { return @() }
+    $result  = [System.Collections.Generic.List[object]]::new()
 
-    $result = [System.Collections.Generic.List[object]]::new()
+    if ($regions) {
+        foreach ($region in $regions) {
+            $allSites = [System.Collections.Generic.List[object]]::new()
 
-    foreach ($region in $regions) {
-        $allSites = [System.Collections.Generic.List[object]]::new()
+            foreach ($base in $region.bases) {
+                $baseLabel = if ($base -match '^OU=([^,]+)') { $Matches[1] } else { $base }
+                try {
+                    $sites = Get-ADOrganizationalUnit -Filter * `
+                        -SearchBase $base -SearchScope OneLevel `
+                        -Credential $global:AD_credential `
+                        -Properties Name -ErrorAction Stop
 
-        foreach ($base in $region.bases) {
-            $baseLabel = if ($base -match '^OU=([^,]+)') { $Matches[1] } else { $base }
-            try {
-                $sites = Get-ADOrganizationalUnit -Filter * `
-                    -SearchBase $base -SearchScope OneLevel `
-                    -Credential $global:AD_credential `
-                    -Properties Name -ErrorAction Stop
-
-                foreach ($site in $sites) {
-                    if ($site.Name -notmatch '^A\d{5}') { continue }
-                    $allSites.Add([PSCustomObject]@{
-                        name      = $site.Name
-                        dn        = $site.DistinguishedName
-                        type      = 'site'
-                        baseLabel = $baseLabel
-                    })
+                    foreach ($site in $sites) {
+                        if ($site.Name -notmatch '^A\d{5}') { continue }
+                        $allSites.Add([PSCustomObject]@{
+                            name      = $site.Name
+                            dn        = $site.DistinguishedName
+                            type      = 'site'
+                            baseLabel = $baseLabel
+                        })
+                    }
+                } catch {
+                    add-msg -msg "Erreur lecture OU '$base' : $($_.Exception.Message)" -foregroundColor Red
                 }
-            } catch {
-                add-msg -msg "Erreur lecture OU '$base' : $($_.Exception.Message)" -foregroundColor Red
             }
-        }
 
-        $result.Add([PSCustomObject]@{
-            name      = $region.label
-            type      = 'region'
-            multiBase = ($region.bases.Count -gt 1)
-            children  = @($allSites | Sort-Object baseLabel, name)
-        })
+            $result.Add([PSCustomObject]@{
+                name      = $region.label
+                type      = 'region'
+                multiBase = ($region.bases.Count -gt 1)
+                children  = @($allSites | Sort-Object baseLabel, name)
+            })
+        }
     }
 
-    return @($result)
+    $json = ConvertTo-Json -InputObject @($result) -Depth 6 -Compress
+    $path = Get-OUsCachePath
+    [System.IO.File]::WriteAllText($path, $json, [System.Text.Encoding]::UTF8)
+    $siteCount = @($result | ForEach-Object { $_.children } | Where-Object { $_ }).Count
+    add-msg -msg "  [OUsCache] $siteCount site(s) mis en cache -> $path" -foregroundColor Green -quelType writeHost
+    return $siteCount
+}
+
+function Get-OUTree {
+    # Lit l'arborescence des OUs DEPUIS LE CACHE (jamais l'AD en direct).
+    # Construit le cache une première fois s'il est absent.
+    $tree = Get-OUsFromCache
+    if (-not $tree -or @($tree).Count -eq 0) {
+        [void](Build-OUsCache)
+        $tree = Get-OUsFromCache
+    }
+    return @($tree)
 }
 
 function Get-RegionFromDN {
@@ -257,6 +275,21 @@ function Get-GlobalUsersCachePath {
     $cacheDir   = Join-Path $scriptsDir "cache"
     if (-not (Test-Path $cacheDir)) { New-Item -ItemType Directory -Path $cacheDir -Force | Out-Null }
     return Join-Path $cacheDir "_users_global.json"
+}
+
+function Get-OUsCachePath {
+    $scriptsDir = Split-Path ($global:path."r_settings" -replace '/', '\') -Parent
+    $cacheDir   = Join-Path $scriptsDir "cache"
+    if (-not (Test-Path $cacheDir)) { New-Item -ItemType Directory -Path $cacheDir -Force | Out-Null }
+    return Join-Path $cacheDir "_ous_global.json"
+}
+
+function Get-OUsFromCache {
+    $path = Get-OUsCachePath
+    if (-not (Test-Path $path)) { return @() }
+    try {
+        return @(ConvertFrom-Json ([System.IO.File]::ReadAllText($path, [System.Text.Encoding]::UTF8)))
+    } catch { return @() }
 }
 
 function Get-AllUsersFromCache {

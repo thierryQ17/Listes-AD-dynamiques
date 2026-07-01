@@ -1098,6 +1098,31 @@ tr.row-selected td {
 }
 .modal-overlay[hidden] { display: none; }
 
+/* Modale de confirmation */
+.confirm-box {
+    background: #fff;
+    border-radius: 10px;
+    box-shadow: 0 12px 40px rgba(0,0,0,.25);
+    width: min(460px, 92vw);
+    padding: 22px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+.confirm-title { font-size: 15px; font-weight: 700; color: #1e293b; }
+.confirm-msg { font-size: 13px; color: #334155; line-height: 1.5; }
+.confirm-msg .confirm-list { margin: 8px 0; padding-left: 20px; }
+.confirm-msg .confirm-list li { margin: 3px 0; }
+.confirm-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 6px; }
+.btn-confirm-cancel, .btn-confirm-ok {
+    padding: 8px 16px; border-radius: 6px; font-size: 13px; font-weight: 600;
+    cursor: pointer; border: 1px solid; font-family: inherit;
+}
+.btn-confirm-cancel { background: #fff; border-color: #cbd5e1; color: #475569; }
+.btn-confirm-cancel:hover { background: #f1f5f9; }
+.btn-confirm-ok { background: #2563eb; border-color: #2563eb; color: #fff; }
+.btn-confirm-ok:hover { background: #1d4ed8; }
+
 .modal-box {
     background: #fff;
     border-radius: 8px;

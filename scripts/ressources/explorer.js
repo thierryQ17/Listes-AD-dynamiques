@@ -10,6 +10,7 @@ const state = {
     sortDir:        'asc',
     groupBy:        'none',
     groupsExpanded: true,
+    searchActive:   false,
     selectedSite:   null
 };
 
@@ -490,11 +491,48 @@ function toggleRegion(regionEl) {
 }
 
 
+function showConfirmModal(title, htmlMsg) {
+    return new Promise(resolve => {
+        const modal     = document.getElementById('confirm-modal');
+        const okBtn     = document.getElementById('confirm-ok');
+        const cancelBtn = document.getElementById('confirm-cancel');
+        if (!modal) { resolve(window.confirm(title)); return; }
+        document.getElementById('confirm-title').textContent = title;
+        document.getElementById('confirm-msg').innerHTML     = htmlMsg;
+        modal.hidden = false;
+        const cleanup = () => {
+            modal.hidden = true;
+            okBtn.removeEventListener('click', onOk);
+            cancelBtn.removeEventListener('click', onCancel);
+            modal.removeEventListener('click', onOverlay);
+            document.removeEventListener('keydown', onKey);
+        };
+        const onOk      = () => { cleanup(); resolve(true); };
+        const onCancel  = () => { cleanup(); resolve(false); };
+        const onOverlay = e => { if (e.target === modal) { cleanup(); resolve(false); } };
+        const onKey     = e => { if (e.key === 'Escape') { cleanup(); resolve(false); } };
+        okBtn.addEventListener('click', onOk);
+        cancelBtn.addEventListener('click', onCancel);
+        modal.addEventListener('click', onOverlay);
+        document.addEventListener('keydown', onKey);
+        okBtn.focus();
+    });
+}
+
 async function refreshAllCache() {
     const allSites = state.treeData.flatMap(r => r.children || []);
     if (!allSites.length) return;
 
-    const ok = confirm(`Vider et reconstruire tout le cache ?\n\n${allSites.length} site(s) rechargé(s) depuis l'AD.\nCette opération peut prendre plusieurs minutes.`);
+    const ok = await showConfirmModal(
+        'Vider et reconstruire TOUS les caches ?',
+        `Tous les caches seront <b>vidés et rechargés depuis l'AD</b> :` +
+        `<ul class="confirm-list">` +
+            `<li><b>${allSites.length}</b> sites (utilisateurs par site)</li>` +
+            `<li>les <b>OUs</b> (arborescence)</li>` +
+            `<li>le cache <b>global des utilisateurs</b></li>` +
+        `</ul>` +
+        `Cette opération peut prendre plusieurs minutes.`
+    );
     if (!ok) return;
 
     const btn = document.getElementById('refresh-all-btn');
@@ -536,7 +574,10 @@ async function refreshAllCache() {
 
 async function refreshRegionCache(region, regionEl) {
     const sites = region.children || [];
-    const ok = confirm(`Actualiser le cache de "${region.name}" ?\n\n${sites.length} site(s) rechargé(s) depuis l'AD.\nCette opération peut prendre quelques secondes.`);
+    const ok = await showConfirmModal(
+        `Actualiser le cache de « ${region.name} » ?`,
+        `<b>${sites.length}</b> site(s) seront rechargés depuis l'AD.<br>Cette opération peut prendre quelques secondes.`
+    );
     if (!ok) return;
 
     const btn = regionEl.querySelector('.region-refresh-btn');
@@ -662,7 +703,7 @@ function setupGroupBy() {
 
 function updateToggleBtn() {
     const btn = document.getElementById('toggle-all-btn');
-    if (state.groupBy === 'none') {
+    if (state.groupBy === 'none' && !state.searchActive) {
         btn.style.display = 'none';
     } else {
         btn.style.display = '';
@@ -698,6 +739,7 @@ function setAllGroups(expand) {
 }
 
 function displayUsers(users) {
+    state.searchActive = false;
     if (state.groupBy === 'none') {
         renderFlat(getSortedUsers(users));
     } else if (state.groupBy === 'category') {
@@ -1216,6 +1258,11 @@ function renderCrossSiteResults(q, preserveScroll) {
     document.getElementById('user-filter').disabled          = true;
     document.getElementById('group-by').disabled             = true;
 
+    // Bouton « Tout ouvrir / Tout fermer » pour les groupes (sites) des résultats
+    state.searchActive   = results.some(r => !r.uncached && r.users.length > 0);
+    state.groupsExpanded = true;
+    updateToggleBtn();
+
     const cachedLabel = totalCached < totalSites
         ? ` <span class="search-cache-hint">(${totalCached}/${totalSites} sites en cache)</span>`
         : '';
@@ -1281,6 +1328,7 @@ function renderCrossSiteResults(q, preserveScroll) {
 }
 
 function restoreMainPanel() {
+    state.searchActive = false;
     if (state.selectedSite) {
         const { site } = state.selectedSite;
         document.getElementById('user-filter').disabled = false;
@@ -1291,6 +1339,7 @@ function restoreMainPanel() {
         document.getElementById('current-site-name').textContent = 'Sélectionner un site';
         document.getElementById('user-count').textContent        = '';
         document.getElementById('users-tbody').innerHTML         = '';
+        updateToggleBtn();
     }
 }
 

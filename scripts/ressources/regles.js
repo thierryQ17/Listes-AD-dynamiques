@@ -2,6 +2,9 @@
 
 let rules      = [];
 let editingId  = null;
+let activeFormTab = 'params';
+let apercuCache = {};   // cache du rendu de l'onglet « Aperçu groupes », par signature de règle
+let groupByNiveau = (() => { try { return localStorage.getItem('regles_group_niveau') === '1'; } catch { return false; } })();
 
 const FIELDS = [
     ['title',              'Fonction (title)'],
@@ -221,6 +224,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     document.getElementById('btn-new-rule').addEventListener('click', openNewForm);
     document.getElementById('btn-view-json').addEventListener('click', openJsonModal);
+    setupGroupNiveauBtn();
+
+    const sidebar = document.querySelector('.regles-sidebar');
+    if (sidebar) {
+        try { if (localStorage.getItem('regles_sidebar_collapsed') === '1') sidebar.classList.add('collapsed'); } catch { /* ignore */ }
+        document.getElementById('btn-toggle-sidebar')?.addEventListener('click', () => {
+            const c = sidebar.classList.toggle('collapsed');
+            try { localStorage.setItem('regles_sidebar_collapsed', c ? '1' : '0'); } catch { /* ignore */ }
+        });
+    }
     setupJsonModal();
     setupHelpModal();
     setupCsvModal();
@@ -250,9 +263,26 @@ function renderList() {
         el.innerHTML = '<p class="hint">Aucune règle définie</p>';
         return;
     }
+    el.innerHTML = '';
+
+    if (groupByNiveau) {
+        for (const niv of [1, 2, 3]) {
+            const inNiv = rules.filter(r => (r.niveau || 1) === niv);
+            if (!inNiv.length) continue;
+            const hdr = document.createElement('div');
+            hdr.className = 'rules-niveau-hdr';
+            hdr.innerHTML = `<span class="niv-full">Niveau ${niv} (${NIV_LABELS[niv] || ''})</span><span class="niv-mini">N${niv}</span><span class="rules-niveau-count">${inNiv.length}</span>`;
+            el.appendChild(hdr);
+            const activeN   = inNiv.filter(r => r.active !== false);
+            const inactiveN = inNiv.filter(r => r.active === false);
+            for (const rule of activeN)   el.appendChild(buildCard(rule));
+            for (const rule of inactiveN) el.appendChild(buildCard(rule));
+        }
+        return;
+    }
+
     const active   = rules.filter(r => r.active !== false);
     const inactive = rules.filter(r => r.active === false);
-    el.innerHTML = '';
     for (const rule of active)   el.appendChild(buildCard(rule));
     if (inactive.length) {
         const sep = document.createElement('div');
@@ -261,6 +291,18 @@ function renderList() {
         el.appendChild(sep);
         for (const rule of inactive) el.appendChild(buildCard(rule));
     }
+}
+
+function setupGroupNiveauBtn() {
+    const btn = document.getElementById('btn-group-niveau');
+    if (!btn) return;
+    btn.classList.toggle('active', groupByNiveau);
+    btn.addEventListener('click', () => {
+        groupByNiveau = !groupByNiveau;
+        try { localStorage.setItem('regles_group_niveau', groupByNiveau ? '1' : '0'); } catch { /* ignore */ }
+        btn.classList.toggle('active', groupByNiveau);
+        renderList();
+    });
 }
 
 // Maître : icône "git-fork" (la règle alimente d'autres règles)
@@ -288,13 +330,18 @@ function buildCard(rule) {
         + (editingId === rule.id ? ' active' : '')
         + (isActive ? '' : ' inactive');
     card.dataset.id = rule.id;
+    card.title = rule.label || '';
+    const initials = (rule.label || '?').replace(/[^A-Za-z0-9]/g, '').slice(0, 2).toUpperCase() || '?';
     card.innerHTML =
+        `<span class="rule-initials">${esc(initials)}</span>` +
         `<div class="rule-card-row">` +
             `<span class="rule-card-label">${esc(rule.label || '(sans nom)')}</span>` +
             linkBadge +
             (linkedRule ? `<button class="btn-card-peer-preview" title="Prévisualiser « ${esc(linkedRule.label)} »" data-peer-id="${esc(linkedRule.id)}"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>` : '') +
             (!isActive ? `<span class="badge-inactive">Inactif</span>` : '') +
-        `</div>`;
+            (rule.locked ? `<span class="rule-lock-ic" title="Règle verrouillée">🔒</span>` : '') +
+        `</div>` +
+        (rule.locked ? `<span class="rule-lock-mini" title="Règle verrouillée">🔒</span>` : '');
 
     card.addEventListener('click', () => openEditForm(rule.id));
 
@@ -311,6 +358,7 @@ function buildCard(rule) {
 // ── Formulaire ────────────────────────────────────────────────────────
 function openNewForm() {
     editingId = null;
+    activeFormTab = 'params';
     renderList();
     renderForm(null);
 }
@@ -336,11 +384,13 @@ function renderForm(rule) {
     const exc          = rule?.conditions?.exclude || [];
     const activeChecked = (rule?.active !== false) ? ' checked' : '';
     const hasPeer = !!editingId && (!!rule?.invertOf || rules.some(r => r.invertOf === editingId));
+    const locked  = !!rule?.locked;
 
     main.innerHTML =
         `<div class="regles-form" id="rule-form">` +
             `<div class="form-tabs-bar">` +
                 `<button class="form-tab-btn active" data-tab="params">Paramètres</button>` +
+                `<button class="form-tab-btn" data-tab="apercu">Aperçu groupes</button>` +
                 `<button class="form-tab-btn" data-tab="circuit">Circuit</button>` +
             `</div>` +
             `<div class="form-tab-pane" id="tab-params">` +
@@ -440,6 +490,9 @@ function renderForm(rule) {
         `<div class="form-tab-pane" id="tab-circuit" hidden>` +
             buildCircuitHtml() +
         `</div>` +
+        `<div class="form-tab-pane" id="tab-apercu" hidden>` +
+            `<iframe id="apercu-frame" class="apercu-frame" title="Aperçu des groupes" allowfullscreen></iframe>` +
+        `</div>` +
         `</div>` +
         `<div class="form-footer">` +
             `<div class="gen-progress" id="gen-progress" hidden>` +
@@ -448,7 +501,11 @@ function renderForm(rule) {
             `</div>` +
             `<div class="form-footer-buttons">` +
                 `<div class="form-footer-left">` +
-                    (editingId ? `<button class="btn-danger" id="btn-delete-rule">Supprimer</button>` : '') +
+                    (editingId
+                        ? (locked
+                            ? `<button class="btn-unlock" id="btn-unlock" type="button" title="Déverrouiller pour autoriser les modifications">🔓 Déverrouiller</button>`
+                            : `<button class="btn-danger" id="btn-delete-rule">Supprimer</button>`)
+                        : '') +
                 `</div>` +
                 `<div class="form-footer-right">` +
                     `<button class="btn-secondary" id="btn-cancel">Annuler</button>` +
@@ -458,8 +515,17 @@ function renderForm(rule) {
                             ` Prévisualiser les groupes` +
                           `</button>`
                         : '') +
-                    (hasPeer ? `<button class="btn-generate-form" id="btn-generate-form">Générer les CSVs FORMATEURS et ADMINISTRATIF</button>` : '') +
-                    `<button class="btn-primary" id="btn-save">Enregistrer</button>` +
+                    (editingId
+                        ? `<button class="btn-html-page" id="btn-html-page" type="button" title="Ouvrir une page HTML récapitulative de tous les groupes">` +
+                            `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>` +
+                            ` Afficher page HTML` +
+                          `</button>`
+                        : '') +
+                    (hasPeer && !locked ? `<button class="btn-generate-form" id="btn-generate-form">Générer les CSVs FORMATEURS et ADMINISTRATIF</button>` : '') +
+                    (locked
+                        ? `<span class="lock-badge" title="Règle verrouillée">🔒 Verrouillée</span>`
+                        : (editingId ? `<button class="btn-lock" id="btn-lock" type="button" title="Verrouiller la règle (bloque toute modification et suppression)">🔒 Verrouiller</button>` : '') +
+                          `<button class="btn-primary" id="btn-save">Enregistrer</button>`) +
                 `</div>` +
             `</div>` +
         `</div>`;
@@ -485,9 +551,10 @@ function renderForm(rule) {
 
     document.getElementById('btn-add-include')?.addEventListener('click', () => { addCondRow('cond-include'); autoUpdateDesc(); });
     document.getElementById('btn-add-exclude')?.addEventListener('click', () => { addCondRow('cond-exclude'); autoUpdateDesc(); });
-    document.getElementById('btn-save').addEventListener('click', saveRule);
-    document.getElementById('btn-cancel').addEventListener('click', closeForm);
+    document.getElementById('btn-save')?.addEventListener('click', saveRule);
+    document.getElementById('btn-cancel')?.addEventListener('click', closeForm);
     document.getElementById('btn-preview-groups')?.addEventListener('click', previewGroups);
+    document.getElementById('btn-html-page')?.addEventListener('click', showGroupsHtmlPage);
 
     const prefixInput = document.getElementById('f-prefix');
     const prefixHint  = document.getElementById('prefix-hint');
@@ -507,6 +574,10 @@ function renderForm(rule) {
     const delRuleBtn = document.getElementById('btn-delete-rule');
     if (delRuleBtn) delRuleBtn.addEventListener('click', () => confirmDelete(editingId, document.getElementById('f-label')?.value.trim() || editingId));
 
+    document.getElementById('btn-lock')?.addEventListener('click', () => toggleLock(true));
+    document.getElementById('btn-unlock')?.addEventListener('click', () => toggleLock(false));
+    if (locked) document.getElementById('rule-form')?.classList.add('rule-form--locked');
+
     document.getElementById('f-active').addEventListener('change', async e => {
         const newVal = e.target.checked;
         e.target.checked = !newVal;
@@ -519,17 +590,24 @@ function renderForm(rule) {
 
     document.querySelectorAll('.form-tab-btn').forEach(btn =>
         btn.addEventListener('click', () => {
+            activeFormTab = btn.dataset.tab;
             document.querySelectorAll('.form-tab-btn').forEach(b => b.classList.remove('active'));
             document.querySelectorAll('.form-tab-pane').forEach(p => { p.hidden = true; });
             btn.classList.add('active');
             document.getElementById('tab-' + btn.dataset.tab).hidden = false;
+            if (btn.dataset.tab === 'apercu') loadApercuGroupes();
         })
     );
     document.getElementById('rule-form')?.addEventListener('input',  updateLdapDisplay);
     document.getElementById('rule-form')?.addEventListener('change', updateLdapDisplay);
     updateLdapDisplay();
 
-    document.getElementById('f-label').focus();
+    // Conserver l'onglet actif quand on change de règle (et recharger l'aperçu le cas échéant)
+    if (activeFormTab && activeFormTab !== 'params') {
+        document.querySelector('.form-tab-btn[data-tab="' + activeFormTab + '"]')?.click();
+    } else {
+        document.getElementById('f-label').focus();
+    }
 }
 
 function createCondRow(cond = null) {
@@ -614,11 +692,36 @@ function readForm() {
         niveau,
         monoNiveau: existing?.monoNiveau ?? false,
         ...(existing?.invertOf ? { invertOf: existing.invertOf } : {}),
+        ...(existing?.locked ? { locked: true } : {}),
         conditions: { include, exclude },
         active:     activeChk ? activeChk.checked : (existing?.active !== false),
         createdAt:  existing?.createdAt || now(),
         updatedAt:  now(),
     };
+}
+
+async function toggleLock(lock) {
+    if (lock) {
+        const rule = readForm();
+        if (!rule) return;
+        if (!await showConfirm(`Verrouiller la règle « ${rule.label} » ?\nToute modification et suppression sera bloquée (déverrouillage possible ensuite).`)) return;
+        rule.locked = true;
+        try {
+            await fetch('/api/regles', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(rule) });
+            editingId = rule.id;
+            showToast('Règle verrouillée', 'success');
+        } catch { showToast('Erreur lors du verrouillage', 'error'); return; }
+    } else {
+        const src = rules.find(r => r.id === editingId);
+        if (!src) return;
+        if (!await showConfirm(`Déverrouiller la règle « ${src.label} » pour autoriser les modifications ?`)) return;
+        try {
+            await fetch('/api/regles', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...src, locked: false, updatedAt: now() }) });
+            showToast('Règle déverrouillée', 'success');
+        } catch { showToast('Erreur lors du déverrouillage', 'error'); return; }
+    }
+    await loadRules();
+    renderForm(rules.find(r => r.id === editingId));
 }
 
 async function saveRule() {
@@ -745,8 +848,10 @@ function setupCacheInfoBar() {
         try {
             const data = await fetch('/api/users/preload', { method: 'POST' }).then(r => r.json());
             if (data.ok) {
-                msg.textContent = `✓ ${data.count.toLocaleString('fr-FR')} util. chargés`;
+                apercuCache = {};   // les données AD ont changé → invalider le cache d'aperçu
+                msg.textContent = `✓ ${data.count.toLocaleString('fr-FR')} util. mis à jour`;
                 msg.className = 'cache-info-msg ok';
+                showToast('Tous les caches mis à jour (utilisateurs, OUs, sites)', 'success');
             } else {
                 msg.textContent = `⚠ ${data.error || 'Erreur'}`;
                 msg.className = 'cache-info-msg warn';
@@ -927,6 +1032,375 @@ async function fetchAndShowPreview(rule, spinEl = null) {
     } finally {
         if (spinEl) { spinEl.disabled = false; }
     }
+}
+
+async function showGroupsHtmlPage() {
+    const rule = readForm();
+    if (!rule) return;
+    const btn = document.getElementById('btn-html-page');
+    if (btn) { btn.disabled = true; }
+    try {
+        const r    = await fetch('/api/regles/preview-groups', {
+            method:  'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body:    JSON.stringify(rule),
+        });
+        const data = await r.json();
+        if (data.error) { showToast(data.error, 'error'); return; }
+        const w = window.open('', '_blank');
+        if (!w) { showToast('Pop-up bloquée — autorisez les fenêtres pour ce site', 'error'); return; }
+        w.document.open();
+        w.document.write(buildGroupsHtmlDoc(data, rule));
+        w.document.close();
+    } catch {
+        showToast('Erreur lors de la génération de la page HTML', 'error');
+    } finally {
+        if (btn) { btn.disabled = false; }
+    }
+}
+
+function buildGroupsHtmlBody(data) {
+    const groups   = data.groups || [];
+    const global   = groups.find(g => g.type === 'global');
+    const doGroups  = groups.filter(g => g.type === 'do').sort((a, b) => a.name.localeCompare(b.name, 'fr'));
+    const centres  = groups.filter(g => g.type === 'centre');
+    for (const dg of doGroups) {
+        dg._centres = centres
+            .filter(c => c.name.startsWith(dg.name + '-'))
+            .sort((a, b) => a.name.localeCompare(b.name, 'fr'));
+    }
+
+    const membersHtml = g => {
+        if (!g.members || !g.members.length) return '';
+        return `<ul class="members">` + g.members.map(m =>
+            `<li><span class="m-name">${esc(m.name)}</span>${m.title ? `<span class="m-title">${esc(m.title)}</span>` : ''}</li>`
+        ).join('') + `</ul>`;
+    };
+    const card = (g, lvl, badge) =>
+        `<div class="grp lvl${lvl}">` +
+            `<div class="grp-hd">` +
+                `<span class="grp-badge">${badge}</span>` +
+                `<span class="grp-name">${esc(g.name)}</span>` +
+                `<span class="grp-count" title="${g.count ?? 0} utilisateur(s)">${g.count ?? 0}</span>` +
+            `</div>` +
+            (g.mail ? `<div class="grp-mail">${esc(g.mail)}</div>` : '') +
+            membersHtml(g) +
+        `</div>`;
+
+    let body = '';
+    if (global) body += card(global, 1, 'Niveau 1 · Global');
+    for (const dg of doGroups) {
+        body += `<div class="branch">` + card(dg, 2, 'Niveau 2 · DO');
+        for (const c of (dg._centres || [])) body += card(c, 3, 'Niveau 3 · Centre');
+        body += `</div>`;
+    }
+    if (!body) body = `<p class="empty">Aucun groupe — la règle ne correspond à aucun utilisateur.</p>`;
+    return body;
+}
+
+function apercuMsgDoc(msg) {
+    return '<!DOCTYPE html><html><head><meta charset="utf-8"></head>' +
+        '<body style="margin:0;font-family:\'Segoe UI\',system-ui,sans-serif;color:#6b7280;background:#f4f5f7;padding:24px;font-style:italic;">' +
+        esc(msg) + '</body></html>';
+}
+
+async function loadApercuGroupes() {
+    const frame = document.getElementById('apercu-frame');
+    if (!frame) return;
+    const rule = readForm();
+    if (!rule) { frame.srcdoc = apercuMsgDoc('Complétez la règle (nom + conditions) pour afficher les groupes.'); return; }
+
+    // Signature du contenu de la règle → si inchangée, on réutilise le rendu en cache
+    const sig = JSON.stringify({
+        id: editingId, label: rule.label, prefix: rule.prefix,
+        niveau: rule.niveau, monoNiveau: rule.monoNiveau,
+        invertOf: rule.invertOf, conditions: rule.conditions,
+    });
+    if (apercuCache[sig]) { frame.srcdoc = apercuCache[sig]; return; }
+
+    frame.srcdoc = apercuMsgDoc('Chargement…');
+    try {
+        const r    = await fetch('/api/regles/preview-groups', {
+            method:  'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body:    JSON.stringify(rule),
+        });
+        const data = await r.json();
+        if (data.error) { frame.srcdoc = apercuMsgDoc(data.error); return; }
+        // Exactement la même page que « Afficher page HTML », dans l'iframe
+        const doc = buildGroupsHtmlDoc(data, rule);
+        apercuCache[sig] = doc;
+        frame.srcdoc = doc;
+    } catch {
+        frame.srcdoc = apercuMsgDoc('Erreur lors du chargement des groupes.');
+    }
+}
+
+function buildGroupsHtmlDoc(data, rule) {
+    const groups   = data.groups || [];
+    const global   = groups.find(g => g.type === 'global');
+    const doGroups = groups.filter(g => g.type === 'do').sort((a, b) => a.name.localeCompare(b.name, 'fr'));
+    const centres  = groups.filter(g => g.type === 'centre');
+    for (const dg of doGroups) {
+        dg._centres = centres.filter(c => c.name.startsWith(dg.name + '-')).sort((a, b) => a.name.localeCompare(b.name, 'fr'));
+    }
+
+    const memHtml = g => {
+        if (!g.members || !g.members.length) return '';
+        return '<ul class="members">' + g.members.map(m =>
+            '<li class="mem" data-s="' + esc((m.name + ' ' + (m.title || '')).toLowerCase()) + '">' +
+                '<span class="m-name">' + esc(m.name) + '</span>' +
+                (m.title ? '<span class="m-title">' + esc(m.title) + '</span>' : '') +
+            '</li>'
+        ).join('') + '</ul>';
+    };
+    const card = (g, lvl, badge, cls, toggle) =>
+        '<div class="grp lvl' + lvl + (cls ? ' ' + cls : '') + '" data-name="' + esc((g.name || '').toLowerCase()) + '">' +
+            '<div class="grp-hd">' +
+                (toggle ? '<span class="do-toggle">▾</span>' : '') +
+                (badge ? '<span class="grp-badge">' + badge + '</span>' : '') +
+                '<span class="grp-name">' + esc(g.name) + '</span>' +
+                '<span class="grp-count">' + (g.count ?? 0) + '</span>' +
+            '</div>' +
+            (g.mail ? '<div class="grp-mail">' + esc(g.mail) + '</div>' : '') +
+            memHtml(g) +
+        '</div>';
+
+    const n     = doGroups.length;
+    const isN3  = (data.niveau === 3) && n > 0;
+    const globalCardHtml = global ? card(global, 1, 'Niveau 1 · Global', '', false) : '';
+
+    // Niveau 1/2 : empilement vertical (carte DO + centres)
+    const branchesHtml = doGroups.map(dg => {
+        const hasC = (dg._centres || []).length > 0;
+        return '<div class="branch" data-do="' + esc(dg.name) + '">' +
+                   card(dg, 2, 'Niveau 2 · DO', 'do-head', hasC) +
+                   '<div class="do-children">' +
+                       (dg._centres || []).map(c => card(c, 3, '', '', false)).join('') +
+                   '</div>' +
+               '</div>';
+    }).join('');
+
+    // Niveau 3 : en-têtes DO (figés dans la topbar) séparés des colonnes de centres (défilantes)
+    const doHeaderCards = doGroups.map(dg =>
+        '<div class="do-head-cell" data-do="' + esc(dg.name) + '">' + card(dg, 2, 'Niveau 2 · DO', '', false) + '</div>'
+    ).join('');
+    const centreColumns = doGroups.map(dg =>
+        '<div class="do-centres" data-do="' + esc(dg.name) + '">' +
+            (dg._centres || []).map(c => card(c, 3, '', '', false)).join('') +
+        '</div>'
+    ).join('');
+
+    // Bloc figé (niveau 3) : global + rangée d'en-têtes DO — placé DANS la topbar sticky
+    const stickyGroups = isN3
+        ? '<div class="topbar-groups">' + globalCardHtml + '<div class="do-headers cols-' + n + '">' + doHeaderCards + '</div></div>'
+        : '';
+
+    // Corps défilant
+    let mainBody = isN3
+        ? '<div class="do-columns cols-' + n + '">' + centreColumns + '</div>'
+        : (globalCardHtml + branchesHtml);
+    if (!mainBody) mainBody = '<p class="empty">Aucun groupe — la règle ne correspond à aucun utilisateur.</p>';
+
+    // Auto-complétion : noms de membres + de groupes
+    const nameSet = new Set();
+    groups.forEach(g => { (g.members || []).forEach(m => nameSet.add(m.name)); if (g.name) nameSet.add(g.name); });
+    const datalistHtml = '<datalist id="allnames">' +
+        [...nameSet].sort((a, b) => a.localeCompare(b, 'fr')).map(n => '<option value="' + esc(n) + '">').join('') +
+        '</datalist>';
+
+    // Catégorisation par DO
+    const catOpts     = doGroups.map(dg => '<option value="' + esc(dg.name) + '">' + esc(dg.name) + '</option>').join('');
+    const hasBranches = doGroups.length > 0;
+    const toolbar =
+        '<div class="toolbar">' +
+            '<div class="search-wrap"><input id="q" list="allnames" type="text" placeholder="Rechercher un nom, une fonction, un groupe…" autocomplete="off"><button id="qclear" class="qclear" type="button" hidden title="Vider">×</button></div>' +
+            (hasBranches ? '<select id="cat"><option value="">Toutes les DO</option>' + catOpts + '</select>' : '') +
+            (hasBranches ? '<button id="collapseAll" type="button">Tout replier</button>' : '') +
+            '<button id="toggleMembers" type="button">Masquer les membres</button>' +
+            '<span class="count" id="count"></span>' +
+        '</div>';
+
+    // Filtre de la règle (comment ce groupe est filtré)
+    const opMap    = Object.fromEntries(OPS);
+    const condText = c => {
+        const f = FIELD_LABELS[c.field] || c.field;
+        const o = opMap[c.op] || c.op;
+        return NO_VALUE_OPS.has(c.op) ? (f + ' ' + o) : (f + ' ' + o + ' « ' + c.value + ' »');
+    };
+    const inc = (rule && rule.conditions && rule.conditions.include) || [];
+    const exc = (rule && rule.conditions && rule.conditions.exclude) || [];
+    let filterHtml = '';
+    if (rule && rule.invertOf) {
+        filterHtml = '<div class="fl-row">Règle <b>inverse</b> : tous les utilisateurs <b>sauf</b> ceux de la règle source.</div>';
+    } else {
+        if (inc.length) filterHtml += '<div class="fl-row"><span class="fl-tag inc">INCLURE</span><ul class="fl-list">' + inc.map(c => '<li>' + esc(condText(c)) + '</li>').join('') + '</ul></div>';
+        if (exc.length) filterHtml += '<div class="fl-row"><span class="fl-tag exc">EXCLURE</span><ul class="fl-list">' + exc.map(c => '<li>' + esc(condText(c)) + '</li>').join('') + '</ul></div>';
+        if (!inc.length && !exc.length) filterHtml = '<div class="fl-row">Aucune condition définie.</div>';
+    }
+    const nivMap = { 1: 'Global (1 groupe)', 2: 'Par DO (DO + global)', 3: 'Par centre (centre + DO + global)' };
+    filterHtml += '<div class="fl-row fl-note">Groupement niveau ' + (data.niveau || '?') + ' · ' + esc(nivMap[data.niveau] || '') + ' — comptes activés uniquement, OU « Comptes generiques » exclues.</div>';
+
+    const css = `
+        *{box-sizing:border-box;}
+        body{font-family:"Segoe UI",system-ui,-apple-system,sans-serif;margin:0;background:#f4f5f7;color:#1f2430;}
+        .topbar{position:sticky;top:0;z-index:10;background:#f4f5f7;box-shadow:0 3px 8px rgba(0,0,0,.08);}
+        .topbar-inner{max-width:none;margin:0 auto;padding:12px 28px 10px;}
+        .doc-hd{background:linear-gradient(120deg,#374151,#6b7280 68%,#9ca3af);color:#fff;padding:14px 28px;display:flex;align-items:center;justify-content:space-between;gap:16px;}
+        .doc-hd-txt{min-width:0;}
+        .fs-btn{display:inline-flex;align-items:center;gap:7px;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.3);color:#fff;padding:7px 13px;border-radius:8px;font-size:12.5px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap;}
+        .fs-btn:hover{background:rgba(255,255,255,.28);}
+        .doc-hd h1{margin:0 0 6px;font-size:1.35rem;}
+        .doc-meta{opacity:.94;font-size:.88rem;}
+        .doc-meta b{color:#fff;}
+        .wrap{max-width:none;margin:0 auto;padding:14px 28px 60px;}
+        .filter-box{background:#fff;border:1px solid #e2e5ea;border-left:4px solid #6b7280;border-radius:10px;padding:10px 16px;margin:0 0 10px;}
+        .filter-title{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#6b7280;margin-bottom:6px;}
+        .fl-row{font-size:.86rem;margin:5px 0;}
+        .fl-tag{display:inline-block;font-size:9px;font-weight:700;padding:2px 8px;border-radius:999px;margin-right:6px;background:#e5e7eb;color:#374151;vertical-align:middle;}
+        .fl-list{margin:5px 0 0;padding-left:24px;}
+        .fl-list li{margin:2px 0;}
+        .fl-note{color:#6b7280;font-size:.8rem;margin-top:9px;}
+        .toolbar{display:flex;gap:12px;align-items:center;flex-wrap:wrap;}
+        .search-wrap{position:relative;flex:1;min-width:230px;}
+        .toolbar #q{width:100%;height:34px;padding:0 32px 0 12px;border:1px solid #cbd0d8;border-radius:8px;font-size:13px;font-family:inherit;}
+        .qclear{position:absolute;right:8px;top:50%;transform:translateY(-50%);border:none;background:#cbd0d8;color:#fff;width:18px;height:18px;border-radius:50%;cursor:pointer;font-size:13px;line-height:1;display:flex;align-items:center;justify-content:center;padding:0;}
+        .qclear:hover{background:#9ca3af;}
+        .qclear[hidden]{display:none;}
+        .toolbar select{height:34px;border:1px solid #cbd0d8;border-radius:8px;padding:0 8px;font-size:13px;font-family:inherit;background:#fff;}
+        .toolbar button{height:34px;border:1px solid #cbd0d8;background:#fff;border-radius:8px;padding:0 12px;font-size:12.5px;font-weight:600;cursor:pointer;color:#374151;}
+        .toolbar button:hover{background:#eef0f3;}
+        .toolbar .count{font-size:.82rem;color:#6b7280;margin-left:auto;}
+        .grp{border-radius:11px;border:1px solid #cbd5e1;padding:12px 16px;margin:9px 0;background:#fff;box-shadow:0 2px 7px rgba(15,23,42,.09);}
+        .grp.lvl1{border:1px solid #c3d0e0;border-left:6px solid #1e3a5f;background:#eef2f8;}
+        .grp.lvl2{border:1px solid #c3d4ee;border-left:6px solid #2563eb;background:#f0f5fc;margin-left:26px;}
+        .grp.lvl3{border:1px solid #d5dbe4;border-left:6px solid #7c8ba1;background:#fafbfd;margin-left:52px;}
+        .branch{margin:2px 0 12px;}
+        .branch.collapsed .do-children{display:none;}
+        .do-columns{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;align-items:start;margin:10px auto 0;}
+        .do-columns.cols-3{grid-template-columns:repeat(3,minmax(0,1fr));max-width:75%;}
+        .do-columns.cols-2{grid-template-columns:repeat(2,minmax(0,1fr));max-width:50%;}
+        .do-columns.cols-1{grid-template-columns:minmax(0,1fr);max-width:25%;}
+        .topbar-groups{padding:2px 28px 10px;}
+        .topbar-groups .grp.lvl1{margin:6px 0 0;}
+        .do-headers{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin:8px auto 0;}
+        .do-headers.cols-3{grid-template-columns:repeat(3,minmax(0,1fr));max-width:75%;}
+        .do-headers.cols-2{grid-template-columns:repeat(2,minmax(0,1fr));max-width:50%;}
+        .do-headers.cols-1{grid-template-columns:minmax(0,1fr);max-width:25%;}
+        .do-head-cell .grp.lvl2{margin:0;}
+        .do-centres{display:flex;flex-direction:column;gap:9px;}
+        .do-centres.collapsed{display:none;}
+        .do-centres .grp.lvl3{margin-left:16px;}
+        .do-centres .members{columns:1;}
+        .do-centres .members li{grid-template-columns:135px 1fr;}
+        .grp-hd{display:flex;align-items:center;gap:9px;}
+        .do-toggle{cursor:pointer;user-select:none;font-size:11px;color:#6b7280;width:12px;}
+        .do-head{cursor:pointer;}
+        .grp-badge{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;padding:2px 9px;border-radius:999px;background:#e5e7eb;color:#4b5563;white-space:nowrap;}
+        .grp-name{font-weight:700;font-size:.97rem;color:#1e3a5f;letter-spacing:.01em;word-break:normal;overflow-wrap:break-word;}
+        .grp-count{margin-left:auto;background:#374151;color:#fff;border-radius:999px;padding:1px 10px;font-size:.78rem;font-weight:700;}
+        .grp-mail{font-family:"Cascadia Code",Consolas,monospace;font-size:.78rem;color:#6b7280;margin-top:3px;}
+        .members{list-style:none;margin:9px 0 0;padding:8px 0 0;border-top:1px dashed #d5dae1;columns:2;column-gap:30px;}
+        .members li{break-inside:avoid;display:grid;grid-template-columns:155px 1fr;column-gap:8px;align-items:baseline;padding:1px 0;font-size:.82rem;}
+        .m-name{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+        .m-title{color:#6b7280;text-transform:uppercase;font-size:.72rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+        .grp.hide,.branch.hide,.mem.hide{display:none;}
+        #tree.hide-members .members{display:none;}
+        .empty{color:#6b7280;font-style:italic;}
+        @media print{.toolbar{display:none;}body{background:#fff;}.doc-hd,.grp{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}
+    `;
+    const meta =
+        `Préfixe <b>${esc(data.prefix || '')}</b> · Domaine <b>@${esc(data.mailDomain || '')}</b> · ` +
+        `Niveau <b>${data.niveau}</b> · <b>${data.total}</b> utilisateur(s)` +
+        (data.cacheTs ? ` · Cache du <b>${esc(data.cacheTs)}</b>` : '');
+
+    const pageScript =
+`(function(){
+  var q=document.getElementById('q');
+  var cat=document.getElementById('cat');
+  var countEl=document.getElementById('count');
+  var mems=[].slice.call(document.querySelectorAll('.mem'));
+  var grps=[].slice.call(document.querySelectorAll('.grp'));
+  var branches=[].slice.call(document.querySelectorAll('.branch, .do-centres'));
+  var g1=document.querySelector('.grp.lvl1');
+  function apply(){
+    var term=((q&&q.value)||'').trim().toLowerCase();
+    var catVal=(cat&&cat.value)||'';
+    mems.forEach(function(li){
+      var ok=!term||(li.getAttribute('data-s')||'').indexOf(term)!==-1;
+      li.classList.toggle('hide',!ok);
+    });
+    grps.forEach(function(g){
+      var name=g.getAttribute('data-name')||'';
+      if(term&&name.indexOf(term)!==-1){
+        var ms=g.querySelectorAll('.mem'); for(var i=0;i<ms.length;i++){ms[i].classList.remove('hide');}
+      }
+    });
+    var shown=0; mems.forEach(function(li){ if(!li.classList.contains('hide'))shown++; });
+    grps.forEach(function(g){
+      var name=g.getAttribute('data-name')||'';
+      var nameMatch=!term||name.indexOf(term)!==-1;
+      var hasMemAny=g.querySelectorAll('.mem').length>0;
+      var hasMemVis=g.querySelectorAll('.mem:not(.hide)').length>0;
+      var visible=!term||nameMatch||hasMemVis;
+      g.classList.toggle('hide',hasMemAny?!visible:false);
+    });
+    branches.forEach(function(b){
+      var doName=b.getAttribute('data-do')||'';
+      var catOk=!catVal||doName===catVal;
+      var doMatch=!term||doName.toLowerCase().indexOf(term)!==-1;
+      var hasVisChild=b.querySelectorAll('.grp.lvl3:not(.hide)').length>0;
+      var termOk=!term||doMatch||hasVisChild;
+      var show=catOk&&termOk;
+      b.classList.toggle('hide',!show);
+      var hc=document.querySelector('.do-head-cell[data-do="'+doName.replace(/"/g,'\\"')+'"]');
+      if(hc)hc.classList.toggle('hide',!show);
+    });
+    if(g1){
+      var hideG=!!catVal||(term&&(g1.getAttribute('data-name')||'').indexOf(term)===-1&&g1.querySelectorAll('.mem:not(.hide)').length===0);
+      g1.classList.toggle('hide',hideG);
+    }
+    if(countEl)countEl.textContent=shown+' membre(s) affiche(s)';
+  }
+  var qc=document.getElementById('qclear');
+  if(q){
+    q.addEventListener('focus',function(){q.select();});
+    q.addEventListener('input',function(){ if(qc)qc.hidden=!q.value; apply(); });
+  }
+  if(qc)qc.addEventListener('click',function(){ q.value=''; qc.hidden=true; apply(); q.focus(); });
+  if(cat)cat.addEventListener('change',apply);
+  [].slice.call(document.querySelectorAll('.do-head')).forEach(function(h){
+    h.addEventListener('click',function(){ var br=h.closest('.branch'); if(br)br.classList.toggle('collapsed'); });
+  });
+  var cb=document.getElementById('collapseAll'); var col=false;
+  if(cb)cb.addEventListener('click',function(){ col=!col; branches.forEach(function(b){b.classList.toggle('collapsed',col);}); cb.textContent=col?'Tout deplier':'Tout replier'; });
+  var fsBtn=document.getElementById('fsBtn');
+  if(fsBtn)fsBtn.addEventListener('click',function(){ if(document.fullscreenElement){document.exitFullscreen();}else{document.documentElement.requestFullscreen();} });
+  var tmBtn=document.getElementById('toggleMembers');
+  var treeEl=document.getElementById('tree');
+  if(tmBtn&&treeEl)tmBtn.addEventListener('click',function(){ var h=treeEl.classList.toggle('hide-members'); tmBtn.textContent=h?'Afficher les membres':'Masquer les membres'; });
+  apply();
+})();`;
+
+    return '<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8">' +
+        '<title>Groupes — ' + esc(data.prefix || '') + '</title><style>' + css + '</style></head><body>' +
+        '<div class="topbar">' +
+            '<header class="doc-hd">' +
+            '<div class="doc-hd-txt"><h1>Prévisualisation des groupes AD</h1><div class="doc-meta">' + meta + '</div></div>' +
+            '<button id="fsBtn" class="fs-btn" type="button" title="Plein écran (F11)">' +
+                '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M16 21h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>' +
+                '<span>Plein écran</span>' +
+            '</button>' +
+        '</header>' +
+            '<div class="topbar-inner">' +
+                '<section class="filter-box"><div class="filter-title">Comment ce groupe est filtré</div>' + filterHtml + '</section>' +
+                toolbar + datalistHtml +
+            '</div>' +
+            stickyGroups +
+        '</div>' +
+        '<div class="wrap"><main id="tree">' + mainBody + '</main></div>' +
+        '<script>' + pageScript + '</script>' +
+        '</body></html>';
 }
 
 async function previewGroups() {

@@ -9,6 +9,17 @@
 - Ne jamais proposer, suggérer ou écrire du code qui modifie l'AD **sauf si l'utilisateur le demande explicitement**
 - L'utilisateur introduira les opérations d'écriture (`Set-AD*`, `Add-ADGroupMember`, etc.) en temps voulu — attendre sa demande explicite avant d'en écrire
 
+## RÈGLE — TOUT passe par le CACHE
+
+**Aucune recherche (utilisateurs, OUs, personnes, valeurs de champs…) ne doit interroger l'AD en direct.** Toute l'application gravite autour des caches JSON locaux ; l'AD n'est interrogé QUE pour (re)construire un cache.
+
+- **Cache utilisateurs** : `scripts/cache/_users_global.json` — construit par `Build-GlobalUsersCache`, lu par `Get-AllUsersFromCache`.
+- **Cache OUs** : `scripts/cache/_ous_global.json` — construit par `Build-OUsCache`, lu par `Get-OUsFromCache` ; **`Get-OUTree` lit ce cache** (jamais l'AD).
+- **Caches par site** : `scripts/cache/*.json` — utilisateurs par site (Explorateur).
+- Le filtrage (règles, recherche Explorateur, sélecteurs de valeurs, arbre) se fait **en mémoire** sur ces caches.
+- **Seules les fonctions `Build-*Cache`** (dans `ad-reader.psm1`) ont le droit d'appeler `Get-AD*`. Toute nouvelle recherche/fonctionnalité doit **lire un cache**, jamais appeler `Get-AD*` directement.
+- Le bouton **↻ Cache** (route `POST /api/users/preload`) reconstruit **TOUS** les caches et le footer affiche l'état à jour.
+
 ## Architecture
 
 - **Backend** : PowerShell + `System.Net.HttpListener` (serveur HTTP local)

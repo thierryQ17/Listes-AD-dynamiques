@@ -161,6 +161,12 @@ function Invoke-RouteHandler {
                 for ($i = 0; $i -lt $regles.Count; $i++) { if ($regles[$i].id -eq $rule.id) { $idx = $i; break } }
                 if ($idx -ge 0) {
                     $stored = $regles[$idx]
+                    # Règle verrouillée : bloquer toute modification, sauf le déverrouillage explicite (locked:false)
+                    if ($stored.locked -eq $true -and $rule.locked -ne $false) {
+                        $Response.StatusCode = 403
+                        Send-JsonResponse -Response $Response -Body '{"error":"Règle verrouillée — modification bloquée."}'
+                        return
+                    }
                     $regles[$idx] = $rule
                     # Préserver les champs non gérés par le formulaire (ex. invertOf)
                     if ($stored.PSObject.Properties['invertOf'] -and -not $rule.PSObject.Properties['invertOf']) {
@@ -185,7 +191,18 @@ function Invoke-RouteHandler {
         '^/api/users/preload$' {
             if ($Method -eq 'POST') {
                 try {
+                    # Reconstruit TOUS les caches : OUs + utilisateurs global (synchrone),
+                    # puis purge les caches par site et relance le warmup (reconstruction en arrière-plan).
+                    [void](Build-OUsCache)
                     $count = Build-GlobalUsersCache
+                    $sd = Split-Path ($global:path."r_settings" -replace '/', '\') -Parent
+                    $cd = Join-Path $sd "cache"
+                    if (Test-Path $cd) {
+                        Get-ChildItem $cd -Filter '*.json' -ErrorAction SilentlyContinue |
+                            Where-Object { $_.Name -notin @('_users_global.json', '_ous_global.json') } |
+                            Remove-Item -Force -ErrorAction SilentlyContinue
+                    }
+                    Start-CacheWarmup
                     Send-JsonResponse -Response $Response -Body "{`"ok`":true,`"count`":$count}"
                 } catch {
                     $errMsg = $_.Exception.Message -replace '"', "'"
@@ -524,9 +541,15 @@ function Invoke-RouteHandler {
             $rPath  = Get-ReglesPath
             if ($Method -eq 'DELETE') {
                 $regles = if (Test-Path $rPath) { @(ConvertFrom-Json ([System.IO.File]::ReadAllText($rPath, [System.Text.Encoding]::UTF8))) } else { @() }
-                $regles = @($regles | Where-Object { $_.id -ne $id })
-                [System.IO.File]::WriteAllText($rPath, (ConvertTo-Json -InputObject @($regles) -Depth 10 -Compress), [System.Text.Encoding]::UTF8)
-                Send-JsonResponse -Response $Response -Body '{"ok":true}'
+                $target = $regles | Where-Object { $_.id -eq $id } | Select-Object -First 1
+                if ($target -and $target.locked -eq $true) {
+                    $Response.StatusCode = 403
+                    Send-JsonResponse -Response $Response -Body '{"error":"Règle verrouillée — suppression bloquée."}'
+                } else {
+                    $regles = @($regles | Where-Object { $_.id -ne $id })
+                    [System.IO.File]::WriteAllText($rPath, (ConvertTo-Json -InputObject @($regles) -Depth 10 -Compress), [System.Text.Encoding]::UTF8)
+                    Send-JsonResponse -Response $Response -Body '{"ok":true}'
+                }
             }
         }
         '^/api/ad/values$' {
