@@ -1006,11 +1006,14 @@ function showUserDetail(u) {
             <div class="detail-name">${esc(u.displayName || u.samAccountName)}</div>
             ${statusHtml}
             <div class="detail-fields">
-                ${scalarFields.filter(f => f.value).map(f => `
+                ${scalarFields.map(f => {
+                    const empty = f.value == null || String(f.value).trim() === '';
+                    return `
                     <div class="detail-field">
                         <span class="detail-label">${esc(f.label)}</span>
-                        <span class="detail-value">${esc(f.value)}</span>
-                    </div>`).join('')}
+                        <span class="detail-value${empty ? ' detail-value-empty' : ''}">${empty ? '—' : esc(String(f.value))}</span>
+                    </div>`;
+                }).join('')}
                 ${buildProxyHtml(u)}
             </div>
         </div>`;
@@ -1036,11 +1039,15 @@ function showUserDetail(u) {
             <div class="detail-name">${esc(u.displayName || u.samAccountName)}</div>
             ${statusHtml}
             <div class="detail-fields">
-                ${majFields.filter(f => u[f.key]).map(f => `
+                ${majFields.map(f => {
+                    const raw = u[f.key];
+                    const empty = raw == null || String(raw).trim() === '';
+                    return `
                     <div class="detail-field">
                         <span class="detail-label">${esc(f.label)}</span>
-                        <span class="detail-value">${esc(u[f.key])}</span>
-                    </div>`).join('')}
+                        <span class="detail-value${empty ? ' detail-value-empty' : ''}">${empty ? '—' : esc(String(raw))}</span>
+                    </div>`;
+                }).join('')}
             </div>
         </div>`;
 

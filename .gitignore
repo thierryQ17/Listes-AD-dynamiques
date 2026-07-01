@@ -11,8 +11,9 @@ scripts/xmlConnect/AD/*.xml
 # Fichiers générés au démarrage
 scripts/settings/variablesGlobales.json
 
-# Sorties applicatives
+# Sorties applicatives (CSV générés)
 application/out/
+application/output/
 
 # Divers
 *.tmp

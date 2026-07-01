@@ -517,6 +517,12 @@ body {
     word-break: break-all;
 }
 
+/* Champ sans valeur : tiret grisé (le champ reste affiché pour un panneau homogène) */
+.detail-value-empty {
+    color: #9ca3af;
+    font-style: italic;
+}
+
 .detail-value a {
     color: var(--accent);
     text-decoration: none;

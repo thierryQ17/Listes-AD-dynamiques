@@ -22,7 +22,7 @@
 
 ## Architecture
 
-- **Backend** : PowerShell + `System.Net.HttpListener` (serveur HTTP local)
+- **Backend** : PowerShell + **Pode** (serveur HTTP local multi-thread ; ex-`System.Net.HttpListener`)
 - **Frontend** : HTML/CSS/JS pur (pas de framework)
 - **Port** : 8888 (localhost uniquement)
 - **Authentification AD** : credentials XML chiffrés via `Export-CliXml` / `Import-CliXml`
@@ -34,7 +34,7 @@
 | `_initGlobalVariables.psm1` | Auto-découverte des chemins (`$global:path`) |
 | `scripts/modules/connect.psm1` | Connexion AD (credentials XML) |
 | `scripts/modules/ad-reader.psm1` | Lecture AD — seul module autorisé à toucher l'AD |
-| `scripts/modules/http-server.psm1` | Serveur HTTP, routes API |
+| `scripts/modules/http-server.psm1` | Serveur HTTP **Pode** (`Start-AppServer`), routes API |
 | `scripts/ressources/index.html` | Interface drag & drop |
 | `scripts/ressources/app.js` | Logique JavaScript |
 | `scripts/ressources/style.css` | Styles (thème clair, pas de fond noir) |

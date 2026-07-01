@@ -171,36 +171,45 @@ function add-msg{
 	}
 }
 
-init_globalVariables
+# Initialisation à effet de bord : ne DOIT s'exécuter que sur le thread principal.
+# Pode réimporte ce module dans chacun de ses runspaces (auto-import) ; sans ce garde,
+# init_globalVariables/load_jsonParameters se rejoueraient à chaque runspace (réécriture
+# de variablesGlobales.json, nouveaux logs, bruit console). Dans un runspace Pode, la
+# variable globale $PodeContext existe déjà (positionnée avant l'import des modules) ;
+# sur le thread principal (Start.ps1) elle est absente → l'init s'exécute normalement.
+# Les $global:* nécessaires aux routes sont réhydratés par le middleware Pode (Pode state).
+if ($null -eq $PodeContext) {
+    init_globalVariables
 
-# initialisation le fichier de log
-$global:fileLog_maintenant = $((Get-Date).ToString("yyyyMMddHHmm"))
-$logFile = "$global:fileLog_maintenant`_log.log"
-$global:fileLog = Join-Path -Path $global:path."r_log" -ChildPath $logFile
+    # initialisation le fichier de log
+    $global:fileLog_maintenant = $((Get-Date).ToString("yyyyMMddHHmm"))
+    $logFile = "$global:fileLog_maintenant`_log.log"
+    $global:fileLog = Join-Path -Path $global:path."r_log" -ChildPath $logFile
 
-$msg = "[`$global:fileLog_maintenant`] ==> '$global:fileLog_maintenant' : Acronym de la variable globale '`$global:fileLog'"
-add-msg -msg $msg -foregroundColor Green
+    $msg = "[`$global:fileLog_maintenant`] ==> '$global:fileLog_maintenant' : Acronym de la variable globale '`$global:fileLog'"
+    add-msg -msg $msg -foregroundColor Green
 
-$msg = "[`$global:fileLog] ==> Accès au fichier de log : '$global:fileLog'"
-add-msg -msg $msg -foregroundColor Green
+    $msg = "[`$global:fileLog] ==> Accès au fichier de log : '$global:fileLog'"
+    add-msg -msg $msg -foregroundColor Green
 
-$msg = "[`$global:path.""...""] ==> Initialisation des variables globales : '"+$(Join-Path $global:path."r_settings" "variablesGlobales.json")+"'"
-add-msg -msg $msg -foregroundColor Green
+    $msg = "[`$global:path.""...""] ==> Initialisation des variables globales : '"+$(Join-Path $global:path."r_settings" "variablesGlobales.json")+"'"
+    add-msg -msg $msg -foregroundColor Green
 
-$msg = "[`$global:path.""r_settings""] ==> accès au répertoire (r_) ""r_settings"" '" + $global:path."r_settings" + "'"
-add-msg -msg $msg -foregroundColor Green
+    $msg = "[`$global:path.""r_settings""] ==> accès au répertoire (r_) ""r_settings"" '" + $global:path."r_settings" + "'"
+    add-msg -msg $msg -foregroundColor Green
 
-$msg = "[`$global:path.""f_settings.json""] ==> accès au fichier (f_) ""f_settings"" '" + $global:path."f_settings.json" + "'"
-add-msg -msg $msg -foregroundColor Green
+    $msg = "[`$global:path.""f_settings.json""] ==> accès au fichier (f_) ""f_settings"" '" + $global:path."f_settings.json" + "'"
+    add-msg -msg $msg -foregroundColor Green
 
-load_jsonParameters
+    load_jsonParameters
 
-$msg = ""
-add-msg -msg $msg
+    $msg = ""
+    add-msg -msg $msg
 
-$msg = "----------------------------------------- ############## ----------------------------------------- "
-add-msg -msg $msg -foregroundColor Green
+    $msg = "----------------------------------------- ############## ----------------------------------------- "
+    add-msg -msg $msg -foregroundColor Green
 
-$msg = ""
-add-msg -msg $msg
+    $msg = ""
+    add-msg -msg $msg
+}
 

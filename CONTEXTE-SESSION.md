@@ -9,9 +9,14 @@
 
 Application web locale (PowerShell + HTML/CSS/JS pur) pour administrer l'AD en **lecture seule** : explorer les utilisateurs par OU, définir des règles de filtrage, et générer des CSV.
 
-- **Backend** : PowerShell, serveur HTTP `System.Net.HttpListener` port **8888**
+- **Backend** : PowerShell, serveur HTTP **Pode** (module `Pode` 2.13.3), **multi-thread**, port **8888**
 - **Frontend** : HTML/CSS/JS pur, sans framework
 - **Démarrage** : `Start.bat` ou `Start.ps1` → ouvre `http://localhost:8888/`
+
+> **Migration HttpListener → Pode (juillet 2026)** : le serveur maison
+> `System.Net.HttpListener` (séquentiel, une requête à la fois — UI gelée pendant
+> génération/preview/check-mail) a été remplacé par **Pode multi-thread**. Voir la
+> section « Serveur Pode » plus bas. Le frontend et les modules métier sont inchangés.
 
 ---
 
@@ -96,6 +101,52 @@ CONTEXTE-SESSION.md         ← ce fichier
 | `/api/cache/info` | `{ builtAt: "2026-05-18T16:33:39" }` — date de MAJ de `_users_global.json` |
 | `/api/cache/refresh-all` | Vide tout le cache + relance le warmup |
 | `/api/users/preload` (`↻ Cache`) | Reconstruit **TOUS** les caches : `Build-OUsCache` + `Build-GlobalUsersCache` + purge des `*.json` par site + warmup |
+
+> Méthodes HTTP (désormais explicites sous Pode) : **POST** pour `refresh-all`,
+> `users/preload`, `regles` (upsert), `regles/:id/generate`, `regles/preview-groups`,
+> `regles/generate-pair`, `regles/check-mail` ; **DELETE** pour `regles/:id` ; **GET**
+> pour tout le reste.
+
+---
+
+## Serveur Pode (`http-server.psm1`)
+
+Depuis juillet 2026, le serveur repose sur **Pode** (multi-thread) au lieu de
+`System.Net.HttpListener`. Point d'entrée : **`Start-AppServer -Port`** (appelée par
+`Start.ps1`). Frontend et modules métier (`ad-reader`, `csv-generator`, cache) inchangés.
+
+### Fonctionnement (validé par POC + tests end-to-end)
+- **Multi-thread** : `Start-PodeServer -Threads 3`. Une requête lente (génération,
+  preview-groups, check-mail) **ne gèle plus l'UI** (mesuré : `/api/tree` en 57 ms
+  pendant un `preview-groups` de 1922 ms en parallèle).
+- **État partagé entre runspaces** : les `$global:*` (`parametresJson`, `AD_credential`,
+  `path`, `fileLog`) sont snapshotés au démarrage via `Set-PodeState`, puis **réhydratés
+  avant chaque requête** par un **middleware** (`Get-PodeState`). Le port est passé via
+  `$global:__AppPort` (une variable locale n'est pas garantie d'être capturée par le
+  scriptblock de `Start-PodeServer`).
+- **Disponibilité des fonctions** : l'**auto-import Pode** réimporte tous les modules de
+  session dans les runspaces → `Get-OUTree`, `Get-AllUsersFromCache`, `add-msg`, etc. sont
+  dispo dans les routes **sans `Import-PodeModule`**.
+- **Garde `_initGlobalVariables`** : son init top-level est enveloppé dans
+  `if ($null -eq $PodeContext)` — sinon l'auto-import rejouerait ses effets de bord
+  (réécriture de `variablesGlobales.json`, nouveaux logs) à chaque runspace.
+- **Corps POST** : parsé en PSCustomObject via `ConvertFrom-Json $WebEvent.Request.Body`
+  (car `$WebEvent.Data` est un `OrderedHashtable`, incompatible avec `.PSObject.Properties`
+  — nécessaire pour préserver `invertOf`).
+- **Concurrence sûre** : les lecture-modification-écriture de `regles.json`
+  (POST/DELETE `/api/regles`) sont protégées par **`Lock-PodeObject`** (verrou global).
+- **Réponses** : helpers `Send-Json` (→ `Write-PodeTextResponse -ContentType 'application/json'`,
+  JSON déjà sérialisé, pas de re-sérialisation) et `Serve-File` (bytes + `Cache-Control:
+  no-cache`). ⚠️ `Write-PodeTextResponse` ajoute lui-même `; charset=utf-8` → passer un
+  ContentType **nu**. Statuts via `Set-PodeResponseStatus` implicite (param `-StatusCode`) ;
+  redirection 302 via `Move-PodeResponseUrl`.
+
+### ⚠️ Piège opérationnel
+Pode se lie via une **socket directe**. Si une ancienne instance HttpListener occupe
+encore le port 8888 (`Get-NetTCPConnection -LocalPort 8888` → pid 4/System = http.sys),
+Pode **échoue à démarrer** (« socket interdit ») tout en affichant « Serveur actif ».
+→ **Fermer l'ancien serveur avant de lancer le nouveau.** Vérifier qu'on parle bien au
+nouveau serveur via l'en-tête **`Server: Pode`**.
 
 ---
 

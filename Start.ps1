@@ -35,5 +35,5 @@ add-msg -msg "Appuyez sur Ctrl+C dans ce terminal pour arrêter le serveur." -fo
 add-msg -msg "" -foregroundColor White
 
 Start-CacheWarmup
-Start-Process "http://localhost:$port"
-Start-HttpServer -Port $port
+# Le navigateur est ouvert par Pode (-Browse) une fois le serveur réellement à l'écoute.
+Start-AppServer -Port $port
