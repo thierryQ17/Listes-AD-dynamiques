@@ -8,7 +8,13 @@
 - Mécanisme de **patterns (gabarits)** pour construire **nom + mail** des groupes.
 - **Opt-in par règle** via une **case à cocher** ; défaut = mécanisme actuel
   (`{prefix}-{do}-{centre}`, mail = nom.ToLower()@mailDomain).
-- Case cochée → **choix d'un pattern** ; défaut proposé `{centre}` (→ `centre@aftral.com`).
+- Case cochée → **DEUX gabarits texte libre indépendants** (par règle), tokens en `{{ }}` :
+  - **Pattern du NOM** du groupe — ex. `Formateurs-{{region}}-{{nomCentre}}`
+    (ADMIN : `Personnes Adm -{{region}}-{{nomCentre}}`).
+  - **Pattern du MAIL** du groupe — ex. `formateurs.{{region}}.{{nomCentre}}@aftral.com`
+    (indépendant du nom, pas dérivé de lui).
+  Tokens : `{{region}}` = libellé DO **SANS le préfixe « DO »** (ex. « DO I2N » → `I2N`,
+  « DO SUD » → `SUD`), `{{nomCentre}}` (= centre) ; prévoir `{{prefix}}`, `{{domain}}`.
 - Un centre peut n'avoir qu'un seul sous-groupe (FORM sans ADMIN, ou l'inverse).
 - **Question à trancher en 1er** : le pattern crée-t-il un **groupe CENTRE agrégé**
   (FORM+ADMIN réunis) ou **renomme**-t-il les groupes de la règle ? (+ liste des patterns).
