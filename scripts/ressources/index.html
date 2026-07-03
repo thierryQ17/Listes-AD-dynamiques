@@ -41,6 +41,9 @@
         .csv-run-delta { flex: none; font-weight: 800; font-size: 11px; color: #7c3aed; background: #ede9fe;
             border-radius: 5px; padding: 0 6px; line-height: 17px; }
         .csv-run-item.active .csv-run-delta { background: #ddd6fe; }
+        /* Delta vide (0 différence) : même emplacement, ton grisé pour le distinguer d'un delta plein */
+        .csv-run-delta.csv-run-delta-empty { color: #6b7280; background: #e5e7eb; }
+        .csv-run-item.active .csv-run-delta.csv-run-delta-empty { background: #d1d5db; }
 
         /* Arborescence GROUPE → fichiers (zone du bas) */
         .csv-tree-group { display: flex; align-items: center; gap: 6px; padding: 5px 8px; margin: 2px 4px 0; cursor: pointer; border-radius: 5px; font-size: 11.5px; font-weight: 700; color: #374151; transition: background .12s, color .12s; }

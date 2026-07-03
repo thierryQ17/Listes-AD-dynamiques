@@ -5,6 +5,7 @@ let groupCounts = {};   // { ruleId: nombre total de groupes (hiérarchie compl�
 let editingId  = null;
 let activeFormTab = 'params';
 let apercuCache = {};   // cache du rendu de l'onglet « Aperçu groupes », par signature de règle
+let ddgCache    = {};   // cache du rendu de l'onglet « DDG », par signature de règle
 let groupByNiveau = (() => { try { return localStorage.getItem('regles_group_niveau') === '1'; } catch { return false; } })();
 
 
@@ -620,6 +621,7 @@ function renderForm(rule) {
             `<div class="form-tabs-bar">` +
                 `<button class="form-tab-btn active" data-tab="params">Paramètres</button>` +
                 `<button class="form-tab-btn" data-tab="apercu">Aperçu groupes</button>` +
+                `<button class="form-tab-btn" data-tab="ddg">DDG</button>` +
                 `<button class="form-tab-btn" data-tab="circuit">Circuit</button>` +
             `</div>` +
             `<div class="form-tab-pane" id="tab-params">` +
@@ -746,6 +748,14 @@ function renderForm(rule) {
         `<div class="form-tab-pane" id="tab-apercu" hidden>` +
             `<iframe id="apercu-frame" class="apercu-frame" title="Aperçu des groupes" allowfullscreen></iframe>` +
         `</div>` +
+        `<div class="form-tab-pane" id="tab-ddg" hidden>` +
+            `<div class="ddg-toolbar">` +
+                `<span class="ddg-toolbar-title">Scripts <code>New-DynamicDistributionGroup</code></span>` +
+                `<span class="ddg-toolbar-note">Texte uniquement — aucune action AD/Exchange. À copier et exécuter manuellement.</span>` +
+                `<button type="button" class="ddg-copy-btn" id="ddg-copy-btn" title="Copier tous les scripts">Copier</button>` +
+            `</div>` +
+            `<pre class="ddg-code" id="ddg-code"><span class="ddg-hint">Chargement…</span></pre>` +
+        `</div>` +
         `</div>` +
         `<div class="form-footer">` +
             `<div class="gen-progress" id="gen-progress" hidden>` +
@@ -842,11 +852,22 @@ function renderForm(rule) {
             btn.classList.add('active');
             document.getElementById('tab-' + btn.dataset.tab).hidden = false;
             if (btn.dataset.tab === 'apercu') loadApercuGroupes();
+            if (btn.dataset.tab === 'ddg')    loadDdg();
         })
     );
     document.getElementById('rule-form')?.addEventListener('input',  updateLdapDisplay);
     document.getElementById('rule-form')?.addEventListener('change', updateLdapDisplay);
     updateLdapDisplay();
+
+    // DDG : cache indexé par signature de règle (loadDdg) → pas besoin d'invalidation manuelle
+    document.getElementById('ddg-copy-btn')?.addEventListener('click', () => {
+        const txt = document.getElementById('ddg-code')?.dataset.raw || '';
+        if (!txt) { showToast('Aucun script à copier', 'error'); return; }
+        navigator.clipboard?.writeText(txt).then(
+            () => showToast('Scripts copiés', 'success'),
+            () => showToast('Copie impossible', 'error'),
+        );
+    });
 
     // Conserver l'onglet actif quand on change de règle (et recharger l'aperçu le cas échéant)
     if (activeFormTab && activeFormTab !== 'params') {
@@ -1405,6 +1426,185 @@ async function loadApercuGroupes() {
         frame.srcdoc = doc;
     } catch {
         frame.srcdoc = apercuMsgDoc('Erreur lors du chargement des groupes.');
+    }
+}
+
+
+// ==================== Onglet DDG — génération de scripts (TEXTE seul) ====================
+// Pour chaque groupe de la règle (global ▸ DO ▸ centre), produit un script
+// New-DynamicDistributionGroup. AUCUNE action AD/Exchange : uniquement du texte à copier.
+// Le contrôle de population (mon mécanisme vs DDG) se branchera ensuite sur cette même base.
+
+// Champ de règle -> propriété de filtre OPATH Exchange. null = pas d'équivalent fiable
+// (description, OU) → signalé et NON traduit (évite un filtre faussement rassurant).
+const OPATH_FIELD_MAP = {
+    title:               'Title',
+    department:          'Department',
+    office:              'Office',
+    extensionAttribute1: 'CustomAttribute1',
+    description:         null,
+    ou:                  null,
+};
+
+// Échappe une valeur pour une chaîne OPATH entre apostrophes ('' double une apostrophe).
+function opathVal(v) { return "'" + String(v == null ? '' : v).replace(/'/g, "''") + "'"; }
+
+// Une condition -> clause OPATH (ou null si champ non mappable).
+function condToOpath(cond) {
+    const prop = OPATH_FIELD_MAP[cond.field];
+    if (!prop) return null;
+    switch (cond.op) {
+        case 'eq':       return `(${prop} -eq ${opathVal(cond.value)})`;
+        case 'ne':       return `(${prop} -ne ${opathVal(cond.value)})`;
+        case 'like':     return `(${prop} -like ${opathVal('*' + cond.value + '*')})`;
+        case 'notlike':  return `(${prop} -notlike ${opathVal('*' + cond.value + '*')})`;
+        case 'notempty': return `(${prop} -ne $null)`;
+        case 'empty':    return `(${prop} -eq $null)`;
+        default:         return `(${prop} -eq ${opathVal(cond.value)})`;
+    }
+}
+
+// RecipientFilter OPATH d'une règle + champs non traduisibles relevés.
+// Reflète Test-UserMatchesRule : positifs (eq/like) en OU · négatifs en ET · exclude niés en ET.
+function buildOpathFilter(rule) {
+    const skipped = new Set();
+    const map = c => { const cl = condToOpath(c); if (cl === null) skipped.add(c.field); return cl; };
+    let core;
+    if (rule.invertOf) {
+        const src = rules.find(r => r.id === rule.invertOf);
+        const inc = (src?.conditions?.include || []).filter(c => c.value || NO_VALUE_OPS.has(c.op));
+        const parts = inc.map(map).filter(Boolean);
+        core = parts.length ? '-not (' + (parts.length === 1 ? parts[0] : parts.join(' -or ')) + ')' : null;
+    } else {
+        const inc = (rule.conditions?.include || []).filter(c => c.value || NO_VALUE_OPS.has(c.op));
+        const exc = (rule.conditions?.exclude || []).filter(c => c.value || NO_VALUE_OPS.has(c.op));
+        const POS = new Set(['eq', 'like']);
+        const positives = inc.filter(c => POS.has(c.op)).map(map).filter(Boolean);
+        const negatives = inc.filter(c => !POS.has(c.op)).map(map).filter(Boolean);
+        const excl      = exc.map(c => { const cl = map(c); return cl ? `-not ${cl}` : null; }).filter(Boolean);
+        const posPart = positives.length
+            ? (positives.length === 1 ? positives[0] : '(' + positives.join(' -or ') + ')')
+            : null;
+        const andParts = [posPart, ...negatives, ...excl].filter(Boolean);
+        core = andParts.length ? (andParts.length === 1 ? andParts[0] : andParts.join(' -and ')) : null;
+    }
+    const base = "(RecipientTypeDetails -eq 'UserMailbox')";
+    return { filter: core ? `${base} -and (${core})` : base, skipped: [...skipped] };
+}
+
+// Colorateur PowerShell léger (entrée CONTRÔLÉE = scripts générés). Retourne du HTML échappé.
+const PS_OPERATORS = new Set(['eq','ne','like','notlike','and','or','not','match','notmatch','contains']);
+function highlightPowerShell(code) {
+    const re = /(#[^\n]*)|("(?:[^"\\]|\\.)*")|('(?:[^']|'')*')|(\b[A-Z][A-Za-z]+-[A-Za-z]\w+\b)|(\$[A-Za-z_]\w*)|(-[A-Za-z]\w*)/g;
+    let out = '', last = 0, m;
+    while ((m = re.exec(code)) !== null) {
+        out += esc(code.slice(last, m.index));
+        last = re.lastIndex;
+        if      (m[1]) out += `<span class="ps-comment">${esc(m[1])}</span>`;
+        else if (m[2] || m[3]) out += `<span class="ps-str">${esc(m[2] || m[3])}</span>`;
+        else if (m[4]) out += `<span class="ps-cmd">${esc(m[4])}</span>`;
+        else if (m[5]) out += `<span class="ps-var">${esc(m[5])}</span>`;
+        else if (m[6]) {
+            const cls = PS_OPERATORS.has(m[6].slice(1).toLowerCase()) ? 'ps-op' : 'ps-param';
+            out += `<span class="${cls}">${esc(m[6])}</span>`;
+        }
+    }
+    return out + esc(code.slice(last));
+}
+
+// Assemble le TEXTE brut des scripts (arborescence global ▸ DO ▸ centre).
+function buildDdgScriptText(data, rule) {
+    const { filter, skipped } = buildOpathFilter(rule);
+    const dqFilter = filter.replace(/\$null/g, '`$null');   // évite l'interpolation de $null en chaîne "…"
+    const groups = data.groups || [];
+    const L = [];
+
+    L.push(`# ${'='.repeat(70)}`);
+    L.push(`# Scripts DDG — regle « ${rule.label || ''} »  (${data.total} membre(s), ${groups.length} groupe(s))`);
+    L.push(`# Genere depuis le mecanisme actuel — cache du ${data.cacheTs || '?'}`);
+    L.push(`# ${'='.repeat(70)}`);
+    L.push(`# ATTENTION — ecarts possibles vs mon mecanisme :`);
+    L.push(`#   - le DDG n'inclut QUE les boites aux lettres (RecipientTypeDetails=UserMailbox) :`);
+    L.push(`#     un compte sans BAL present dans mes groupes sera absent du DDG.`);
+    if (skipped.length) {
+        L.push(`#   - critere(s) NON traduisible(s) en OPATH, ignore(s) ici : ${skipped.map(f => FIELD_LABELS[f] || f).join(', ')}.`);
+    }
+    L.push(`#   - le decoupage DO/centre est porte par -RecipientContainer (OU), pas par le filtre.`);
+    L.push('');
+    L.push(`# Prerequis — session Exchange Online (INTERACTIF : ouvre une fenetre de connexion) :`);
+    L.push(`Connect-ExchangeOnline`);
+    L.push('');
+
+    const INDENT = { global: '', do: '  ', centre: '    ' };
+    const TYPE_LBL = { global: 'GLOBAL', do: 'DO', centre: 'CENTRE' };
+    const gk = g => g.key ?? g.name;
+
+    const emit = g => {
+        const ind = INDENT[g.type] || '';
+        const container = g.containerDN || '';
+        const nameWarn = (g.name && g.name.length > 64) ? '   /!\\ nom > 64 caracteres (limite Exchange)' : '';
+        L.push(`${ind}# -- ${TYPE_LBL[g.type] || g.type} : ${g.name}   (${g.count} membre(s))${nameWarn}`);
+        if (g.type === 'do' && g.multiBase) {
+            L.push(`${ind}# /!\\ region multi-OU : -RecipientContainer approxime au parent « ${container} ».`);
+        }
+        let cmd = `${ind}New-DynamicDistributionGroup -Name "${g.name}"`;
+        if (g.mail)    cmd += ` -PrimarySmtpAddress "${g.mail}"`;
+        if (container) cmd += ` -RecipientContainer "${container}"`;
+        cmd += ` -RecipientFilter "${dqFilter}"`;
+        L.push(cmd);
+        // Équivalent Get-Recipient : un DDG n'expose PAS ses membres → on prévisualise
+        // le contenu via le même filtre (lecture seule, sans créer le DDG).
+        L.push(`${ind}# Voir le contenu (un DDG ne montre pas ses membres) :`);
+        let ctrl = `${ind}Get-Recipient -RecipientPreviewFilter "${dqFilter}"`;
+        if (container) ctrl += ` -OrganizationalUnit "${container}"`;
+        ctrl += ` -ResultSize Unlimited | Select-Object DisplayName,@{Name='Fonction';Expression={$_.Title}}`;
+        L.push(ctrl);
+        L.push('');
+    };
+
+    const globals = groups.filter(g => g.type === 'global');
+    const dos     = groups.filter(g => g.type === 'do');
+    const centres = groups.filter(g => g.type === 'centre');
+    globals.forEach(emit);
+    dos.forEach(g => {
+        emit(g);
+        centres.filter(c => (c.parent ?? '') === gk(g)).forEach(emit);
+    });
+    // Centres sans DO parent identifié (sécurité) — émis en fin.
+    centres.filter(c => !dos.some(g => gk(g) === (c.parent ?? ''))).forEach(emit);
+
+    return L.join('\n');
+}
+
+async function loadDdg() {
+    const pre = document.getElementById('ddg-code');
+    if (!pre) return;
+    const rule = readForm();
+    if (!rule) { pre.innerHTML = '<span class="ddg-hint">Complétez la règle (nom + conditions) pour générer les scripts.</span>'; delete pre.dataset.raw; return; }
+
+    const sig = JSON.stringify({
+        id: editingId, label: rule.label, prefix: rule.prefix,
+        niveau: rule.niveau, invertOf: rule.invertOf,
+        conditions: rule.conditions, naming: rule.naming,
+    });
+    if (ddgCache[sig]) { pre.innerHTML = ddgCache[sig].html; pre.dataset.raw = ddgCache[sig].raw; return; }
+
+    pre.innerHTML = '<span class="ddg-hint">Chargement…</span>';
+    try {
+        const r = await fetch('/api/regles/preview-groups', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(rule),
+        });
+        const data = await r.json();
+        if (data.error) { pre.innerHTML = `<span class="ddg-hint">${esc(data.error)}</span>`; delete pre.dataset.raw; return; }
+        const text = buildDdgScriptText(data, rule);
+        const html = highlightPowerShell(text);
+        ddgCache[sig] = { html, raw: text };
+        pre.innerHTML = html;
+        pre.dataset.raw = text;
+    } catch {
+        pre.innerHTML = '<span class="ddg-hint">Erreur lors de la génération des scripts.</span>';
+        delete pre.dataset.raw;
     }
 }
 

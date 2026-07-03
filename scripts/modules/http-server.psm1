@@ -277,7 +277,10 @@ function Start-AppServer {
                 foreach ($d in (Get-ChildItem -Path $outputDir -Directory | Sort-Object Name -Descending)) {
                     # Récursif : inclut les CSV des sous-dossiers (chemin relatif, ex. "FORMATEURS\...csv")
                     $csvFiles = @(Get-ChildItem -Path $d.FullName -Filter "*.csv" -Recurse -ErrorAction SilentlyContinue | Sort-Object FullName | ForEach-Object { $_.FullName.Substring($d.FullName.Length).TrimStart('\') })
-                    $runs.Add([PSCustomObject]@{ run = $d.Name; path = $d.FullName; files = $csvFiles })
+                    # Sous-dossiers delta listés à part : un delta SANS différence est un dossier VIDE
+                    # (aucun .csv) → absent de $csvFiles. On le remonte quand même pour l'afficher marqué (0).
+                    $deltaDirs = @(Get-ChildItem -Path $d.FullName -Directory -Filter '__DELTA CSVs*' -ErrorAction SilentlyContinue | Sort-Object Name -Descending | ForEach-Object { $_.Name })
+                    $runs.Add([PSCustomObject]@{ run = $d.Name; path = $d.FullName; files = $csvFiles; deltaDirs = $deltaDirs })
                 }
             }
             Send-Json -Body (ConvertTo-Json -InputObject @($runs) -Depth 3 -Compress)
@@ -517,6 +520,45 @@ function Start-AppServer {
                     $filtered   = @($filtered | Where-Object { -not (Test-UserExcluded $_) })
                     $groups     = [System.Collections.Generic.List[hashtable]]::new()
 
+                    # DDG : OU racine (RecipientContainer) du groupe global = parent commun des bases DO
+                    # (ex. "OU=administratif,DC=aft-iftim,DC=france"). Derive de la CONFIG, aucun appel AD.
+                    $firstBase = @(@($global:parametresJson.ad.regions)[0].bases)[0]
+                    $adminOU   = if ($firstBase) { $firstBase -replace '^OU=[^,]+,', '' } else { $global:parametresJson.ad.searchBase }
+
+                    # ---- Simulation DDG (estimation LOCALE du filtre OPATH — cf. onglet DDG) ----
+                    # Population que produirait le DDG : mêmes conditions MAPPABLES (title/department/
+                    # office/extensionAttribute1 ; description & OU non exprimables en OPATH → ignorées),
+                    # + contrainte BAL (primarySmtpAddress/mail renseigné), SANS l'exclusion Ricoh
+                    # (le filtre OPATH n'en a pas). ESTIMATION — la vérité terrain reste Get-Recipient.
+                    $ddgMap = @('title','department','office','extensionAttribute1')
+                    if ($rule.invertOf) {
+                        $srcMapInc = @(@($srcRule.conditions.include) | Where-Object { $_.field -in $ddgMap })
+                        if ($srcMapInc.Count -eq 0) {
+                            $ddgAll = @($allUsers | Where-Object { ((-not [string]::IsNullOrWhiteSpace("$($_.primarySmtpAddress)")) -or (-not [string]::IsNullOrWhiteSpace("$($_.mail)"))) })
+                        } else {
+                            $ddgConds = @{ include = $srcMapInc; exclude = @() }
+                            $ddgAll = @($allUsers | Where-Object { (((-not [string]::IsNullOrWhiteSpace("$($_.primarySmtpAddress)")) -or (-not [string]::IsNullOrWhiteSpace("$($_.mail)")))) -and (-not (Test-UserMatchesRule -User $_ -Conditions $ddgConds)) })
+                        }
+                    } else {
+                        $ddgConds = @{
+                            include = @(@($rule.conditions.include) | Where-Object { $_.field -in $ddgMap })
+                            exclude = @(@($rule.conditions.exclude) | Where-Object { $_.field -in $ddgMap })
+                        }
+                        $ddgAll = @($allUsers | Where-Object { (((-not [string]::IsNullOrWhiteSpace("$($_.primarySmtpAddress)")) -or (-not [string]::IsNullOrWhiteSpace("$($_.mail)")))) -and (Test-UserMatchesRule -User $_ -Conditions $ddgConds) })
+                    }
+                    # Projection membre commune (name / title / sam) — sam pour l'appariement (diff) frontend.
+                    $ddgProj = { param($set) @($set | Sort-Object displayName | ForEach-Object { [ordered]@{ name = if ($_.displayName) { "$($_.displayName)" } else { "$($_.samAccountName)" }; title = if ($_.title) { "$($_.title)" } else { '' }; sam = "$($_.samAccountName)" } }) }
+                    # Regroupement DDG par DO/centre avec les MÊMES clés que le mécanisme (appariement carte à carte).
+                    $ddgCentreMembers = @{}; $ddgDoMembers = @{}
+                    foreach ($dGrp in ($ddgAll | Group-Object { Get-RegionFromDN $_.dn } | Where-Object { $_.Name -and $_.Name -ne 'MONCHY' })) {
+                        $dCl = Clean-ForFileName $dGrp.Name
+                        $ddgDoMembers["$lbl-$dCl"] = & $ddgProj $dGrp.Group
+                        foreach ($cGrp in ($dGrp.Group | Group-Object { Get-CentreFromDN $_.dn })) {
+                            $ddgCentreMembers["$lbl-$dCl-$(Clean-ForFileName $cGrp.Name)"] = & $ddgProj $cGrp.Group
+                        }
+                    }
+                    $ddgGlobalMembers = & $ddgProj $ddgAll
+
                     if ($rule.niveau -eq 3) {
                         # Hiérarchie complète pour la prévisualisation (monoNiveau n'affecte que la génération CSV)
                         $glId = Resolve-GroupIdentity -Naming $naming -DefaultBase $lbl -MailDomain $mailDomain -Prefix $lbl -DoName '' -Centre '' -Level 'global'
@@ -548,18 +590,26 @@ function Start-AppServer {
                                     [ordered]@{
                                         name  = if ($_.displayName) { "$($_.displayName)" } else { "$($_.samAccountName)" }
                                         title = if ($_.title)       { "$($_.title)"        } else { '' }
+                                        sam   = "$($_.samAccountName)"
                                     }
                                 })
                                 $cId = Resolve-GroupIdentity -Naming $naming -DefaultBase $cBase -MailDomain $mailDomain -Prefix $lbl -DoName $doName -Centre $cName -Level 'centre'
+                                # DDG : OU du centre (RecipientContainer) extraite du DN cache, AUCUN appel AD.
+                                $cContainer = ''
+                                $cFirst = $cGrp.Group | Select-Object -First 1
+                                if ($cFirst -and $cFirst.dn -and $cFirst.dn -match '(OU=A\d{5}[^,]*,.+)$') { $cContainer = $Matches[1] }
                                 # key/parent = bases hierarchiques UNIQUES (independantes du nom affiche).
                                 # Indispensable quand le gabarit produit des noms identiques entre DO
                                 # (ex. "Centre AFTRAL" sans {{region}}) : la liaison DO->centre doit
                                 # se faire par cle, pas par nom, sinon chaque centre apparait sous tous les DO.
-                                $groups.Add(@{ key = $cBase; name = $cId.name; mail = $cId.mail; parent = $doBase; type = 'centre'; count = $cGrp.Group.Count; members = $centreMembers; baseLabel = $baseLabel })
+                                $ddgCentre = if ($ddgCentreMembers.ContainsKey($cBase)) { $ddgCentreMembers[$cBase] } else { @() }
+                                $groups.Add(@{ key = $cBase; name = $cId.name; mail = $cId.mail; parent = $doBase; type = 'centre'; count = $cGrp.Group.Count; members = $centreMembers; baseLabel = $baseLabel; containerDN = $cContainer; ddgMembers = @($ddgCentre); ddgCount = @($ddgCentre).Count })
                             }
-                            $groups.Add(@{ key = $doBase; name = $doId.name; mail = $doId.mail; parent = $lbl; type = 'do'; count = $doGrp.Group.Count; multiBase = $isMultiBase })
+                            # DDG : OU du DO. Une region multi-base (NORD+IDF) n'a pas d'OU unique -> parent commun.
+                            $doContainer = if ($isMultiBase) { $adminOU } elseif ($regionCfg -and $regionCfg.bases) { @($regionCfg.bases)[0] } else { $adminOU }
+                            $groups.Add(@{ key = $doBase; name = $doId.name; mail = $doId.mail; parent = $lbl; type = 'do'; count = $doGrp.Group.Count; multiBase = $isMultiBase; containerDN = $doContainer })
                         }
-                        $groups.Add(@{ key = $lbl; name = $glId.name; mail = $glId.mail; type = 'global'; count = $filtered.Count })
+                        $groups.Add(@{ key = $lbl; name = $glId.name; mail = $glId.mail; type = 'global'; count = $filtered.Count; containerDN = $adminOU })
                     } elseif ($rule.niveau -eq 2) {
                         $glId = Resolve-GroupIdentity -Naming $naming -DefaultBase $lbl -MailDomain $mailDomain -Prefix $lbl -DoName '' -Centre '' -Level 'global'
                         $byDO = $filtered | Group-Object { Get-RegionFromDN $_.dn } | Where-Object { $_.Name -and $_.Name -ne 'MONCHY' }
@@ -573,21 +623,25 @@ function Start-AppServer {
                                 [ordered]@{
                                     name  = if ($_.displayName) { "$($_.displayName)" } else { "$($_.samAccountName)" }
                                     title = if ($_.title)       { "$($_.title)"        } else { '' }
+                                    sam   = "$($_.samAccountName)"
                                 }
                             })
                             $doId = Resolve-GroupIdentity -Naming $naming -DefaultBase $doBase -MailDomain $mailDomain -Prefix $lbl -DoName $doName -Centre '' -Level 'do'
-                            $groups.Add(@{ key = $doBase; name = $doId.name; mail = $doId.mail; parent = $lbl; type = 'do'; count = $doGrp.Group.Count; members = $doMembers; multiBase = $isMultiBase })
+                            $doContainer = if ($isMultiBase) { $adminOU } elseif ($regionCfg -and $regionCfg.bases) { @($regionCfg.bases)[0] } else { $adminOU }
+                            $ddgDo = if ($ddgDoMembers.ContainsKey($doBase)) { $ddgDoMembers[$doBase] } else { @() }
+                            $groups.Add(@{ key = $doBase; name = $doId.name; mail = $doId.mail; parent = $lbl; type = 'do'; count = $doGrp.Group.Count; members = $doMembers; multiBase = $isMultiBase; containerDN = $doContainer; ddgMembers = @($ddgDo); ddgCount = @($ddgDo).Count })
                         }
-                        $groups.Add(@{ key = $lbl; name = $glId.name; mail = $glId.mail; type = 'global'; count = $filtered.Count })
+                        $groups.Add(@{ key = $lbl; name = $glId.name; mail = $glId.mail; type = 'global'; count = $filtered.Count; containerDN = $adminOU })
                     } else {
                         $globalMembers = @($filtered | Sort-Object displayName | ForEach-Object {
                             [ordered]@{
                                 name  = if ($_.displayName) { "$($_.displayName)" } else { "$($_.samAccountName)" }
                                 title = if ($_.title)       { "$($_.title)"        } else { '' }
+                                sam   = "$($_.samAccountName)"
                             }
                         })
                         $glId = Resolve-GroupIdentity -Naming $naming -DefaultBase $lbl -MailDomain $mailDomain -Prefix $lbl -DoName '' -Centre '' -Level 'global'
-                        $groups.Add(@{ key = $lbl; name = $glId.name; mail = $glId.mail; type = 'global'; count = $filtered.Count; members = $globalMembers })
+                        $groups.Add(@{ key = $lbl; name = $glId.name; mail = $glId.mail; type = 'global'; count = $filtered.Count; members = $globalMembers; containerDN = $adminOU; ddgMembers = @($ddgGlobalMembers); ddgCount = @($ddgGlobalMembers).Count })
                     }
 
                     $cacheTs = ''
@@ -602,7 +656,7 @@ function Start-AppServer {
                         cacheTs    = $cacheTs
                         groups     = @($groups)
                     }
-                    Send-Json -Body (ConvertTo-Json -InputObject $result -Depth 5 -Compress)
+                    Send-Json -Body (ConvertTo-Json -InputObject $result -Depth 6 -Compress)
                 }
             } catch {
                 $errMsg = $_.Exception.Message -replace '"', "'"

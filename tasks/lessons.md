@@ -14,6 +14,35 @@
   dans `Resolve-GroupIdentity`, remplacer `\s+` par `-` sur le MAIL uniquement
   (le nom du groupe garde ses espaces).
 
+## Listing base sur les fichiers = dossiers VIDES invisibles
+
+- Un delta SANS difference cree un dossier `__DELTA CSVs -- <date>` VIDE (aucun .csv).
+  `/api/output/list` n'enumerait que les `*.csv` (`Get-ChildItem -Filter *.csv -Recurse`)
+  -> dossier vide absent de `run.files` -> ni badge Δ ni groupe dans l'arbre. L'utilisateur
+  croit que "le dossier ne se cree pas" alors qu'il existe sur le disque.
+  Correction : la route remonte aussi `deltaDirs` (sous-dossiers `__DELTA CSVs*`, meme vides)
+  et le frontend injecte un groupe vide marque « 0 ». Regle : quand on liste par fichiers,
+  penser aux dossiers vides qui doivent rester visibles.
+- **Preuve/contre-preuve** : avant de conclure "pas cree", verifie sur le disque
+  (`find application/output -type d -name '__DELTA*'`) -> le dossier existait bien, vide.
+
+## Cache dans un etat DEGENERE (present mais vide) — garde-fou insuffisant
+
+- `_ous_global.json` peut contenir les 5 regions avec `children:[]` (0 site). `Get-OUTree`
+  ne se reconstruisait que si l'arbre etait vide AU NIVEAU REGIONS (`Count -eq 0`) -> un
+  cache a 5 regions sans site n'etait JAMAIS repare -> warmup « 0 sites » a chaque demarrage.
+  Correction : tester aussi le nombre total de SITES (`$siteCount -eq 0`) avant de renoncer
+  a reconstruire. Regle generale : un garde-fou « cache absent » doit aussi couvrir « cache
+  present mais vide/degenerate », sinon un mauvais etat se fige.
+
+## Cache global = comptes avec BAL uniquement
+
+- `Build-GlobalUsersCache` ne conserve QUE les comptes avec `primarySmtpAddress`
+  (= proxyAddress `SMTP:` en MAJUSCULES ; proxyAddresses peuple = condition absolue de
+  synchro Azure) ET `samAccountName`. Extraction : `-cmatch '^SMTP:(.+)$'` (sensible casse).
+  ~4007/4412 conserves. Le cache reflete ainsi la population « boites aux lettres » (celle
+  qu'un DDG verrait), ce qui aligne mecanisme et DDG.
+
 ## Rechargement des modules (piege)
 
 - Le serveur Pode charge `csv-generator.psm1` / `http-server.psm1` UNE fois au demarrage

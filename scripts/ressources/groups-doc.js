@@ -53,14 +53,45 @@ function buildGroupsHtmlDoc(data, rule) {
     if (global) global._grpCount = doGroups.length;
     doGroups.forEach(dg => { dg._grpCount = dg._centres.length; });
 
+    // Rendu comparatif « mon mécanisme » (gauche) vs « DDG estimé » (droite, zone rouge).
+    // La liste de gauche reste un <ul class="members"> intact (recherche/catégorisation inchangées) ;
+    // la droite est un <ul class="ddg-list"> distinct. Diff par sam : mem-drop = perdu par le DDG,
+    // mem-add = présent dans le DDG mais pas dans mon mécanisme.
     const memHtml = g => {
-        if (!g.members || !g.members.length) return '';
-        return '<ul class="members">' + g.members.map(m =>
-            '<li class="mem" data-s="' + esc((m.name + ' ' + (m.title || '')).toLowerCase()) + '">' +
+        const mine = g.members || [];
+        let ddg = g.ddgMembers;
+        ddg = Array.isArray(ddg) ? ddg : (ddg ? [ddg] : []);
+        if (!mine.length && !ddg.length) return '';
+        const key      = m => m.sam || m.name;
+        const ddgKeys  = new Set(ddg.map(key));
+        const mineKeys = new Set(mine.map(key));
+        const li = (m, cls) =>
+            '<li class="mem' + (cls ? ' ' + cls : '') + '" data-s="' + esc((m.name + ' ' + (m.title || '')).toLowerCase()) + '">' +
                 '<span class="m-name">' + esc(m.name) + '</span>' +
                 (m.title ? '<span class="m-title">' + esc(m.title) + '</span>' : '') +
-            '</li>'
-        ).join('') + '</ul>';
+            '</li>';
+        const common  = mine.filter(m => ddgKeys.has(key(m))).length;
+        const dropped = mine.length - common;   // dans mon mécanisme, absents du DDG (sans BAL / critère non-OPATH)
+        const added   = ddg.length - common;    // dans le DDG, absents de mon mécanisme (sans exclusion Ricoh…)
+        const mineCol =
+            '<div class="cmp-col">' +
+                '<div class="cmp-hd cmp-hd-mine">Mon mécanisme · ' + mine.length + '</div>' +
+                (mine.length ? '<ul class="members">' + mine.map(m => li(m, ddgKeys.has(key(m)) ? '' : 'mem-drop')).join('') + '</ul>'
+                             : '<div class="cmp-empty">—</div>') +
+            '</div>';
+        const ddgCol =
+            '<div class="cmp-col cmp-col-ddg">' +
+                '<div class="cmp-hd cmp-hd-ddg" title="Estimation locale du filtre OPATH (BAL = primarySmtpAddress ; sans l\'exclusion Ricoh). Vérité terrain : commande Get-Recipient de l\'onglet DDG.">DDG estimé · ' + ddg.length + '</div>' +
+                (ddg.length ? '<ul class="ddg-list">' + ddg.map(m => li(m, mineKeys.has(key(m)) ? '' : 'mem-add')).join('') + '</ul>'
+                            : '<div class="cmp-empty">aucune BAL estimée</div>') +
+            '</div>';
+        const delta =
+            '<div class="cmp-delta">' +
+                '<span class="cd-eq">≈ ' + common + ' commun' + (common > 1 ? 's' : '') + '</span>' +
+                (dropped ? '<span class="cd-drop">− ' + dropped + ' hors DDG</span>' : '') +
+                (added   ? '<span class="cd-add">+ ' + added + ' DDG seul</span>' : '') +
+            '</div>';
+        return '<div class="grp-cmp">' + mineCol + ddgCol + '</div>' + delta;
     };
     const card = (g, lvl, badge, cls, toggle) => {
         // Conteneur = a des sous-groupes → clic sur le mail ouvre l'arbre des adresses/groupes
@@ -331,6 +362,21 @@ function buildGroupsHtmlDoc(data, rule) {
         .members .mem-fn-hdr.hide{display:none;}
         #tree.categorized .members .mem{grid-template-columns:1fr;padding-left:15px;}
         #tree.categorized .members .mem .m-title{display:none;}
+        /* Comparaison mon mécanisme vs DDG (zone rouge) */
+        .grp-cmp{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:9px;padding-top:8px;border-top:1px dashed #d5dae1;}
+        .cmp-col{min-width:0;}
+        .cmp-col-ddg{background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:6px 9px;}
+        .cmp-hd{font-size:.64rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;margin-bottom:5px;}
+        .cmp-hd-mine{color:#1e3a5f;}
+        .cmp-hd-ddg{color:#b91c1c;}
+        .grp-cmp .members,.grp-cmp .ddg-list{columns:1;list-style:none;margin:0;padding:0;border-top:none;}
+        .grp-cmp .members li,.grp-cmp .ddg-list li,.do-centres .grp-cmp .members li{display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:6px;align-items:baseline;padding:1px 0;font-size:.78rem;break-inside:avoid;}
+        .mem-drop .m-name{color:#b91c1c;text-decoration:line-through;text-decoration-thickness:1px;}
+        .mem-add .m-name{color:#b45309;}
+        .cmp-empty{color:#9ca3af;font-size:.72rem;font-style:italic;padding:2px 0;}
+        .cmp-delta{display:flex;gap:12px;flex-wrap:wrap;margin-top:6px;font-size:.7rem;font-weight:700;}
+        .cd-eq{color:#374151;} .cd-drop{color:#b91c1c;} .cd-add{color:#b45309;}
+        #tree.hide-members .grp-cmp,#tree.hide-members .cmp-delta{display:none;}
         .empty{color:#6b7280;font-style:italic;}
         @media print{.toolbar{display:none;}body{background:#fff;}.doc-hd,.grp{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}
     `;

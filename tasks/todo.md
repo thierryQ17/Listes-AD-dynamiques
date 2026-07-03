@@ -25,6 +25,20 @@
 - Détails complets dans le fichier de plan : `~/.claude/plans/clever-dancing-ritchie.md`.
 
 ## Termine
+- **Sous-onglet DDG (Règles)** — génère le TEXTE des scripts `New-DynamicDistributionGroup`
+  par groupe (arbo global ▸ DO ▸ centre), zone sombre + coloration PowerShell. Aucune action
+  AD/Exchange. Backend : `preview-groups` expose `containerDN` (OU, dérivée du DN cache).
+  Frontend : `buildOpathFilter` (jumeau OPATH de `buildLdapHtml`), `highlightPowerShell`,
+  `loadDdg`. Ligne `Get-Recipient -RecipientPreviewFilter … | Select DisplayName,Fonction`
+  sous chaque `New-DDG` (le DDG n'expose pas ses membres) + `Connect-ExchangeOnline` en tête.
+- **Contrôle de population (mon mécanisme vs DDG)** — dans la page HTML des groupes
+  (Aperçu / Afficher page HTML). Chaque carte affiche 2 colonnes : gauche = mon mécanisme,
+  droite (zone rouge) = **DDG estimé localement** (mêmes conditions mappables + BAL=mail
+  renseigné, sans exclusion Ricoh). Diff : `mem-drop` (perdu par DDG, rouge barré),
+  `mem-add` (DDG seul, ambre) + ligne delta « ≈N communs · −N hors DDG · +N DDG seul ».
+  Backend `preview-groups` : `ddgMembers`/`ddgCount`/`sam` par groupe. Validé sur cache réel :
+  FORMATEURS 0 écart ; ADMINISTRATIF 211 perdus (tous sans BAL). Estimation locale —
+  vérité terrain = `Get-Recipient` (onglet DDG).
 - Migration du serveur HTTP vers **Pode** (multi-thread) — commits `84e813f` / `6125ece`.
 - UI : onglets Détail/MAJ AD affichent tous les champs (— si vide).
 - Doc `docs/INTEGRATION-242.md` (déploiement sur le 242).

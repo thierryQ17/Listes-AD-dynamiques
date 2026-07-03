@@ -492,6 +492,7 @@ let csvActiveItem   = null;
 let allRuns         = [];
 let selectedRunPath = null;
 let currentRunFiles = [];
+let currentRunDeltaDirs = [];   // sous-dossiers delta (peuvent être vides = 0 différence)
 
 async function loadOutputList() {
     const runList = document.getElementById('csv-run-list');
@@ -525,13 +526,15 @@ function renderRunList(runs) {
         label.title = run.run;
         item.appendChild(label);
 
-        // Indicateur : le dossier contient un delta (sous-dossier __DELTA CSVs avec des fichiers)
-        const hasDelta = Array.isArray(run.files) && run.files.some(f => f.indexOf('__DELTA CSVs') === 0);
-        if (hasDelta) {
+        // Indicateur delta : Δ si le dossier __DELTA CSVs contient des fichiers, « Δ 0 »
+        // s'il existe mais est VIDE (aucune différence — dossier créé mais sans .csv).
+        const hasDeltaFiles = Array.isArray(run.files) && run.files.some(f => f.indexOf('__DELTA CSVs') === 0);
+        const hasDeltaDir   = Array.isArray(run.deltaDirs) && run.deltaDirs.length > 0;
+        if (hasDeltaFiles || hasDeltaDir) {
             const dbadge = document.createElement('span');
-            dbadge.className = 'csv-run-delta';
-            dbadge.textContent = 'Δ';
-            dbadge.title = 'Contient un delta (__DELTA CSVs)';
+            dbadge.className = 'csv-run-delta' + (hasDeltaFiles ? '' : ' csv-run-delta-empty');
+            dbadge.textContent = hasDeltaFiles ? 'Δ' : 'Δ 0';
+            dbadge.title = hasDeltaFiles ? 'Contient un delta (__DELTA CSVs)' : 'Delta calculé — aucune différence (0)';
             item.appendChild(dbadge);
         }
 
@@ -601,6 +604,7 @@ async function deleteRun(run) {
 function selectRun(run) {
     selectedRunPath = run.path;
     currentRunFiles = run.files || [];
+    currentRunDeltaDirs = run.deltaDirs || [];
     document.querySelectorAll('.csv-run-item').forEach(el =>
         el.classList.toggle('active', el.dataset.path === run.path));
     const selEl = document.getElementById('csv-sel-file');   // bandeau = nom du dossier sélectionné
@@ -614,7 +618,6 @@ function renderFileList() {
     const list  = document.getElementById('csv-file-list');
     const files = q ? currentRunFiles.filter(f => f.toLowerCase().includes(q)) : currentRunFiles;
     list.innerHTML = '';
-    if (!files.length) { list.innerHTML = '<p class="csv-tree-hint">Aucun fichier</p>'; return; }
 
     // Regroupe par dossier de tête = le GROUPE ("" = fichiers à la racine, ex. anciens runs plats)
     const groups = new Map();
@@ -624,6 +627,13 @@ function renderFileList() {
         if (!groups.has(g)) groups.set(g, []);
         groups.get(g).push(f);
     }
+    // Dossiers delta VIDES (0 différence) : sur disque mais sans .csv → absents de `files`.
+    // On les ajoute comme groupe vide → rendu avec le compteur « 0 ».
+    for (const dd of currentRunDeltaDirs) {
+        if (!groups.has(dd) && (!q || dd.toLowerCase().includes(q))) groups.set(dd, []);
+    }
+
+    if (!groups.size) { list.innerHTML = '<p class="csv-tree-hint">Aucun fichier</p>'; return; }
 
     const makeFile = (fullRel, label, nested) => {
         const el = document.createElement('div');

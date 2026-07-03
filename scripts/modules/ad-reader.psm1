@@ -202,9 +202,11 @@ function Build-OUsCache {
 
 function Get-OUTree {
     # Lit l'arborescence des OUs DEPUIS LE CACHE (jamais l'AD en direct).
-    # Construit le cache une première fois s'il est absent.
-    $tree = Get-OUsFromCache
-    if (-not $tree -or @($tree).Count -eq 0) {
+    # Reconstruit le cache s'il est absent OU dégénéré (régions présentes mais AUCUN site),
+    # sinon un cache `children:[]` figé provoquerait « warmup - 0 sites » sans jamais se réparer.
+    $tree      = Get-OUsFromCache
+    $siteCount = @($tree | ForEach-Object { $_.children } | Where-Object { $_ }).Count
+    if (-not $tree -or @($tree).Count -eq 0 -or $siteCount -eq 0) {
         [void](Build-OUsCache)
         $tree = Get-OUsFromCache
     }
@@ -308,42 +310,45 @@ function Build-GlobalUsersCache {
         SearchBase  = $searchBase
         Credential  = $global:AD_credential
         Properties  = @('SamAccountName','Mail','DisplayName','Title','Department','Office',
-                        'extensionAttribute1','Description','UserPrincipalName',
-                        'ProxyAddresses','Manager','Company','EmployeeNumber','PostalCode','StreetAddress')
+                        'extensionAttribute1','Description','ProxyAddresses')
         ErrorAction = 'Stop'
     }
     $users = @(Get-ADUser @adParams)
     add-msg -msg "  [UsersCache] $($users.Count) utilisateurs actifs chargés." -foregroundColor Cyan -quelType writeHost
 
     $records = @($users | ForEach-Object {
-        $u = $_
+        $u   = $_
+        $sam = "$($u.SamAccountName)"
+        # primarySmtpAddress = proxyAddress 'SMTP:' en MAJUSCULES (adresse primaire).
+        # proxyAddresses peuplé est la condition ABSOLUE de synchronisation Azure : sans lui,
+        # le compte n'a pas de boîte cible (à exclure des listes de distribution).
+        $primary = ''
+        foreach ($p in @($u.ProxyAddresses)) { if ("$p" -cmatch '^SMTP:(.+)$') { $primary = $Matches[1]; break } }
+        # IMPÉRATIF : ne conserver QUE les comptes avec primarySmtpAddress ET samAccountName.
+        if ([string]::IsNullOrWhiteSpace($primary) -or [string]::IsNullOrWhiteSpace($sam)) { return }
         [ordered]@{
             dn                  = "$($u.DistinguishedName)"
-            displayName         = if ($u.DisplayName)           { "$($u.DisplayName)"           } else { "$($u.SamAccountName)" }
-            samAccountName      = "$($u.SamAccountName)"
+            displayName         = if ($u.DisplayName)           { "$($u.DisplayName)"           } else { $sam }
+            samAccountName      = $sam
+            primarySmtpAddress  = $primary
             mail                = if ($u.Mail)                   { "$($u.Mail)"                   } else { '' }
             title               = if ($u.Title)                  { "$($u.Title)"                  } else { '' }
             department          = if ($u.Department)             { "$($u.Department)"             } else { '' }
             office              = if ($u.Office)                 { "$($u.Office)"                 } else { '' }
             extensionAttribute1 = if ($u.extensionAttribute1)   { "$($u.extensionAttribute1)"   } else { '' }
             description         = if ($u.Description)           { "$($u.Description)"           } else { '' }
-            userPrincipalName   = if ($u.UserPrincipalName)     { "$($u.UserPrincipalName)"     } else { '' }
-            proxyAddresses      = [string[]]@($u.ProxyAddresses | Where-Object { $_ } | ForEach-Object { "$_" })
-            manager             = if ($u.Manager -match '^CN=([^,]+)') { $Matches[1] } else { if ($u.Manager) { "$($u.Manager)" } else { '' } }
-            company             = if ($u.Company)               { "$($u.Company)"               } else { '' }
-            employeeNumber      = if ($u.EmployeeNumber)        { "$($u.EmployeeNumber)"        } else { '' }
-            postalCode          = if ($u.PostalCode)            { "$($u.PostalCode)"            } else { '' }
-            streetAddress       = if ($u.StreetAddress)         { "$($u.StreetAddress)"         } else { '' }
-            enabled             = $true
-            builtAt             = (Get-Date -Format 'yyyy-MM-ddTHH:mm:ss')
         }
     })
 
+    # Diagnostic : distingue « proxyAddresses non récupéré » de « récupéré mais sans SMTP: primaire ».
+    $withAnyProxy = @($users | Where-Object { @($_.ProxyAddresses).Count -gt 0 }).Count
+    add-msg -msg "  [UsersCache] diag: $withAnyProxy/$($users.Count) ont des proxyAddresses ; $($records.Count) avec SMTP: primaire (+ samAccountName)." -foregroundColor DarkYellow -quelType writeHost
+    add-msg -msg "  [UsersCache] $($records.Count) comptes avec BAL (primarySmtpAddress + samAccountName) conservés sur $($users.Count) actifs." -foregroundColor Cyan -quelType writeHost
     $json = ConvertTo-Json -InputObject @($records) -Depth 3 -Compress
     $cachePath = Get-GlobalUsersCachePath
     [System.IO.File]::WriteAllText($cachePath, $json, [System.Text.Encoding]::UTF8)
     add-msg -msg "  [UsersCache] Fichier JSON sauvegardé ($([Math]::Round($json.Length/1kb)) KB) → $cachePath" -foregroundColor Green -quelType writeHost
-    return $users.Count
+    return $records.Count
 }
 
 function Get-OUSiteUsers {
@@ -367,14 +372,21 @@ function Get-OUSiteUsers {
 
         return @(
             $users | ForEach-Object {
-                $u = $_
+                $u   = $_
+                $sam = "$($u.SamAccountName)"
+                # Ne garder QUE les comptes avec BAL : primarySmtpAddress (proxyAddress 'SMTP:'
+                # en majuscules) + samAccountName. Les autres n'ont pas d'intérêt dans le cache.
+                $primary = ''
+                foreach ($p in @($u.ProxyAddresses)) { if ("$p" -cmatch '^SMTP:(.+)$') { $primary = $Matches[1]; break } }
+                if ([string]::IsNullOrWhiteSpace($primary) -or [string]::IsNullOrWhiteSpace($sam)) { return }
                 [PSCustomObject]@{
                     displayName       = if ($u.DisplayName) { $u.DisplayName } else { $u.SamAccountName }
                     description       = $u.Description
                     mail              = $u.Mail
+                    primarySmtpAddress = $primary
                     title             = $u.Title
                     department        = $u.Department
-                    samAccountName    = $u.SamAccountName
+                    samAccountName    = $sam
                     enabled           = [bool]$u.Enabled
                     proxyAddresses    = [string[]]@($u.ProxyAddresses | Where-Object { $_ } | ForEach-Object { [string]$_ })
                     userPrincipalName = $u.UserPrincipalName
