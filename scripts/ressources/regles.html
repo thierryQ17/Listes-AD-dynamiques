@@ -51,6 +51,7 @@
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
                     <span>Par niveau</span>
                 </button>
+                <span id="regles-total-badge" class="regles-total-badge" hidden></span>
             </div>
             <div class="regles-list" id="regles-list">
                 <p class="hint">Chargement…</p>
@@ -208,6 +209,34 @@
         </div>
     </div>
 
+    <!-- Modale édition d'un gabarit (nom / mail du groupe) -->
+    <div id="pattern-modal" class="confirm-modal-overlay" hidden>
+        <div class="pattern-modal-box">
+            <div class="pattern-modal-header">
+                <span class="pattern-modal-title" id="pattern-modal-title">Gabarit</span>
+                <button id="pattern-modal-close" class="csv-modal-close" title="Fermer">
+                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+                        <path d="M1 1l12 12M13 1L1 13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                    </svg>
+                </button>
+            </div>
+            <div class="pattern-modal-body">
+                <label class="form-label" for="pattern-modal-input">Gabarit</label>
+                <input id="pattern-modal-input" class="form-input" type="text" autocomplete="off" spellcheck="false">
+                <div class="pattern-tokens" id="pattern-tokens"></div>
+                <div class="pattern-preview">
+                    <span class="pattern-preview-lbl">Aperçu (centre) :</span>
+                    <span class="pattern-preview-val" id="pattern-preview-val">—</span>
+                </div>
+                <p class="pattern-modal-hint" id="pattern-modal-hint"></p>
+            </div>
+            <div class="confirm-modal-actions">
+                <button class="btn-secondary" id="pattern-modal-cancel">Annuler</button>
+                <button id="pattern-modal-ok">Valider</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Overlay génération CSV -->
     <div id="gen-overlay" hidden>
         <div class="gen-overlay-inner">
@@ -292,6 +321,7 @@
         </div>
     </div>
 
-    <script src="/regles.js?v=44"></script>
+    <script src="/groups-doc.js?v=2"></script>
+    <script src="/regles.js?v=45"></script>
 </body>
 </html>

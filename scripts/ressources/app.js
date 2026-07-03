@@ -22,7 +22,86 @@ document.addEventListener('DOMContentLoaded', () => {
     loadOutputList();
     document.getElementById('csv-refresh').addEventListener('click', loadOutputList);
     document.getElementById('csv-file-search').addEventListener('input', renderFileList);
+    document.getElementById('csv-gen-all').addEventListener('click', generateAllCsv);
+    setupResizer();
 });
+
+// Redimensionnement de la zone de gauche par glisser (setPointerCapture → drag fiable même en iframe)
+function setupResizer() {
+    const resizer = document.getElementById('csv-resizer');
+    const pane    = document.getElementById('csv-tree-pane');
+    if (!resizer || !pane) return;
+    try { const w = localStorage.getItem('csv_pane_width'); if (w) pane.style.width = w; } catch { /* ignore */ }
+    let startX = 0, startW = 0;
+    resizer.addEventListener('pointerdown', e => {
+        startX = e.clientX;
+        startW = pane.getBoundingClientRect().width;
+        resizer.classList.add('active');
+        resizer.setPointerCapture(e.pointerId);
+        e.preventDefault();
+    });
+    resizer.addEventListener('pointermove', e => {
+        if (!resizer.hasPointerCapture(e.pointerId)) return;
+        let w = startW + (e.clientX - startX);
+        w = Math.max(180, Math.min(w, window.innerWidth - 220));
+        pane.style.width = w + 'px';
+    });
+    resizer.addEventListener('pointerup', e => {
+        resizer.classList.remove('active');
+        try { resizer.releasePointerCapture(e.pointerId); } catch { /* ignore */ }
+        try { localStorage.setItem('csv_pane_width', pane.style.width); } catch { /* ignore */ }
+    });
+}
+
+// ── Génération de TOUS les CSV (dossier horodaté, un sous-dossier par groupe) ──
+function csvOverlay(on, title)  { try { window.top.postMessage({ type: 'groupes-generating', on: !!on, title }, '*'); } catch { /* hors iframe */ } }
+function csvProgress(done, total, label) { try { window.top.postMessage({ type: 'groupes-progress', done, total, label }, '*'); } catch { /* ignore */ } }
+
+async function generateAllCsv() {
+    if (!confirm('Générer TOUS les fichiers CSV de tous les groupes ?\n\nUn dossier horodaté sera créé, avec un sous-dossier par groupe (CSV niveaux 1/2/3).\nL’application sera bloquée le temps de la génération.')) return;
+
+    let rules;
+    try { rules = await fetchJSON('/api/regles'); } catch { showToast('Erreur : chargement des règles', 'error'); return; }
+    if (!Array.isArray(rules) || !rules.length) { showToast('Aucune règle définie', 'error'); return; }
+    const total = rules.length;
+
+    csvOverlay(true, 'Génération des fichiers CSV…');
+    csvProgress(0, total, '');
+    await new Promise(r => setTimeout(r, 60));   // laisse le bandeau s'afficher
+
+    let dir = '';
+    try {
+        const r = await fetch('/api/csv/generate-all/init', { method: 'POST' });
+        const j = await r.json();
+        if (!j.ok || !j.dir) throw new Error(j.error || 'init');
+        dir = j.dir;
+    } catch { csvOverlay(false); showToast('Erreur lors de la création du dossier', 'error'); return; }
+
+    try {
+        const queue = rules.slice();
+        let done = 0;
+        const CONC = 2;
+        async function worker() {
+            while (queue.length) {
+                const rule = queue.shift();
+                csvProgress(done, total, rule.label);           // groupe en cours
+                try {
+                    await fetch('/api/csv/generate-all/rule', {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ dir, ruleId: rule.id }),
+                    });
+                } catch { /* on continue même si une règle échoue */ }
+                done++;
+                csvProgress(done, total, rule.label);
+            }
+        }
+        await Promise.all(Array.from({ length: CONC }, worker));
+    } finally {
+        csvOverlay(false);
+    }
+    showToast('Tous les CSV ont été générés', 'success');
+    loadOutputList();
+}
 
 async function loadGroups() {
     try {
@@ -377,12 +456,50 @@ function renderRunList(runs) {
     for (const run of runs) {
         const item = document.createElement('div');
         item.className = 'csv-run-item';
-        item.textContent = run.run;
-        item.title = run.run;
         item.dataset.path = run.path;
         item.addEventListener('click', () => selectRun(run));
+
+        const label = document.createElement('span');
+        label.className = 'csv-run-label';
+        label.textContent = run.run;
+        label.title = run.run;
+        item.appendChild(label);
+
+        const del = document.createElement('button');
+        del.className = 'csv-run-del';
+        del.type = 'button';
+        del.title = 'Supprimer ce dossier et tout son contenu';
+        del.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>';
+        del.addEventListener('click', e => { e.stopPropagation(); deleteRun(run); });
+        item.appendChild(del);
+
         runList.appendChild(item);
     }
+}
+
+async function deleteRun(run) {
+    if (!confirm(`Supprimer le dossier « ${run.run} » et tout son contenu ?\n\nCette action est définitive.`)) return;
+    try {
+        const r   = await fetch('/api/output/delete', {
+            method:  'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body:    JSON.stringify({ path: run.path }),
+        });
+        const txt = await r.text();
+        let j = {};
+        try { j = JSON.parse(txt); } catch { /* réponse non-JSON (ex. 404 si serveur pas redémarré) */ }
+        if (!r.ok || !j.ok) throw new Error(j.error || ('HTTP ' + r.status + (r.status === 404 ? ' — redémarrez le serveur' : '')));
+    } catch (e) {
+        showToast('Erreur lors de la suppression : ' + e.message, 'error');
+        return;
+    }
+    showToast('Dossier supprimé', 'success');
+    // Rafraîchir les DEUX blocs : la liste des dossiers ET la zone du bas
+    selectedRunPath = null;
+    currentRunFiles = [];
+    document.getElementById('csv-file-list').innerHTML = '';
+    document.getElementById('csv-view').innerHTML = '<p class="csv-view-hint">Sélectionner un fichier</p>';
+    loadOutputList();   // recharge les dossiers ; sélectionne le 1er → remplit la zone du bas
 }
 
 function selectRun(run) {
@@ -398,18 +515,46 @@ function renderFileList() {
     const q     = document.getElementById('csv-file-search').value.toLowerCase();
     const list  = document.getElementById('csv-file-list');
     const files = q ? currentRunFiles.filter(f => f.toLowerCase().includes(q)) : currentRunFiles;
-    if (!files.length) {
-        list.innerHTML = '<p class="csv-tree-hint">Aucun fichier</p>';
-        return;
-    }
     list.innerHTML = '';
-    for (const file of files) {
-        const item = document.createElement('div');
-        item.className = 'csv-tree-file';
-        item.textContent = file;
-        item.title = file;
-        item.addEventListener('click', () => openCsvFile(selectedRunPath + '\\' + file, item));
-        list.appendChild(item);
+    if (!files.length) { list.innerHTML = '<p class="csv-tree-hint">Aucun fichier</p>'; return; }
+
+    // Regroupe par dossier de tête = le GROUPE ("" = fichiers à la racine, ex. anciens runs plats)
+    const groups = new Map();
+    for (const f of files) {
+        const i = f.indexOf('\\');
+        const g = i >= 0 ? f.slice(0, i) : '';
+        if (!groups.has(g)) groups.set(g, []);
+        groups.get(g).push(f);
+    }
+
+    const makeFile = (fullRel, label, nested) => {
+        const el = document.createElement('div');
+        el.className = 'csv-tree-file' + (nested ? ' csv-tree-file-nested' : '');
+        el.textContent = label;
+        el.title = fullRel;
+        el.addEventListener('click', () => openCsvFile(selectedRunPath + '\\' + fullRel, el));
+        return el;
+    };
+
+    for (const [g, gf] of groups) {
+        if (!g) { gf.forEach(f => list.appendChild(makeFile(f, f, false))); continue; }
+        const collapsed = !q;   // replié par défaut ; déplié pendant une recherche
+        const head = document.createElement('div');
+        head.className = 'csv-tree-group';
+        head.title = g;
+        head.innerHTML = '<span class="csv-tree-caret"></span><span class="csv-tree-group-name"></span><span class="csv-tree-group-count"></span>';
+        head.querySelector('.csv-tree-caret').textContent      = collapsed ? '▸' : '▾';
+        head.querySelector('.csv-tree-group-name').textContent  = g;
+        head.querySelector('.csv-tree-group-count').textContent = gf.length;
+        const wrap = document.createElement('div');
+        wrap.className = 'csv-tree-group-files' + (collapsed ? ' collapsed' : '');
+        gf.forEach(f => wrap.appendChild(makeFile(f, f.slice(g.length + 1), true)));
+        head.addEventListener('click', () => {
+            const c = wrap.classList.toggle('collapsed');
+            head.querySelector('.csv-tree-caret').textContent = c ? '▸' : '▾';
+        });
+        list.appendChild(head);
+        list.appendChild(wrap);
     }
 }
 

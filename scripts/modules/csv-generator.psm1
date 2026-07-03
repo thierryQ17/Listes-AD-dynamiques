@@ -28,24 +28,16 @@ function Invoke-RuleGeneration {
     add-msg -msg "  [CSV] $($filtered.Count) utilisateurs correspondent aux conditions." -foregroundColor Cyan -quelType writeHost
 
     $outDir = Get-RunOutputDir -Label $Rule.label
-    if ($Rule.niveau -eq 3) {
-        if ($Rule.monoNiveau) {
-            $files = Write-CsvNiveau3Mono -Users $filtered -Label $Rule.label -OutDir $outDir
-        } else {
-            $files = Write-CsvNiveau3 -Users $filtered -Label $Rule.label -OutDir $outDir
-        }
-    } elseif ($Rule.niveau -eq 2) {
-        $files = Write-CsvNiveau2 -Users $filtered -Label $Rule.label -OutDir $outDir
-    } else {
-        $files = Write-CsvNiveau1 -Users $filtered -Label $Rule.label -OutDir $outDir
-    }
+    # Génération RÉCURSIVE (nommage par gabarit) — chemin unique partagé avec generate-pair.
+    $files = Write-RuleCsvSet -Rule $Rule -Users $filtered -OutDir $outDir
 
     add-msg -msg "  [CSV] Terminé : $(@($files).Count) fichiers dans '$outDir'." -foregroundColor Green -quelType writeHost
 
     Invoke-GroupProvisioning -Files @($files) -OutDir $outDir -Rule $Rule
 
-    # Calcul des groupes (même logique que preview-groups) pour le contrôle des adresses mail
+    # Calcul des groupes (mêmes noms/mails que la prévisualisation) pour le contrôle des adresses mail
     $lbl        = if ($Rule.prefix) { Clean-ForFileName $Rule.prefix } else { Clean-ForFileName $Rule.label }
+    $naming     = $Rule.naming
     $mailDomain = $global:parametresJson.ad.mailDomain
     $gpGroups   = [System.Collections.Generic.List[hashtable]]::new()
 
@@ -54,25 +46,28 @@ function Invoke-RuleGeneration {
         foreach ($doGrp in $byDO) {
             $doName  = if ($doGrp.Name) { $doGrp.Name } else { 'SANS-DO' }
             $doClean = Clean-ForFileName $doName
-            $doBase  = "$lbl-$doClean"
+            $doId    = Resolve-GroupIdentity -Naming $naming -DefaultBase "$lbl-$doClean" -MailDomain $mailDomain -Prefix $lbl -DoName $doName -Centre '' -Level 'do'
             foreach ($cGrp in ($doGrp.Group | Group-Object { Get-CentreFromDN $_.dn })) {
                 $cName  = if ($cGrp.Name) { $cGrp.Name } else { 'SANS-CENTRE' }
-                $cBase  = "$lbl-$doClean-$(Clean-ForFileName $cName)"
-                $gpGroups.Add(@{ name = $cBase; mail = "$($cBase.ToLower())@$mailDomain"; type = 'centre'; count = $cGrp.Group.Count })
+                $cId    = Resolve-GroupIdentity -Naming $naming -DefaultBase "$lbl-$doClean-$(Clean-ForFileName $cName)" -MailDomain $mailDomain -Prefix $lbl -DoName $doName -Centre $cName -Level 'centre'
+                $gpGroups.Add(@{ name = $cId.name; mail = $cId.mail; type = 'centre'; count = $cGrp.Group.Count })
             }
-            $gpGroups.Add(@{ name = $doBase; mail = "$($doBase.ToLower())@$mailDomain"; type = 'do'; count = $doGrp.Group.Count })
+            $gpGroups.Add(@{ name = $doId.name; mail = $doId.mail; type = 'do'; count = $doGrp.Group.Count })
         }
-        $gpGroups.Add(@{ name = $lbl; mail = "$($lbl.ToLower())@$mailDomain"; type = 'global'; count = $filtered.Count })
+        $glId = Resolve-GroupIdentity -Naming $naming -DefaultBase $lbl -MailDomain $mailDomain -Prefix $lbl -DoName '' -Centre '' -Level 'global'
+        $gpGroups.Add(@{ name = $glId.name; mail = $glId.mail; type = 'global'; count = $filtered.Count })
     } elseif ($Rule.niveau -eq 2) {
         $byDO = $filtered | Group-Object { Get-RegionFromDN $_.dn } | Where-Object { $_.Name -and $_.Name -ne 'MONCHY' }
         foreach ($doGrp in $byDO) {
             $doName  = if ($doGrp.Name) { $doGrp.Name } else { 'SANS-DO' }
-            $doBase  = "$lbl-$(Clean-ForFileName $doName)"
-            $gpGroups.Add(@{ name = $doBase; mail = "$($doBase.ToLower())@$mailDomain"; type = 'do'; count = $doGrp.Group.Count })
+            $doId    = Resolve-GroupIdentity -Naming $naming -DefaultBase "$lbl-$(Clean-ForFileName $doName)" -MailDomain $mailDomain -Prefix $lbl -DoName $doName -Centre '' -Level 'do'
+            $gpGroups.Add(@{ name = $doId.name; mail = $doId.mail; type = 'do'; count = $doGrp.Group.Count })
         }
-        $gpGroups.Add(@{ name = $lbl; mail = "$($lbl.ToLower())@$mailDomain"; type = 'global'; count = $filtered.Count })
+        $glId = Resolve-GroupIdentity -Naming $naming -DefaultBase $lbl -MailDomain $mailDomain -Prefix $lbl -DoName '' -Centre '' -Level 'global'
+        $gpGroups.Add(@{ name = $glId.name; mail = $glId.mail; type = 'global'; count = $filtered.Count })
     } else {
-        $gpGroups.Add(@{ name = $lbl; mail = "$($lbl.ToLower())@$mailDomain"; type = 'global'; count = $filtered.Count })
+        $glId = Resolve-GroupIdentity -Naming $naming -DefaultBase $lbl -MailDomain $mailDomain -Prefix $lbl -DoName '' -Centre '' -Level 'global'
+        $gpGroups.Add(@{ name = $glId.name; mail = $glId.mail; type = 'global'; count = $filtered.Count })
     }
 
     return [PSCustomObject]@{
@@ -145,127 +140,6 @@ function Test-Condition {
         'notempty' { return -not [string]::IsNullOrWhiteSpace($val) }
         default   { return $false }
     }
-}
-
-# ── Conversion en contenu CSV (thread principal — objets AD natifs) ──────────
-
-function Get-CsvContent {
-    param($Users)
-    # Accès aux propriétés AD dans le thread principal (non sérialisées)
-    $sb = [System.Text.StringBuilder]::new()
-    [void]$sb.AppendLine('"nom";"samaccountname";"mail";"fonction"')
-    foreach ($u in @($Users)) {
-        $n = [string]$u.DisplayName
-        $s = [string]$u.SamAccountName
-        $m = [string]$u.Mail
-        $f = [string]$u.Title
-        [void]$sb.AppendLine("`"$n`";`"$s`";`"$m`";`"$f`"")
-    }
-    return $sb.ToString()
-}
-
-# ── Écriture parallèle (reçoit du texte pré-calculé, pas d'objets AD) ────────
-
-function Invoke-WriteJobs {
-    param([System.Collections.Generic.List[hashtable]]$Jobs)
-    $Jobs | ForEach-Object -Parallel {
-        [System.IO.File]::WriteAllText($_.path, $_.content, [System.Text.Encoding]::UTF8)
-    } -ThrottleLimit 8
-}
-
-function Write-CsvNiveau3 {
-    param($Users, [string]$Label, [string]$OutDir)
-
-    $lbl       = Clean-ForFileName $Label
-    $userArray = @($Users)
-    $jobs      = [System.Collections.Generic.List[hashtable]]::new()
-
-    add-msg -msg "  [CSV] Génération niveau 3 (centre + DO + global) — '$Label'" -foregroundColor DarkCyan -quelType writeHost
-    $byDO = $userArray | Group-Object { Get-RegionFromDN $_.dn } | Where-Object { $_.Name -and $_.Name -ne 'MONCHY' }
-    foreach ($doGrp in $byDO) {
-        $doName  = if ($doGrp.Name) { $doGrp.Name } else { 'SANS-DO' }
-        $doClean = Clean-ForFileName $doName
-        foreach ($cGrp in ($doGrp.Group | Group-Object { Get-CentreFromDN $_.dn })) {
-            $cName  = if ($cGrp.Name) { $cGrp.Name } else { 'SANS-CENTRE' }
-            $cClean = Clean-ForFileName $cName
-            $fname  = "$lbl-$doClean-$cClean.csv"
-            add-msg -msg "  [CSV]   + '$fname' ($($cGrp.Group.Count) utilisateur(s)) [centre]" -foregroundColor DarkGray -quelType writeHost
-            $jobs.Add(@{ path = Join-Path $OutDir $fname; fname = $fname; content = Get-CsvContent $cGrp.Group })
-        }
-        $fname = "$lbl-$doClean.csv"
-        add-msg -msg "  [CSV]   + '$fname' ($($doGrp.Group.Count) utilisateur(s)) [DO]" -foregroundColor DarkGray -quelType writeHost
-        $jobs.Add(@{ path = Join-Path $OutDir $fname; fname = $fname; content = Get-CsvContent $doGrp.Group })
-    }
-    $fname = "$lbl.csv"
-    add-msg -msg "  [CSV]   + '$fname' ($($userArray.Count) utilisateur(s)) [global]" -foregroundColor DarkGray -quelType writeHost
-    $jobs.Add(@{ path = Join-Path $OutDir $fname; fname = $fname; content = Get-CsvContent $userArray })
-
-    add-msg -msg "  [CSV] Écriture de $($jobs.Count) fichier(s) en parallèle…" -foregroundColor DarkCyan -quelType writeHost
-    Invoke-WriteJobs -Jobs $jobs
-    return @($jobs | ForEach-Object { $_.fname })
-}
-
-function Write-CsvNiveau3Mono {
-    param($Users, [string]$Label, [string]$OutDir)
-
-    $lbl       = Clean-ForFileName $Label
-    $userArray = @($Users)
-    $jobs      = [System.Collections.Generic.List[hashtable]]::new()
-
-    add-msg -msg "  [CSV] Génération niveau 3 mono (centre uniquement) — '$Label'" -foregroundColor DarkCyan -quelType writeHost
-    $byDO = $userArray | Group-Object { Get-RegionFromDN $_.dn } | Where-Object { $_.Name -and $_.Name -ne 'MONCHY' }
-    foreach ($doGrp in $byDO) {
-        $doName  = if ($doGrp.Name) { $doGrp.Name } else { 'SANS-DO' }
-        $doClean = Clean-ForFileName $doName
-        foreach ($cGrp in ($doGrp.Group | Group-Object { Get-CentreFromDN $_.dn })) {
-            $cName  = if ($cGrp.Name) { $cGrp.Name } else { 'SANS-CENTRE' }
-            $cClean = Clean-ForFileName $cName
-            $fname  = "$lbl-$doClean-$cClean.csv"
-            add-msg -msg "  [CSV]   + '$fname' ($($cGrp.Group.Count) utilisateur(s)) [centre]" -foregroundColor DarkGray -quelType writeHost
-            $jobs.Add(@{ path = Join-Path $OutDir $fname; fname = $fname; content = Get-CsvContent $cGrp.Group })
-        }
-    }
-
-    add-msg -msg "  [CSV] Écriture de $($jobs.Count) fichier(s) en parallèle…" -foregroundColor DarkCyan -quelType writeHost
-    Invoke-WriteJobs -Jobs $jobs
-    return @($jobs | ForEach-Object { $_.fname })
-}
-
-function Write-CsvNiveau2 {
-    param($Users, [string]$Label, [string]$OutDir)
-
-    $lbl       = Clean-ForFileName $Label
-    $userArray = @($Users)
-    $jobs      = [System.Collections.Generic.List[hashtable]]::new()
-
-    add-msg -msg "  [CSV] Génération niveau 2 (DO + global) — '$Label'" -foregroundColor DarkCyan -quelType writeHost
-    $byDO = $userArray | Group-Object { Get-RegionFromDN $_.dn } | Where-Object { $_.Name -and $_.Name -ne 'MONCHY' }
-    foreach ($doGrp in $byDO) {
-        $doName = if ($doGrp.Name) { $doGrp.Name } else { 'SANS-DO' }
-        $fname  = "$lbl-$(Clean-ForFileName $doName).csv"
-        add-msg -msg "  [CSV]   + '$fname' ($($doGrp.Group.Count) utilisateur(s)) [DO]" -foregroundColor DarkGray -quelType writeHost
-        $jobs.Add(@{ path = Join-Path $OutDir $fname; fname = $fname; content = Get-CsvContent $doGrp.Group })
-    }
-    $fname = "$lbl.csv"
-    add-msg -msg "  [CSV]   + '$fname' ($($userArray.Count) utilisateur(s)) [global]" -foregroundColor DarkGray -quelType writeHost
-    $jobs.Add(@{ path = Join-Path $OutDir $fname; fname = $fname; content = Get-CsvContent $userArray })
-
-    add-msg -msg "  [CSV] Écriture de $($jobs.Count) fichier(s) en parallèle…" -foregroundColor DarkCyan -quelType writeHost
-    Invoke-WriteJobs -Jobs $jobs
-    return @($jobs | ForEach-Object { $_.fname })
-}
-
-function Write-CsvNiveau1 {
-    param($Users, [string]$Label, [string]$OutDir)
-
-    $lbl   = Clean-ForFileName $Label
-    $fname = "$lbl.csv"
-    $path  = Join-Path $OutDir $fname
-    add-msg -msg "  [CSV] Génération niveau 1 (global uniquement) — '$Label'" -foregroundColor DarkCyan -quelType writeHost
-    add-msg -msg "  [CSV]   + '$fname' ($(@($Users).Count) utilisateur(s)) [global]" -foregroundColor DarkGray -quelType writeHost
-    [System.IO.File]::WriteAllText($path, (Get-CsvContent $Users), [System.Text.Encoding]::UTF8)
-    add-msg -msg "  [CSV] Écriture de 1 fichier terminée." -foregroundColor DarkCyan -quelType writeHost
-    return @($fname)
 }
 
 # ── Helpers ─────────────────────────────────────────────────────────────
@@ -401,6 +275,183 @@ function Get-RunOutputDir {
     $runDir      = Join-Path $baseDir "${timestamp}_${clean}"
     New-Item -ItemType Directory -Path $runDir -Force | Out-Null
     return $runDir
+}
+
+# ── Nommage par gabarit (patterns opt-in par règle) ─────────────────────
+
+function Get-RegionToken {
+    # {{region}} = libellé DO SANS le préfixe "DO " (ex. "DO SUD" -> "SUD")
+    param([string]$DoName)
+    if (-not $DoName) { return '' }
+    return ($DoName -replace '^\s*DO\s+', '').Trim()
+}
+
+function Resolve-Pattern {
+    # Substitue les tokens {{...}} puis nettoie les artefacts laissés par un token vide
+    # (séparateurs -, ., espaces répétés ou en bord, y compris autour d'un @).
+    param([string]$Pattern, [hashtable]$Tokens)
+    $out = "$Pattern"
+    foreach ($k in $Tokens.Keys) {
+        $out = $out -replace [regex]::Escape("{{$k}}"), [string]$Tokens[$k]
+    }
+    $out = $out -replace '-{2,}', '-'
+    $out = $out -replace '\.{2,}', '.'
+    $out = $out -replace '[-.\s]+@', '@'
+    $out = $out -replace '@[-.\s]+', '@'
+    $out = $out -replace '^[-.\s]+', ''
+    $out = $out -replace '[-.\s]+$', ''
+    return $out.Trim()
+}
+
+function Resolve-GroupIdentity {
+    # Retourne @{ name; mail } pour un groupe donné, selon que la règle utilise
+    # un nommage par gabarit ou le nommage par défaut.
+    #   - $Naming      : $Rule.naming (ou $null)
+    #   - $DefaultBase : nom par défaut ("$lbl-$doClean-$cClean" selon le niveau)
+    #   - $Prefix / $DoName / $Centre : sources des tokens ({{prefix}}/{{region}}/{{nomCentre}})
+    #   - $Level       : 'global' | 'do' | 'centre' — sélectionne le gabarit MAIL dédié au niveau
+    param(
+        $Naming,
+        [string]$DefaultBase,
+        [string]$MailDomain,
+        [string]$Prefix,
+        [string]$DoName,
+        [string]$Centre,
+        [string]$Level = 'centre'
+    )
+    if ($Naming -and $Naming.namePattern) {
+        $tokens = @{
+            prefix    = "$Prefix"
+            region    = (Get-RegionToken $DoName)
+            nomCentre = "$Centre"
+        }
+        $name    = Resolve-Pattern -Pattern $Naming.namePattern -Tokens $tokens
+        # Mail : chaque niveau utilise SON gabarit dédié s'il est renseigné
+        # (mailPatternGlobal / mailPatternDo / mailPattern=Centre) ; sinon il HÉRITE du
+        # gabarit « Nom groupe » (namePattern). Un champ vide = hérite du nom du groupe.
+        $mailPat =
+            if     ("$Level" -eq 'global' -and $Naming.mailPatternGlobal) { $Naming.mailPatternGlobal }
+            elseif ("$Level" -eq 'do'     -and $Naming.mailPatternDo)     { $Naming.mailPatternDo }
+            elseif ("$Level" -eq 'centre' -and $Naming.mailPattern)       { $Naming.mailPattern }
+            else                                                           { $Naming.namePattern }
+        $mail    = (Resolve-Pattern -Pattern $mailPat -Tokens $tokens).ToLower()
+        # Une adresse mail ne peut pas contenir d'espace : un centre multi-mots
+        # (ex. "Le Havre" -> "le-havre", "Lyon 6" -> "lyon-6") voit ses espaces
+        # transformes en tiret. Le nom du groupe, lui, conserve ses espaces.
+        $mail    = ($mail -replace '\s+', '-') -replace '-{2,}', '-'
+        if ($mail -notmatch '@') { $mail = "$mail@$MailDomain" }
+        return @{ name = $name; mail = $mail }
+    }
+    return @{ name = $DefaultBase; mail = "$($DefaultBase.ToLower())@$MailDomain" }
+}
+
+function Get-SafeFileName {
+    # Nom de fichier LISIBLE : conserve le nom du groupe issu du gabarit (espaces, casse,
+    # accents) et ne retire que les caractères interdits par le système de fichiers Windows.
+    # Différent de Clean-ForFileName (qui MAJUSCULE et remplace tout par des tirets).
+    param([string]$Name)
+    if ([string]::IsNullOrWhiteSpace($Name)) { return 'SANS-NOM' }
+    $out = $Name -replace '[<>:"/\\|?*]', ' '
+    $out = ($out -replace '\s{2,}', ' ').Trim().Trim('.')
+    if ([string]::IsNullOrWhiteSpace($out)) { return 'SANS-NOM' }
+    return $out
+}
+
+function Write-RuleCsvSet {
+    # Génère l'arborescence CSV RÉCURSIVE d'une règle, nommage par gabarit :
+    #   - feuille (centre en niv.3, DO en niv.2, global en niv.1) = LES PERSONNES (samAccountName;mail)
+    #   - parents (DO, global) = leurs GROUPES enfants → sam = partie gauche du mail, mail = mail du groupe
+    # Format 2 colonnes "samAccountName;mail", UTF-8 BOM. Retourne les chemins des fichiers écrits.
+    # Partagé par /api/regles/generate-pair et Invoke-RuleGeneration (mêmes fichiers).
+    param(
+        [Parameter(Mandatory)] $Rule,
+        [Parameter(Mandatory)] $Users,
+        [Parameter(Mandatory)][string] $OutDir
+    )
+    $lbl        = if ($Rule.prefix) { Clean-ForFileName $Rule.prefix } else { Clean-ForFileName $Rule.label }
+    $naming     = $Rule.naming
+    $mailDomain = $global:parametresJson.ad.mailDomain
+    $niveau     = if ($Rule.niveau) { [int]$Rule.niveau } else { 3 }
+    $filtered   = @($Users)
+    $utf8Bom    = New-Object System.Text.UTF8Encoding($true)
+    $written    = [System.Collections.Generic.List[string]]::new()
+
+    $writeCsv = {
+        param([string]$FileBase, $Rows)
+        $lines = [System.Collections.Generic.List[string]]::new()
+        $lines.Add("samAccountName;mail")
+        foreach ($row in @($Rows)) { $lines.Add([string]$row) }
+        $path = Join-Path $OutDir "$(Get-SafeFileName $FileBase).csv"
+        [System.IO.File]::WriteAllText($path, ($lines -join "`r`n"), $utf8Bom)
+        [void]$written.Add($path)
+    }
+    $usersRows = { param($Grp) $l = [System.Collections.Generic.List[string]]::new(); foreach ($u in ($Grp | Sort-Object samAccountName)) { $l.Add("$($u.samAccountName);$($u.mail)") }; $l }
+    $childRow  = { param($Id) $sam = ($Id.mail -split '@')[0]; "$sam;$($Id.mail)" }
+    $glId = Resolve-GroupIdentity -Naming $naming -DefaultBase $lbl -MailDomain $mailDomain -Prefix $lbl -DoName '' -Centre '' -Level 'global'
+
+    if ($niveau -ge 3) {
+        $doChildRows = [System.Collections.Generic.List[string]]::new()
+        $byDO = $filtered | Group-Object { Get-RegionFromDN $_.dn } | Where-Object { $_.Name -and $_.Name -ne 'MONCHY' }
+        foreach ($doGrp in $byDO) {
+            $doClean = Clean-ForFileName $doGrp.Name
+            $doId    = Resolve-GroupIdentity -Naming $naming -DefaultBase "$lbl-$doClean" -MailDomain $mailDomain -Prefix $lbl -DoName $doGrp.Name -Centre '' -Level 'do'
+            $cChildRows = [System.Collections.Generic.List[string]]::new()
+            foreach ($cGrp in ($doGrp.Group | Group-Object { Get-CentreFromDN $_.dn })) {
+                $cClean = Clean-ForFileName $cGrp.Name
+                $cId    = Resolve-GroupIdentity -Naming $naming -DefaultBase "$lbl-$doClean-$cClean" -MailDomain $mailDomain -Prefix $lbl -DoName $doGrp.Name -Centre $cGrp.Name -Level 'centre'
+                & $writeCsv $cId.name (& $usersRows $cGrp.Group)
+                $cChildRows.Add((& $childRow $cId))
+            }
+            & $writeCsv $doId.name $cChildRows
+            $doChildRows.Add((& $childRow $doId))
+        }
+        & $writeCsv $glId.name $doChildRows
+    } elseif ($niveau -eq 2) {
+        $doChildRows = [System.Collections.Generic.List[string]]::new()
+        $byDO = $filtered | Group-Object { Get-RegionFromDN $_.dn } | Where-Object { $_.Name -and $_.Name -ne 'MONCHY' }
+        foreach ($doGrp in $byDO) {
+            $doClean = Clean-ForFileName $doGrp.Name
+            $doId    = Resolve-GroupIdentity -Naming $naming -DefaultBase "$lbl-$doClean" -MailDomain $mailDomain -Prefix $lbl -DoName $doGrp.Name -Centre '' -Level 'do'
+            & $writeCsv $doId.name (& $usersRows $doGrp.Group)
+            $doChildRows.Add((& $childRow $doId))
+        }
+        & $writeCsv $glId.name $doChildRows
+    } else {
+        & $writeCsv $glId.name (& $usersRows $filtered)
+    }
+    return @($written)
+}
+
+function Get-RuleGroupCount {
+    # Nombre TOTAL de groupes (hiérarchie complète : global + DO + centres) que produit
+    # une règle — identique au « N groupe(s) » de la prévisualisation. Indépendant de
+    # monoNiveau (qui n'affecte que la génération CSV, pas la structure des groupes).
+    # Réutilise exactement la même logique de filtrage que /api/regles/preview-groups.
+    param($Rule, $AllUsers, $AllRules)
+
+    if ($Rule.invertOf) {
+        $srcRule = @($AllRules | Where-Object { $_.id -eq $Rule.invertOf } | Select-Object -First 1)
+        if (-not $srcRule) { return 0 }
+        $srcIds = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+        @($AllUsers | Where-Object { Test-UserMatchesRule -User $_ -Conditions $srcRule.conditions }) | ForEach-Object { [void]$srcIds.Add($_.samAccountName) }
+        $filtered = @($AllUsers | Where-Object { -not $srcIds.Contains($_.samAccountName) })
+    } else {
+        $filtered = @($AllUsers | Where-Object { Test-UserMatchesRule -User $_ -Conditions $Rule.conditions })
+    }
+    $filtered = @($filtered | Where-Object { -not (Test-UserExcluded $_) })
+
+    if ($Rule.niveau -eq 3) {
+        $byDO = @($filtered | Group-Object { Get-RegionFromDN $_.dn } | Where-Object { $_.Name -and $_.Name -ne 'MONCHY' })
+        $centres = 0
+        foreach ($doGrp in $byDO) {
+            $centres += @($doGrp.Group | Group-Object { Get-CentreFromDN $_.dn }).Count
+        }
+        return 1 + $byDO.Count + $centres
+    } elseif ($Rule.niveau -eq 2) {
+        $byDO = @($filtered | Group-Object { Get-RegionFromDN $_.dn } | Where-Object { $_.Name -and $_.Name -ne 'MONCHY' })
+        return 1 + $byDO.Count
+    }
+    return 1
 }
 
 function Clean-ForFileName {

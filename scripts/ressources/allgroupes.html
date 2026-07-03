@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Groupes — toutes les pages</title>
+    <link rel="stylesheet" href="/style.css">
+    <style>
+        html, body { margin: 0; height: 100%; overflow: hidden; background: #f4f5f7; }
+        .ag-wrap { display: flex; height: 100vh; }
+
+        /* Menu vertical gauche (un onglet par règle) — repliable comme la sidebar Règles */
+        .ag-sidebar {
+            flex: none; width: 234px; background: #fff; border-right: 1px solid #e5e7eb;
+            display: flex; flex-direction: column; transition: width .15s ease;
+        }
+        .ag-sidebar.collapsed { width: 54px; }
+        .ag-side-hdr {
+            flex: none; display: flex; align-items: center; justify-content: space-between;
+            gap: 6px; padding: 10px 10px 10px 14px; border-bottom: 1px solid #eef0f3;
+        }
+        .ag-side-title { flex: 1; font: 700 11.5px/1 "Segoe UI", system-ui, sans-serif; letter-spacing: .06em;
+            text-transform: uppercase; color: #6b7280; white-space: nowrap; overflow: hidden; }
+        .ag-sidebar.collapsed .ag-side-title { display: none; }
+        .ag-sidebar.collapsed .ag-side-hdr { flex-direction: column; gap: 6px; }
+        .ag-collapse {
+            flex: none; width: 26px; height: 26px; display: inline-flex; align-items: center; justify-content: center;
+            border: 1px solid #e5e7eb; border-radius: 7px; background: #fff; color: #6b7280; cursor: pointer;
+        }
+        .ag-collapse:hover { background: #f3f4f6; color: #2563eb; }
+        .ag-sidebar.collapsed .ag-side-hdr { justify-content: center; padding: 10px 4px; }
+
+        .ag-tablist { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 8px; display: flex; flex-direction: column; gap: 3px; scrollbar-width: thin; }
+        .ag-tab {
+            display: flex; align-items: center; gap: 8px; width: 100%; text-align: left;
+            padding: 7px 10px; border: 1px solid transparent; border-radius: 8px; background: transparent;
+            color: #374151; font: 600 12.5px "Segoe UI", system-ui, sans-serif; cursor: pointer;
+            transition: background .12s, border-color .12s, color .12s;
+        }
+        .ag-tab:hover { background: #f3f4f6; }
+        .ag-tab.active { background: #eff3ff; border-color: #bfdbfe; color: #1d4ed8; }
+        .ag-tab-ini { display: none; font-weight: 700; font-size: 12px; }
+        .ag-tab-lbl { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .ag-tab.inactive .ag-tab-lbl, .ag-tab.inactive .ag-tab-ini { opacity: .55; }
+        .ag-sidebar.collapsed .ag-tab { justify-content: center; padding: 7px 4px; }
+        .ag-sidebar.collapsed .ag-tab-lbl { display: none; }
+        .ag-sidebar.collapsed .ag-tab-ini { display: inline; }
+        .ag-cnt { flex: none; font-size: 10.5px; font-weight: 700; padding: 1px 7px; border-radius: 999px; background: #e0e7ff; color: #3730a3; }
+        .ag-tab.active .ag-cnt { background: #dbeafe; color: #1d4ed8; }
+        .ag-sidebar.collapsed .ag-cnt { display: none; }
+        .ag-spin { flex: none; width: 10px; height: 10px; border-radius: 50%; border: 2px solid #d1d5db; border-top-color: #2563eb; animation: agspin .7s linear infinite; }
+        @keyframes agspin { to { transform: rotate(360deg); } }
+
+        /* Zone de contenu : une iframe par règle (page HTML identique à l'aperçu) */
+        .ag-content { flex: 1; position: relative; min-height: 0; }
+        .ag-frame { position: absolute; inset: 0; width: 100%; height: 100%; border: none; display: none; background: #f4f5f7; }
+        .ag-frame.active { display: block; }
+        .ag-empty { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+                    color: #6b7280; font: 500 14px "Segoe UI", system-ui, sans-serif; }
+    </style>
+</head>
+<body>
+    <div class="ag-wrap">
+        <aside class="ag-sidebar" id="ag-sidebar">
+            <div class="ag-side-hdr">
+                <span class="ag-side-title">Groupes</span>
+                <button class="ag-collapse" id="ag-fullscreen" type="button" title="Plein écran (F11)">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M16 21h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
+                </button>
+                <button class="ag-collapse" id="ag-refresh" type="button" title="Regénérer toutes les pages HTML des groupes">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                </button>
+                <button class="ag-collapse" id="ag-collapse" type="button" title="Réduire le menu">
+                    <svg id="ag-collapse-ic" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+                </button>
+            </div>
+            <div class="ag-tablist" id="ag-tablist"></div>
+        </aside>
+        <div class="ag-content" id="ag-content">
+            <div class="ag-empty" id="ag-empty">Chargement des groupes…</div>
+        </div>
+    </div>
+    <script src="/groups-doc.js?v=2"></script>
+    <script src="/allgroupes.js?v=13"></script>
+</body>
+</html>

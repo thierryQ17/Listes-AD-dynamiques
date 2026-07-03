@@ -195,6 +195,22 @@ body { overflow: hidden; }
 }
 .btn-group-niveau:hover { background: var(--accent-lt); color: var(--text); }
 .btn-group-niveau.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+/* Total des groupes à créer (somme des pastilles des règles actives) */
+.regles-total-badge {
+    margin-left: auto;
+    align-self: center;
+    background: var(--accent-lt);
+    color: var(--accent);
+    border: 1px solid var(--accent-dim);
+    border-radius: 999px;
+    padding: 3px 11px;
+    font-size: 11.5px;
+    font-weight: 700;
+    white-space: nowrap;
+}
+.regles-total-badge[hidden] { display: none; }
+.regles-sidebar.collapsed .regles-total-badge { display: none; }
 .rules-niveau-hdr {
     display: flex; align-items: center; justify-content: space-between;
     padding: 9px 8px 4px; font-size: 10px; font-weight: 700;
@@ -850,6 +866,21 @@ body { overflow: hidden; }
 .rule-card.inactive { opacity: .55; }
 .rule-card.inactive .rule-card-label { text-decoration: line-through; color: var(--text-sub); }
 
+/* Pastille du nombre de groupes générés par la règle (global + DO + centres) */
+.rule-gcount {
+    flex-shrink: 0;
+    background: var(--accent-lt);
+    color: var(--accent);
+    border: 1px solid var(--accent-dim);
+    border-radius: 999px;
+    padding: 0 7px;
+    min-width: 18px;
+    text-align: center;
+    font-size: 10.5px;
+    font-weight: 700;
+    line-height: 16px;
+}
+
 .badge-inactive {
     font-size: 9px;
     font-weight: 700;
@@ -1235,6 +1266,121 @@ body { overflow: hidden; }
     gap: 8px;
     flex-shrink: 0;
     padding-top: 22px;
+}
+
+/* ── Nommage personnalisé (gabarits) ── */
+.naming-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 10px;
+}
+.naming-fields {
+    margin-top: 0;
+}
+/* Colonne « Adresse mail » : 3 gabarits empilés verticalement (Global / DO / Centre) */
+.naming-mail-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.pattern-input-wrap {
+    position: relative;
+}
+.pattern-input-wrap .form-input {
+    width: 100%;
+    padding-right: 36px;
+}
+.pattern-edit-btn {
+    position: absolute;
+    right: 6px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--text-sub);
+    padding: 4px;
+    line-height: 0;
+    border-radius: 6px;
+    transition: color .15s, background .15s;
+}
+.pattern-edit-btn:hover {
+    color: var(--accent);
+    background: var(--surface-alt);
+}
+
+/* ── Modale d'édition d'un gabarit ── */
+.pattern-modal-box {
+    background: var(--bg);
+    border-radius: var(--radius);
+    box-shadow: 0 8px 40px rgba(0,0,0,.18);
+    width: min(520px, 94vw);
+    display: flex;
+    flex-direction: column;
+}
+.pattern-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border-lt);
+}
+.pattern-modal-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text);
+}
+.pattern-modal-body {
+    padding: 18px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+.pattern-tokens {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+.pattern-token-chip {
+    font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+    font-size: 12px;
+    padding: 4px 9px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--surface-alt);
+    color: var(--accent);
+    cursor: pointer;
+    transition: background .15s, border-color .15s;
+}
+.pattern-token-chip:hover {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+}
+.pattern-preview {
+    display: flex;
+    gap: 8px;
+    align-items: baseline;
+    font-size: 13px;
+    padding: 8px 10px;
+    background: var(--surface-alt);
+    border-radius: 8px;
+}
+.pattern-preview-lbl { color: var(--text-sub); flex-shrink: 0; }
+.pattern-preview-val {
+    font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+    color: var(--text);
+    word-break: break-all;
+}
+.pattern-modal-hint {
+    margin: 0;
+    font-size: 12px;
+    color: var(--text-sub);
+    line-height: 1.4;
+}
+.pattern-modal-box .confirm-modal-actions {
+    padding: 0 20px 18px;
 }
 
 .prefix-wrap {

@@ -6,6 +6,48 @@
     <title>Fichiers CSVs — I2N</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%232563eb'/%3E%3Ctext x='16' y='22' text-anchor='middle' font-family='system-ui,sans-serif' font-size='13' font-weight='700' fill='white'%3EAD%3C/text%3E%3C/svg%3E">
     <link rel="stylesheet" href="/style.css">
+    <style>
+        .csv-gen-all {
+            display: flex; align-items: center; justify-content: center; gap: 8px;
+            width: 100%; padding: 9px 12px; margin-bottom: 8px;
+            background: #2563eb; color: #fff; border: none; border-radius: 8px;
+            font: 600 12.5px "Segoe UI", system-ui, sans-serif; cursor: pointer;
+            transition: background .12s;
+        }
+        .csv-gen-all:hover { background: #1d4ed8; }
+        .csv-gen-all svg { flex: none; }
+
+        /* Dossier : libellé + bouton supprimer (visible au survol) */
+        .csv-run-item { display: flex; align-items: center; gap: 6px; }
+        .csv-run-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .csv-run-del {
+            flex: none; display: inline-flex; align-items: center; justify-content: center;
+            border: none; background: none; color: #b91c1c; cursor: pointer;
+            padding: 3px; border-radius: 5px; opacity: 0; transition: opacity .12s, background .12s;
+        }
+        .csv-run-item:hover .csv-run-del,
+        .csv-run-item.active .csv-run-del { opacity: .75; }
+        .csv-run-del:hover { opacity: 1; background: #fee2e2; }
+
+        /* Arborescence GROUPE → fichiers (zone du bas) */
+        .csv-tree-group { display: flex; align-items: center; gap: 6px; padding: 5px 8px; margin: 2px 4px 0; cursor: pointer; border-radius: 5px; font-size: 11.5px; font-weight: 700; color: #374151; }
+        .csv-tree-group:hover { background: #eeeae4; }
+        .csv-tree-caret { flex: none; width: 10px; font-size: 9px; color: #9ca3af; }
+        .csv-tree-group-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .csv-tree-group-count { flex: none; font-size: 10px; font-weight: 700; padding: 0 7px; border-radius: 999px; background: #e5e7eb; color: #4b5563; }
+        .csv-tree-group-files.collapsed { display: none; }
+        .csv-tree-file-nested { padding-left: 26px; }
+
+        /* Ascenseur vertical bien visible */
+        #csv-run-list, #csv-file-list { scrollbar-width: thin; scrollbar-color: #b8b2a9 transparent; }
+        #csv-file-list::-webkit-scrollbar { width: 10px; }
+        #csv-file-list::-webkit-scrollbar-thumb { background: #c2bcb2; border-radius: 5px; border: 2px solid var(--surface-alt); }
+        #csv-file-list::-webkit-scrollbar-thumb:hover { background: #a8a299; }
+
+        /* Poignée de redimensionnement de la zone de gauche */
+        .csv-resizer { flex: none; width: 6px; cursor: col-resize; background: transparent; transition: background .12s; }
+        .csv-resizer:hover, .csv-resizer.active { background: #bfdbfe; }
+    </style>
 </head>
 <body>
     <header>
@@ -22,7 +64,11 @@
     </header>
 
     <div id="csv-viewer">
-        <div class="csv-tree-pane">
+        <div class="csv-tree-pane" id="csv-tree-pane">
+            <button id="csv-gen-all" class="csv-gen-all" type="button" title="Générer tous les CSV de tous les groupes (dossier horodaté, un sous-dossier par groupe)">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                Générer tous les CSV
+            </button>
             <div class="csv-tree-head">
                 <span>Dossiers</span>
                 <button id="csv-refresh" class="csv-refresh" title="Actualiser">↻</button>
@@ -37,6 +83,7 @@
                 <div id="csv-file-list" class="csv-file-list"></div>
             </div>
         </div>
+        <div class="csv-resizer" id="csv-resizer" title="Glisser pour élargir la zone de gauche"></div>
         <div id="csv-view" class="csv-view">
             <p class="csv-view-hint">Sélectionner un fichier</p>
         </div>

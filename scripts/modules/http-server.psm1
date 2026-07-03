@@ -62,6 +62,9 @@ function Start-AppServer {
         Add-PodeRoute -Method Get -Path '/regles.html' -ScriptBlock { Serve-File -Key 'f_regles.html' -ContentType 'text/html' }
         Add-PodeRoute -Method Get -Path '/regles.js'   -ScriptBlock { Serve-File -Key 'f_regles.js'  -ContentType 'application/javascript' }
         Add-PodeRoute -Method Get -Path '/regles.css'  -ScriptBlock { Serve-File -Key 'f_regles.css' -ContentType 'text/css' }
+        Add-PodeRoute -Method Get -Path '/groups-doc.js' -ScriptBlock { Serve-File -Key 'f_groups-doc.js' -ContentType 'application/javascript' }
+        Add-PodeRoute -Method Get -Path '/allgroupes'    -ScriptBlock { Serve-File -Key 'f_allgroupes.html' -ContentType 'text/html' }
+        Add-PodeRoute -Method Get -Path '/allgroupes.js' -ScriptBlock { Serve-File -Key 'f_allgroupes.js'   -ContentType 'application/javascript' }
 
         # ==================== API — Groupes Dynamiques (index.html) ====================
         Add-PodeRoute -Method Get -Path '/api/groups' -ScriptBlock {
@@ -265,7 +268,8 @@ function Start-AppServer {
             $runs        = [System.Collections.Generic.List[PSCustomObject]]::new()
             if (Test-Path $outputDir) {
                 foreach ($d in (Get-ChildItem -Path $outputDir -Directory | Sort-Object Name -Descending)) {
-                    $csvFiles = @(Get-ChildItem -Path $d.FullName -Filter "*.csv" -ErrorAction SilentlyContinue | Sort-Object Name | ForEach-Object { $_.Name })
+                    # Récursif : inclut les CSV des sous-dossiers (chemin relatif, ex. "FORMATEURS\...csv")
+                    $csvFiles = @(Get-ChildItem -Path $d.FullName -Filter "*.csv" -Recurse -ErrorAction SilentlyContinue | Sort-Object FullName | ForEach-Object { $_.FullName.Substring($d.FullName.Length).TrimStart('\') })
                     $runs.Add([PSCustomObject]@{ run = $d.Name; path = $d.FullName; files = $csvFiles })
                 }
             }
@@ -304,6 +308,88 @@ function Start-AppServer {
             }
         }
 
+        # Supprime un dossier de résultats (récursif) — restreint à application\output, jamais la racine.
+        Add-PodeRoute -Method Post -Path '/api/output/delete' -ScriptBlock {
+            try {
+                $body        = ConvertFrom-Json $WebEvent.Request.Body
+                $reqPath     = "$($body.path)"
+                $settingsDir = $global:path."r_settings" -replace '/', '\'
+                $base        = [System.IO.Path]::GetFullPath((Join-Path (Split-Path (Split-Path $settingsDir -Parent) -Parent) "application\output")).TrimEnd('\') + '\'
+                $resolved    = [System.IO.Path]::GetFullPath($reqPath)
+                if (-not $resolved.StartsWith($base, [System.StringComparison]::OrdinalIgnoreCase)) {
+                    Send-Json -Body '{"ok":false,"error":"Chemin non autorise"}' -StatusCode 403
+                } elseif (($resolved.TrimEnd('\') + '\') -eq $base) {
+                    Send-Json -Body '{"ok":false,"error":"Suppression de la racine interdite"}' -StatusCode 403
+                } elseif (-not (Test-Path $resolved)) {
+                    Send-Json -Body '{"ok":false,"error":"Dossier introuvable"}' -StatusCode 404
+                } else {
+                    Remove-Item -Path $resolved -Recurse -Force -ErrorAction Stop
+                    Send-Json -Body '{"ok":true}'
+                }
+            } catch {
+                $e = $_.Exception.Message -replace '"', "'"
+                Send-Json -Body "{`"ok`":false,`"error`":`"$e`"}"
+            }
+        }
+
+        # ==================== API — Génération de TOUS les CSV (tous les groupes) ====================
+        # Crée un dossier horodaté ; puis, par règle, un sous-dossier <label> avec ses CSV récursifs
+        # (même structure que FORMATEURS/ADMINISTRATIF via Write-RuleCsvSet).
+        Add-PodeRoute -Method Post -Path '/api/csv/generate-all/init' -ScriptBlock {
+            try {
+                $settingsDir = $global:path."r_settings" -replace '/', '\'
+                $baseDir     = Join-Path (Split-Path (Split-Path $settingsDir -Parent) -Parent) "application\output"
+                $ts          = (Get-Date).ToString("yyyy-MM-dd_HH-mm-ss")
+                $dir         = Join-Path $baseDir "${ts}_TOUS-LES-GROUPES"
+                New-Item -ItemType Directory -Path $dir -Force | Out-Null
+                Send-Json -Body (ConvertTo-Json -InputObject @{ ok = $true; dir = $dir } -Compress)
+            } catch {
+                $e = $_.Exception.Message -replace '"', "'"
+                Send-Json -Body "{`"ok`":false,`"error`":`"$e`"}"
+            }
+        }
+
+        Add-PodeRoute -Method Post -Path '/api/csv/generate-all/rule' -ScriptBlock {
+            try {
+                $body   = ConvertFrom-Json $WebEvent.Request.Body
+                $dir    = "$($body.dir)"
+                $ruleId = "$($body.ruleId)"
+
+                # Sécurité : le dossier cible doit être dans application\output
+                $settingsDir = $global:path."r_settings" -replace '/', '\'
+                $base        = [System.IO.Path]::GetFullPath((Join-Path (Split-Path (Split-Path $settingsDir -Parent) -Parent) "application\output")).TrimEnd('\') + '\'
+                $resolvedDir = [System.IO.Path]::GetFullPath($dir)
+                if (-not $resolvedDir.StartsWith($base, [System.StringComparison]::OrdinalIgnoreCase)) { Send-Json -Body '{"ok":false,"error":"Chemin non autorise"}' -StatusCode 403; return }
+                if (-not (Test-Path $resolvedDir)) { Send-Json -Body '{"ok":false,"error":"Dossier run introuvable"}'; return }
+
+                $rPath  = Join-Path ($global:path."r_settings" -replace '/', '\') "regles.json"
+                $regles = @(ConvertFrom-Json ([System.IO.File]::ReadAllText($rPath, [System.Text.Encoding]::UTF8)))
+                $rule   = $regles | Where-Object { $_.id -eq $ruleId } | Select-Object -First 1
+                if (-not $rule) { Send-Json -Body '{"ok":false,"error":"Regle introuvable"}'; return }
+
+                $allUsers = @(Get-AllUsersFromCache)
+                if ($rule.invertOf) {
+                    $srcRule = $regles | Where-Object { $_.id -eq $rule.invertOf } | Select-Object -First 1
+                    if (-not $srcRule) { Send-Json -Body '{"ok":false,"error":"Regle source introuvable"}'; return }
+                    $srcIds = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+                    @($allUsers | Where-Object { Test-UserMatchesRule -User $_ -Conditions $srcRule.conditions }) | ForEach-Object { [void]$srcIds.Add($_.samAccountName) }
+                    $filtered = @($allUsers | Where-Object { -not $srcIds.Contains($_.samAccountName) })
+                } else {
+                    $filtered = @($allUsers | Where-Object { Test-UserMatchesRule -User $_ -Conditions $rule.conditions })
+                }
+                $filtered = @($filtered | Where-Object { -not (Test-UserExcluded $_) })
+
+                # Sous-dossier au nom du groupe (label), CSV récursifs dedans (niveaux 1/2/3)
+                $subDir = Join-Path $resolvedDir (Get-SafeFileName $rule.label)
+                New-Item -ItemType Directory -Path $subDir -Force | Out-Null
+                $files = Write-RuleCsvSet -Rule $rule -Users $filtered -OutDir $subDir
+                Send-Json -Body (ConvertTo-Json -InputObject @{ ok = $true; count = @($files).Count } -Compress)
+            } catch {
+                $e = $_.Exception.Message -replace '"', "'"
+                Send-Json -Body "{`"ok`":false,`"error`":`"$e`"}"
+            }
+        }
+
         # ==================== API — Règles : contrôle mail ====================
         Add-PodeRoute -Method Post -Path '/api/regles/check-mail' -ScriptBlock {
             try {
@@ -328,6 +414,23 @@ function Start-AppServer {
             }
         }
 
+        # ==================== API — Règles : compteurs de groupes (pastille sidebar) ====================
+        Add-PodeRoute -Method Get -Path '/api/regles/counts' -ScriptBlock {
+            try {
+                $rPath    = Join-Path ($global:path."r_settings" -replace '/', '\') "regles.json"
+                $rules    = @(ConvertFrom-Json ([System.IO.File]::ReadAllText($rPath, [System.Text.Encoding]::UTF8)))
+                $allUsers = @(Get-AllUsersFromCache)
+                $counts   = [ordered]@{}
+                foreach ($rule in $rules) {
+                    $counts["$($rule.id)"] = Get-RuleGroupCount -Rule $rule -AllUsers $allUsers -AllRules $rules
+                }
+                Send-Json -Body (ConvertTo-Json -InputObject $counts -Depth 2 -Compress)
+            } catch {
+                $errMsg = $_.Exception.Message -replace '"', "'"
+                Send-Json -Body "{`"error`":`"$errMsg`"}"
+            }
+        }
+
         # ==================== API — Règles : prévisualisation des groupes ====================
         Add-PodeRoute -Method Post -Path '/api/regles/preview-groups' -ScriptBlock {
             try {
@@ -338,6 +441,7 @@ function Start-AppServer {
                 } else {
                     $lbl        = if ($rule.prefix) { Clean-ForFileName $rule.prefix } else { Clean-ForFileName $rule.label }
                     $mailDomain = $global:parametresJson.ad.mailDomain
+                    $naming     = $rule.naming
                     if ($rule.invertOf) {
                         $rPath   = Join-Path ($global:path."r_settings" -replace '/', '\') "regles.json"
                         $srcRule = @(ConvertFrom-Json ([System.IO.File]::ReadAllText($rPath, [System.Text.Encoding]::UTF8))) | Where-Object { $_.id -eq $rule.invertOf } | Select-Object -First 1
@@ -356,6 +460,7 @@ function Start-AppServer {
 
                     if ($rule.niveau -eq 3) {
                         # Hiérarchie complète pour la prévisualisation (monoNiveau n'affecte que la génération CSV)
+                        $glId = Resolve-GroupIdentity -Naming $naming -DefaultBase $lbl -MailDomain $mailDomain -Prefix $lbl -DoName '' -Centre '' -Level 'global'
                         $byDO = $filtered | Group-Object { Get-RegionFromDN $_.dn } | Where-Object { $_.Name -and $_.Name -ne 'MONCHY' }
                         foreach ($doGrp in $byDO) {
                             $doName      = if ($doGrp.Name) { $doGrp.Name } else { 'SANS-DO' }
@@ -363,6 +468,7 @@ function Start-AppServer {
                             $doBase      = "$lbl-$doClean"
                             $regionCfg   = $global:parametresJson.ad.regions | Where-Object { $_.label -eq $doName } | Select-Object -First 1
                             $isMultiBase = ($null -ne $regionCfg -and @($regionCfg.bases).Count -gt 1)
+                            $doId        = Resolve-GroupIdentity -Naming $naming -DefaultBase $doBase -MailDomain $mailDomain -Prefix $lbl -DoName $doName -Centre '' -Level 'do'
                             foreach ($cGrp in ($doGrp.Group | Group-Object { Get-CentreFromDN $_.dn })) {
                                 $cName  = if ($cGrp.Name) { $cGrp.Name } else { 'SANS-CENTRE' }
                                 $cClean = Clean-ForFileName $cName
@@ -385,12 +491,18 @@ function Start-AppServer {
                                         title = if ($_.title)       { "$($_.title)"        } else { '' }
                                     }
                                 })
-                                $groups.Add(@{ name = $cBase; mail = "$($cBase.ToLower())@$mailDomain"; type = 'centre'; count = $cGrp.Group.Count; members = $centreMembers; baseLabel = $baseLabel })
+                                $cId = Resolve-GroupIdentity -Naming $naming -DefaultBase $cBase -MailDomain $mailDomain -Prefix $lbl -DoName $doName -Centre $cName -Level 'centre'
+                                # key/parent = bases hierarchiques UNIQUES (independantes du nom affiche).
+                                # Indispensable quand le gabarit produit des noms identiques entre DO
+                                # (ex. "Centre AFTRAL" sans {{region}}) : la liaison DO->centre doit
+                                # se faire par cle, pas par nom, sinon chaque centre apparait sous tous les DO.
+                                $groups.Add(@{ key = $cBase; name = $cId.name; mail = $cId.mail; parent = $doBase; type = 'centre'; count = $cGrp.Group.Count; members = $centreMembers; baseLabel = $baseLabel })
                             }
-                            $groups.Add(@{ name = $doBase; mail = "$($doBase.ToLower())@$mailDomain"; type = 'do'; count = $doGrp.Group.Count; multiBase = $isMultiBase })
+                            $groups.Add(@{ key = $doBase; name = $doId.name; mail = $doId.mail; parent = $lbl; type = 'do'; count = $doGrp.Group.Count; multiBase = $isMultiBase })
                         }
-                        $groups.Add(@{ name = $lbl; mail = "$($lbl.ToLower())@$mailDomain"; type = 'global'; count = $filtered.Count })
+                        $groups.Add(@{ key = $lbl; name = $glId.name; mail = $glId.mail; type = 'global'; count = $filtered.Count })
                     } elseif ($rule.niveau -eq 2) {
+                        $glId = Resolve-GroupIdentity -Naming $naming -DefaultBase $lbl -MailDomain $mailDomain -Prefix $lbl -DoName '' -Centre '' -Level 'global'
                         $byDO = $filtered | Group-Object { Get-RegionFromDN $_.dn } | Where-Object { $_.Name -and $_.Name -ne 'MONCHY' }
                         foreach ($doGrp in $byDO) {
                             $doName      = if ($doGrp.Name) { $doGrp.Name } else { 'SANS-DO' }
@@ -404,9 +516,10 @@ function Start-AppServer {
                                     title = if ($_.title)       { "$($_.title)"        } else { '' }
                                 }
                             })
-                            $groups.Add(@{ name = $doBase; mail = "$($doBase.ToLower())@$mailDomain"; type = 'do'; count = $doGrp.Group.Count; members = $doMembers; multiBase = $isMultiBase })
+                            $doId = Resolve-GroupIdentity -Naming $naming -DefaultBase $doBase -MailDomain $mailDomain -Prefix $lbl -DoName $doName -Centre '' -Level 'do'
+                            $groups.Add(@{ key = $doBase; name = $doId.name; mail = $doId.mail; parent = $lbl; type = 'do'; count = $doGrp.Group.Count; members = $doMembers; multiBase = $isMultiBase })
                         }
-                        $groups.Add(@{ name = $lbl; mail = "$($lbl.ToLower())@$mailDomain"; type = 'global'; count = $filtered.Count })
+                        $groups.Add(@{ key = $lbl; name = $glId.name; mail = $glId.mail; type = 'global'; count = $filtered.Count })
                     } else {
                         $globalMembers = @($filtered | Sort-Object displayName | ForEach-Object {
                             [ordered]@{
@@ -414,7 +527,8 @@ function Start-AppServer {
                                 title = if ($_.title)       { "$($_.title)"        } else { '' }
                             }
                         })
-                        $groups.Add(@{ name = $lbl; mail = "$($lbl.ToLower())@$mailDomain"; type = 'global'; count = $filtered.Count; members = $globalMembers })
+                        $glId = Resolve-GroupIdentity -Naming $naming -DefaultBase $lbl -MailDomain $mailDomain -Prefix $lbl -DoName '' -Centre '' -Level 'global'
+                        $groups.Add(@{ key = $lbl; name = $glId.name; mail = $glId.mail; type = 'global'; count = $filtered.Count; members = $globalMembers })
                     }
 
                     $cacheTs = ''
@@ -459,8 +573,6 @@ function Start-AppServer {
 
                     foreach ($r in @($rule, $peerRule)) {
                         if (-not $r) { continue }
-                        $lbl = if ($r.prefix) { Clean-ForFileName $r.prefix } else { Clean-ForFileName $r.label }
-
                         if ($r.invertOf) {
                             $srcRule = $regles | Where-Object { $_.id -eq $r.invertOf } | Select-Object -First 1
                             if (-not $srcRule) { continue }
@@ -472,51 +584,8 @@ function Start-AppServer {
                         }
                         $filtered = @($filtered | Where-Object { -not (Test-UserExcluded $_) })
 
-                        $niveau = if ($r.niveau) { [int]$r.niveau } else { 3 }
-
-                        $utf8Bom = New-Object System.Text.UTF8Encoding($true)
-
-                        if ($niveau -ge 3) {
-                            $byDO = $filtered | Group-Object { Get-RegionFromDN $_.dn } | Where-Object { $_.Name -and $_.Name -ne 'MONCHY' }
-                            foreach ($doGrp in $byDO) {
-                                $doClean = Clean-ForFileName $doGrp.Name
-                                $doBase  = "$lbl-$doClean"
-                                foreach ($cGrp in ($doGrp.Group | Group-Object { Get-CentreFromDN $_.dn })) {
-                                    $cClean  = Clean-ForFileName $cGrp.Name
-                                    $cBase   = "$lbl-$doClean-$cClean"
-                                    $cLines  = [System.Collections.Generic.List[string]]::new()
-                                    $cLines.Add("samAccountName;mail")
-                                    foreach ($u in ($cGrp.Group | Sort-Object samAccountName)) { $cLines.Add("$($u.samAccountName);$($u.mail)") }
-                                    $cPath = Join-Path $outDir "$cBase.csv"
-                                    [System.IO.File]::WriteAllText($cPath, ($cLines -join "`r`n"), $utf8Bom)
-                                    [void]$allFiles.Add($cPath)
-                                }
-                                $doLines = [System.Collections.Generic.List[string]]::new()
-                                $doLines.Add("samAccountName;mail")
-                                foreach ($u in ($doGrp.Group | Sort-Object samAccountName)) { $doLines.Add("$($u.samAccountName);$($u.mail)") }
-                                $doPath = Join-Path $outDir "$doBase.csv"
-                                [System.IO.File]::WriteAllText($doPath, ($doLines -join "`r`n"), $utf8Bom)
-                                [void]$allFiles.Add($doPath)
-                            }
-                        } elseif ($niveau -eq 2) {
-                            $byDO = $filtered | Group-Object { Get-RegionFromDN $_.dn } | Where-Object { $_.Name -and $_.Name -ne 'MONCHY' }
-                            foreach ($doGrp in $byDO) {
-                                $doClean = Clean-ForFileName $doGrp.Name
-                                $doBase  = "$lbl-$doClean"
-                                $doLines = [System.Collections.Generic.List[string]]::new()
-                                $doLines.Add("samAccountName;mail")
-                                foreach ($u in ($doGrp.Group | Sort-Object samAccountName)) { $doLines.Add("$($u.samAccountName);$($u.mail)") }
-                                $doPath = Join-Path $outDir "$doBase.csv"
-                                [System.IO.File]::WriteAllText($doPath, ($doLines -join "`r`n"), $utf8Bom)
-                                [void]$allFiles.Add($doPath)
-                            }
-                        }
-                        $glLines = [System.Collections.Generic.List[string]]::new()
-                        $glLines.Add("samAccountName;mail")
-                        foreach ($u in ($filtered | Sort-Object samAccountName)) { $glLines.Add("$($u.samAccountName);$($u.mail)") }
-                        $glPath = Join-Path $outDir "$lbl.csv"
-                        [System.IO.File]::WriteAllText($glPath, ($glLines -join "`r`n"), $utf8Bom)
-                        [void]$allFiles.Add($glPath)
+                        # Génération RÉCURSIVE (nommage par gabarit) — fonction partagée avec Invoke-RuleGeneration
+                        foreach ($f in (Write-RuleCsvSet -Rule $r -Users $filtered -OutDir $outDir)) { [void]$allFiles.Add($f) }
                     }
 
                     $resultJson = ConvertTo-Json -InputObject @{ ok = $true; outDir = $outDir; files = @($allFiles); total = $allFiles.Count } -Compress
@@ -538,6 +607,63 @@ function Start-AppServer {
                 Send-Json -Body (ConvertTo-Json -InputObject @($values) -Depth 2 -Compress)
             }
         }
+
+        # ==================== API — Cache HTML des pages « GROUPES » ====================
+        # Cache PAR PAGE : chaque règle produit <label>.html + <label>.sig (sa signature).
+        # Une page est réutilisée tant que sa signature (version + cache AD + règle) n'a pas changé.
+        # Pas de reset/commit global → robuste, aucune régénération inutile, sûr si interrompu.
+        # Renvoie { counts: { <LABEL>: <nb de groupes> } } — la CLÉ prouve l'existence de la page,
+        # la VALEUR est le nombre de groupes mis en cache (fichier .sig) → plus besoin du /api/regles/counts lent.
+        Add-PodeRoute -Method Get -Path '/api/groupes/html-cache/meta' -ScriptBlock {
+            try {
+                $dir    = Get-HtmlCacheDir
+                $counts = [ordered]@{}
+                foreach ($f in @(Get-ChildItem -Path $dir -Filter '*.html' -ErrorAction SilentlyContinue)) {
+                    $sigFile = Join-Path $dir "$($f.BaseName).sig"
+                    $val = $null
+                    if (Test-Path $sigFile) {
+                        $n = 0
+                        if ([int]::TryParse((([System.IO.File]::ReadAllText($sigFile, [System.Text.Encoding]::UTF8)).Trim()), [ref]$n)) { $val = $n }
+                    }
+                    $counts["$($f.BaseName)"] = $val
+                }
+                Send-Json -Body (ConvertTo-Json -InputObject @{ counts = $counts } -Depth 3 -Compress)
+            } catch {
+                Send-Json -Body '{"counts":{}}'
+            }
+        }
+
+        Add-PodeRoute -Method Post -Path '/api/groupes/html-cache' -ScriptBlock {
+            try {
+                $body = ConvertFrom-Json $WebEvent.Request.Body
+                $name = "$($body.name)"
+                if (-not $name) { Send-Json -Body '{"ok":false,"error":"name manquant"}'; return }
+                # Nom de fichier = label de la règle (assaini, lisible : espaces/casse/accents conservés)
+                $safe = Get-SafeFileName $name
+                $dir  = Get-HtmlCacheDir
+                [System.IO.File]::WriteAllText((Join-Path $dir "$safe.html"), "$($body.html)",  [System.Text.Encoding]::UTF8)
+                # Le .sig stocke le NOMBRE DE GROUPES de la page (compteur mis en cache)
+                [System.IO.File]::WriteAllText((Join-Path $dir "$safe.sig"),  "$($body.count)", [System.Text.Encoding]::UTF8)
+                Send-Json -Body '{"ok":true}'
+            } catch {
+                $e = $_.Exception.Message -replace '"', "'"
+                Send-Json -Body "{`"ok`":false,`"error`":`"$e`"}"
+            }
+        }
+
+        Add-PodeRoute -Method Get -Path '/api/groupes/html-cache/page' -ScriptBlock {
+            try {
+                $safe = Get-SafeFileName "$($WebEvent.Query['name'])"
+                $f    = Join-Path (Get-HtmlCacheDir) "$safe.html"
+                if (Test-Path $f) {
+                    Write-PodeTextResponse -Value ([System.IO.File]::ReadAllText($f, [System.Text.Encoding]::UTF8)) -ContentType 'text/html'
+                } else {
+                    Write-PodeTextResponse -Value '<body style="font:14px sans-serif;padding:24px;color:#6b7280">Page absente du cache.</body>' -ContentType 'text/html' -StatusCode 404
+                }
+            } catch {
+                Write-PodeTextResponse -Value '<body>Erreur cache</body>' -ContentType 'text/html' -StatusCode 500
+            }
+        }
     }
 }
 
@@ -550,6 +676,14 @@ function Send-Json {
     param([string]$Body, [int]$StatusCode = 200)
     if ([string]::IsNullOrEmpty($Body) -or $Body -eq 'null') { $Body = '[]' }
     Write-PodeTextResponse -Value $Body -ContentType 'application/json' -StatusCode $StatusCode
+}
+
+function Get-HtmlCacheDir {
+    # Dossier de cache des pages HTML de l'onglet GROUPES : scripts/cache/html/
+    $scriptsDir = Split-Path ($global:path."r_settings" -replace '/', '\') -Parent
+    $dir = Join-Path $scriptsDir 'cache\html'
+    if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
+    return $dir
 }
 
 function Serve-File {

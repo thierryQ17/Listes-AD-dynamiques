@@ -15,6 +15,56 @@
             border: none;
         }
         .tab-frame.active { display: block; }
+        .nav-badge {
+            display: inline-block;
+            margin-left: 7px;
+            min-width: 18px;
+            padding: 0 6px;
+            border-radius: 999px;
+            background: #dbeafe;
+            color: #2563eb;
+            font-size: 11px;
+            font-weight: 700;
+            line-height: 17px;
+            text-align: center;
+            vertical-align: middle;
+        }
+        .nav-badge[hidden] { display: none; }
+
+        /* Bandeau bloquant (filigrane) pendant la génération des pages GROUPES */
+        #app-overlay {
+            position: fixed; inset: 0; z-index: 99999;
+            display: flex; align-items: center; justify-content: center;
+            background: rgba(244,245,247,.78);
+            backdrop-filter: blur(2px);
+            cursor: wait;
+        }
+        #app-overlay[hidden] { display: none; }
+        #app-overlay .ov-box {
+            display: flex; flex-direction: column; align-items: center; gap: 22px;
+            padding: 30px 46px; border: 3px dashed rgba(107,114,128,.35); border-radius: 22px;
+            background: rgba(255,255,255,.35);
+        }
+        #app-overlay .ov-text {
+            font: 800 clamp(20px, 3.6vw, 44px)/1.2 "Segoe UI", system-ui, sans-serif;
+            letter-spacing: .05em; text-transform: uppercase; text-align: center;
+            color: transparent;
+            background: linear-gradient(120deg,#9ca3af,#374151 55%,#9ca3af);
+            -webkit-background-clip: text; background-clip: text; opacity: .9;
+        }
+        #app-overlay .ov-bar-track {
+            width: min(560px, 74vw); height: 16px; border-radius: 999px;
+            background: rgba(107,114,128,.22); overflow: hidden;
+        }
+        #app-overlay .ov-bar-fill {
+            height: 100%; width: 0%; border-radius: 999px;
+            background: linear-gradient(90deg, #2563eb, #60a5fa);
+            transition: width .25s ease;
+        }
+        #app-overlay .ov-status {
+            font: 600 16px "Segoe UI", system-ui, sans-serif; color: #4b5563; letter-spacing: .01em; text-align: center;
+        }
+        #app-overlay .ov-status b { color: #1d4ed8; }
     </style>
 </head>
 <body>
@@ -22,8 +72,9 @@
         <div class="header-left">
             <nav class="header-nav">
                 <a href="#" class="nav-link active" data-tab="explorer">Explorateur AD</a>
-                <a href="#" class="nav-link" data-tab="regles">Règles</a>
+                <a href="#" class="nav-link" data-tab="regles">Règles<span class="nav-badge" id="nav-regles-count" hidden></span></a>
                 <a href="#" class="nav-link" data-tab="groupes">Fichiers CSVs</a>
+                <a href="#" class="nav-link" data-tab="allgroupes">GROUPES</a>
             </nav>
         </div>
         <div class="header-right">
@@ -35,6 +86,15 @@
     <iframe id="frame-explorer" class="tab-frame active" src="/explorer" title="Explorateur AD"></iframe>
     <iframe id="frame-regles"   class="tab-frame"        data-src="/regles"  title="Règles"></iframe>
     <iframe id="frame-groupes"  class="tab-frame"        data-src="/groupes" title="Groupes Dynamiques"></iframe>
+    <iframe id="frame-allgroupes" class="tab-frame"      data-src="/allgroupes" title="Groupes — pages HTML" allow="fullscreen"></iframe>
+
+    <div id="app-overlay" hidden>
+        <div class="ov-box">
+            <div class="ov-text">En attente de<br>génération des groupes…</div>
+            <div class="ov-bar-track"><div class="ov-bar-fill" id="ov-bar"></div></div>
+            <div class="ov-status" id="ov-status">Préparation…</div>
+        </div>
+    </div>
 
     <script>
         const tabs   = document.querySelectorAll('[data-tab]');
@@ -102,10 +162,55 @@
         refreshCacheDate();
         setInterval(refreshCacheDate, 60000);
 
+        // Pastille « nombre total de règles » sur l'onglet Règles
+        function setRulesCount(n) {
+            const el = document.getElementById('nav-regles-count');
+            if (!el) return;
+            if (n > 0) { el.textContent = n; el.hidden = false; el.title = `${n} règle${n > 1 ? 's' : ''} définie${n > 1 ? 's' : ''}`; }
+            else { el.hidden = true; }
+        }
+        async function refreshRulesCount() {
+            try {
+                const r = await fetch('/api/regles');
+                const d = await r.json();
+                setRulesCount(Array.isArray(d) ? d.length : 0);
+            } catch { /* silencieux */ }
+        }
+        refreshRulesCount();
+
         window.addEventListener('message', async e => {
             if (e.data?.type === 'cache-rebuilt') {
                 const current = await refreshCacheDate();
                 startCacheDatePolling(current);
+            }
+            // La page Règles notifie tout changement (ajout/suppression) → pastille à jour
+            if (e.data?.type === 'rules-changed' && typeof e.data.count === 'number') {
+                setRulesCount(e.data.count);
+            }
+            // La page GROUPES demande le bandeau bloquant pendant la génération
+            if (e.data?.type === 'groupes-generating') {
+                const ov = document.getElementById('app-overlay');
+                if (ov) ov.hidden = !e.data.on;
+                if (e.data.on) {
+                    const bar = document.getElementById('ov-bar');
+                    const st  = document.getElementById('ov-status');
+                    const txt = document.querySelector('#app-overlay .ov-text');
+                    if (txt) txt.innerHTML = e.data.title
+                        ? String(e.data.title).replace(/[<>]/g, '')
+                        : 'En attente de<br>génération des groupes…';
+                    if (bar) bar.style.width = '0%';
+                    if (st)  st.textContent = 'Préparation…';
+                }
+            }
+            // Progression de la génération (barre + groupe en cours)
+            if (e.data?.type === 'groupes-progress') {
+                const bar = document.getElementById('ov-bar');
+                const st  = document.getElementById('ov-status');
+                const total = e.data.total || 0;
+                const done  = e.data.done || 0;
+                const pct = total ? Math.round(done / total * 100) : 0;
+                if (bar) bar.style.width = pct + '%';
+                if (st) st.innerHTML = done + ' / ' + total + (e.data.label ? ' — <b>' + String(e.data.label).replace(/[<>&]/g, '') + '</b>' : '');
             }
         });
     </script>
