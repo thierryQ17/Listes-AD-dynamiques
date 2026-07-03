@@ -61,6 +61,12 @@
             background: linear-gradient(90deg, #2563eb, #60a5fa);
             transition: width .25s ease;
         }
+        /* Barre indéterminée (reconstruction du cache : pas de progression chiffrée) */
+        #app-overlay .ov-bar-track.indeterminate .ov-bar-fill {
+            width: 35%; transition: none;
+            animation: ov-indet 1.15s ease-in-out infinite;
+        }
+        @keyframes ov-indet { 0% { transform: translateX(-110%); } 100% { transform: translateX(315%); } }
         #app-overlay .ov-status {
             font: 600 16px "Segoe UI", system-ui, sans-serif; color: #4b5563; letter-spacing: .01em; text-align: center;
         }
@@ -192,14 +198,16 @@
                 const ov = document.getElementById('app-overlay');
                 if (ov) ov.hidden = !e.data.on;
                 if (e.data.on) {
-                    const bar = document.getElementById('ov-bar');
-                    const st  = document.getElementById('ov-status');
-                    const txt = document.querySelector('#app-overlay .ov-text');
+                    const bar   = document.getElementById('ov-bar');
+                    const track = document.querySelector('#app-overlay .ov-bar-track');
+                    const st    = document.getElementById('ov-status');
+                    const txt   = document.querySelector('#app-overlay .ov-text');
                     if (txt) txt.innerHTML = e.data.title
                         ? String(e.data.title).replace(/[<>]/g, '')
                         : 'En attente de<br>génération des groupes…';
-                    if (bar) bar.style.width = '0%';
-                    if (st)  st.textContent = 'Préparation…';
+                    if (track) track.classList.toggle('indeterminate', !!e.data.indeterminate);
+                    if (bar) bar.style.width = e.data.indeterminate ? '' : '0%';
+                    if (st)  st.textContent = e.data.status || 'Préparation…';
                 }
             }
             // Progression de la génération (barre + groupe en cours)

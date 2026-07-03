@@ -115,6 +115,13 @@ const scanFooter = {
     }
 };
 
+// Bandeau bloquant du shell (comme la génération GROUPES/CSV)
+const appOverlay = {
+    on(title)  { try { window.top.postMessage({ type: 'groupes-generating', on: true, title: title || 'En attente de reconstruction du cache…', status: 'Préparation…' }, '*'); } catch { /* hors iframe */ } },
+    off()      { try { window.top.postMessage({ type: 'groupes-generating', on: false }, '*'); } catch { /* ignore */ } },
+    progress(done, total, label) { try { window.top.postMessage({ type: 'groupes-progress', done, total, label }, '*'); } catch { /* ignore */ } },
+};
+
 
 // ============================================================
 //  Snapshot sessionStorage — persistance entre navigations
@@ -539,6 +546,10 @@ async function refreshAllCache() {
     btn.disabled = true;
     btn.classList.add('spinning');
 
+    // Bloque TOUTE l'application (bandeau shell, comme les GROUPES) jusqu'à la fin RÉELLE de la reconstruction.
+    appOverlay.on('En attente de reconstruction du cache…');
+    appOverlay.progress(0, allSites.length, 'Préparation…');
+
     try {
         const res  = await fetch('/api/cache/refresh-all', { method: 'POST' });
         const data = await res.json();
@@ -558,15 +569,28 @@ async function refreshAllCache() {
         }
         clearDetailPanel();
 
-        // Relancer le prefetch de tous les sites
+        // Prefetch de tous les sites — on ATTEND la fin de tous les sites (promesse par site).
         scanFooter.show('Reconstruction du cache', allSites.length);
-        allSites.forEach(s => enqueuePrefetch(s.dn, () => scanFooter.update(s.name)));
+        let done = 0;
+        await Promise.all(allSites.map(s => new Promise(resolve => {
+            enqueuePrefetch(s.dn, () => {
+                done++;
+                scanFooter.update(s.name);
+                appOverlay.progress(done, allSites.length, s.name);
+                resolve();
+            });
+        })));
 
-        showToast(`Cache vidé (${data.deleted} fichier(s)) — reconstruction en cours`, 'info');
-        window.parent.postMessage({ type: 'cache-rebuilt' }, '*');
+        // Cache global utilisateurs (source de vérité + date du footer) : reconstruction SYNCHRONE.
+        appOverlay.progress(allSites.length, allSites.length, 'Cache global des utilisateurs…');
+        try { await fetch('/api/users/preload', { method: 'POST' }).then(r => r.json()); } catch { /* best-effort */ }
+
+        showToast(`Cache reconstruit (${data.deleted} fichier(s) vidés)`, 'success');
+        window.parent.postMessage({ type: 'cache-rebuilt' }, '*');   // footer → date à jour (plus « absent »)
     } catch (e) {
         showToast('Erreur : ' + e.message, 'error');
     } finally {
+        appOverlay.off();   // débloque UNIQUEMENT ici : le cache est réellement reconstruit et à jour
         btn.disabled = false;
         btn.classList.remove('spinning');
     }

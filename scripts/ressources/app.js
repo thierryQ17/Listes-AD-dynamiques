@@ -96,6 +96,15 @@ async function onGenConfirm() {
 
 // Génère tous les CSV (nouveau dossier horodaté) puis, si demandé, calcule le delta vs refDir.
 async function runGenerationAndDelta(compare, refDir) {
+    // Garde-fou : refuser si le cache utilisateurs est vide/absent (sinon groupes vides → delta géant)
+    try {
+        const rd = await fetch('/api/cache/ready').then(r => r.json());
+        if (!rd || !rd.count) {
+            showToast('Cache utilisateurs absent/vide — reconstruisez-le (↻ Cache) et attendez qu\'il soit prêt avant de générer.', 'error');
+            return;
+        }
+    } catch { /* endpoint injoignable → on laisse passer */ }
+
     let rules;
     try { rules = await fetchJSON('/api/regles'); } catch { showToast('Erreur : chargement des règles', 'error'); return; }
     if (!Array.isArray(rules) || !rules.length) { showToast('Aucune règle définie', 'error'); return; }

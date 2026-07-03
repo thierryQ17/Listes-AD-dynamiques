@@ -92,6 +92,13 @@ function Start-AppServer {
             $body    = if ($builtAt) { "{`"builtAt`":`"$builtAt`"}" } else { '{"builtAt":null}' }
             Send-Json -Body $body
         }
+
+        # Cache utilisateurs prêt ? (nb d'utilisateurs) — garde-fou appelé AVANT une génération de CSV
+        Add-PodeRoute -Method Get -Path '/api/cache/ready' -ScriptBlock {
+            $gPath = Get-GlobalUsersCachePath
+            $count = if (Test-Path $gPath) { @(Get-AllUsersFromCache).Count } else { 0 }
+            Send-Json -Body "{`"count`":$count}"
+        }
         Add-PodeRoute -Method Post -Path '/api/cache/refresh-all' -ScriptBlock {
             $scriptsDir = Split-Path $global:path."r_settings" -Parent
             $cacheDir   = Join-Path $scriptsDir "cache"
