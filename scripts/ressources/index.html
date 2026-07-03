@@ -28,15 +28,59 @@
         .csv-run-item:hover .csv-run-del,
         .csv-run-item.active .csv-run-del { opacity: .75; }
         .csv-run-del:hover { opacity: 1; background: #fee2e2; }
+        /* Bouton ouvrir dans l'explorateur Windows */
+        .csv-run-open {
+            flex: none; display: inline-flex; align-items: center; justify-content: center;
+            border: none; background: none; color: #2563eb; cursor: pointer;
+            padding: 3px; border-radius: 5px; opacity: 0; transition: opacity .12s, background .12s;
+        }
+        .csv-run-item:hover .csv-run-open,
+        .csv-run-item.active .csv-run-open { opacity: .75; }
+        .csv-run-open:hover { opacity: 1; background: #dbeafe; }
+        /* Indicateur « contient un delta » */
+        .csv-run-delta { flex: none; font-weight: 800; font-size: 11px; color: #7c3aed; background: #ede9fe;
+            border-radius: 5px; padding: 0 6px; line-height: 17px; }
+        .csv-run-item.active .csv-run-delta { background: #ddd6fe; }
 
         /* Arborescence GROUPE → fichiers (zone du bas) */
-        .csv-tree-group { display: flex; align-items: center; gap: 6px; padding: 5px 8px; margin: 2px 4px 0; cursor: pointer; border-radius: 5px; font-size: 11.5px; font-weight: 700; color: #374151; }
+        .csv-tree-group { display: flex; align-items: center; gap: 6px; padding: 5px 8px; margin: 2px 4px 0; cursor: pointer; border-radius: 5px; font-size: 11.5px; font-weight: 700; color: #374151; transition: background .12s, color .12s; }
         .csv-tree-group:hover { background: #eeeae4; }
+        .csv-tree-group.active { background: #dbeafe; color: #1d4ed8; }
+        .csv-tree-group.active .csv-tree-caret { color: #1d4ed8; }
+        .csv-tree-group.active .csv-tree-group-count { background: #bfdbfe; color: #1d4ed8; }
+        /* Nœud __DELTA CSVs : mis en avant (fond violet, police plus grande) + collé en haut (sticky) */
+        .csv-tree-group.csv-tree-group-delta {
+            position: sticky; top: 0; z-index: 4;
+            margin: 0; border-radius: 0;                 /* pas de marge → occulte totalement le texte qui défile derrière */
+            background: #ede9fe; color: #6d28d9; font-size: 13px; padding: 7px 12px;
+            border-bottom: 1px solid #ddd6fe; box-shadow: 0 2px 4px rgba(0,0,0,.08);
+        }
+        .csv-tree-group.csv-tree-group-delta:hover { background: #ddd6fe; }
+        .csv-tree-group.csv-tree-group-delta .csv-tree-caret { color: #6d28d9; }
+        .csv-tree-group.csv-tree-group-delta .csv-tree-group-count { background: #ddd6fe; color: #6d28d9; }
+
+        /* Nom du fichier sélectionné, au-dessus du champ de recherche */
+        .csv-sel-file { flex: none; padding: 7px 10px; font: 700 11.5px "Segoe UI", system-ui, sans-serif; color: #1d4ed8;
+            background: #eff6ff; border-bottom: 1px solid #dbeafe; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .csv-sel-file[hidden] { display: none; }
+
+        /* Supprime le liseré de texte qui transparaissait sous la zone de recherche pendant le scroll */
+        .csv-file-search-wrap { position: relative; z-index: 5; background: var(--surface-alt); }
+        #csv-file-list { padding-top: 0; }
         .csv-tree-caret { flex: none; width: 10px; font-size: 9px; color: #9ca3af; }
         .csv-tree-group-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .csv-tree-group-count { flex: none; font-size: 10px; font-weight: 700; padding: 0 7px; border-radius: 999px; background: #e5e7eb; color: #4b5563; }
+        /* Fichiers d'un groupe : ~10 lignes visibles, le reste scrollable */
+        .csv-tree-group-files {
+            max-height: 260px; overflow-y: auto;
+            scrollbar-width: thin; scrollbar-color: #c2bcb2 transparent;
+            border-left: 2px solid #d4d4d2; margin: 0 4px 4px 12px;
+            background: #e6e6e8; border-radius: 0 6px 6px 0;    /* fond gris clair quand le groupe est ouvert */
+        }
+        .csv-tree-group-files::-webkit-scrollbar { width: 8px; }
+        .csv-tree-group-files::-webkit-scrollbar-thumb { background: #cfcac1; border-radius: 4px; }
         .csv-tree-group-files.collapsed { display: none; }
-        .csv-tree-file-nested { padding-left: 26px; }
+        .csv-tree-file-nested { padding-left: 14px; }
 
         /* Ascenseur vertical bien visible */
         #csv-run-list, #csv-file-list { scrollbar-width: thin; scrollbar-color: #b8b2a9 transparent; }
@@ -47,6 +91,54 @@
         /* Poignée de redimensionnement de la zone de gauche */
         .csv-resizer { flex: none; width: 6px; cursor: col-resize; background: transparent; transition: background .12s; }
         .csv-resizer:hover, .csv-resizer.active { background: #bfdbfe; }
+
+        /* En-tête des résultats : nom du fichier CSV à droite (sticky en haut) */
+        .csv-view-hdr {
+            position: sticky; top: 0; z-index: 3; height: 36px;
+            display: flex; align-items: center; justify-content: space-between; gap: 12px;
+            padding: 0 14px; background: #f4f5f7; border-bottom: 1px solid #e5e7eb;
+        }
+        .csv-view-count { flex: none; font-size: 12px; color: #6b7280; }
+        .csv-view-fname { flex: 1; min-width: 0; font-weight: 700; font-size: 13px; color: #1e3a5f;
+            overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        #csv-view .csv-table th { top: 36px; }   /* le sticky du tableau passe SOUS l'en-tête */
+
+        /* Modale « Générer tous les CSV » */
+        .cgm-overlay { position: fixed; inset: 0; z-index: 1000; background: rgba(15,23,42,.45);
+            display: flex; align-items: center; justify-content: center; padding: 24px; }
+        .cgm-overlay[hidden] { display: none; }
+        .cgm-box { width: min(1040px, 96vw); max-height: 90vh; display: flex; flex-direction: column;
+            background: #fff; border-radius: 14px; box-shadow: 0 16px 56px rgba(0,0,0,.32); overflow: hidden; }
+        .cgm-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 22px;
+            background: linear-gradient(120deg, #2563eb, #1d4ed8); }
+        .cgm-title { font: 700 17px "Segoe UI", system-ui, sans-serif; color: #fff; letter-spacing: .01em; }
+        .cgm-close { border: none; background: rgba(255,255,255,.15); font-size: 20px; line-height: 1; color: #fff;
+            cursor: pointer; width: 30px; height: 30px; border-radius: 8px; }
+        .cgm-close:hover { background: rgba(255,255,255,.28); }
+        .cgm-body { display: flex; min-height: 0; }
+        .cgm-left { width: 33%; flex: none; border-right: 1px solid #e5e7eb; display: flex; flex-direction: column; min-height: 0; background: #f8fafc; }
+        .cgm-left-title { padding: 12px 16px; font: 700 11px "Segoe UI", system-ui, sans-serif; text-transform: uppercase;
+            letter-spacing: .06em; color: #2563eb; border-bottom: 1px solid #e5e7eb; }
+        .cgm-run-list { flex: 1; overflow-y: auto; padding: 8px; max-height: 58vh; scrollbar-width: thin; }
+        .cgm-run { display: flex; align-items: center; gap: 9px; padding: 9px 10px; border-radius: 8px; cursor: pointer;
+            font-size: 12.5px; color: #374151; border: 1px solid transparent; }
+        .cgm-run:hover { background: #eef4ff; }
+        .cgm-run:has(input:checked) { background: #dbeafe; border-color: #93c5fd; color: #1d4ed8; font-weight: 600; }
+        .cgm-run input { flex: none; accent-color: #2563eb; }
+        .cgm-run span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .cgm-empty { padding: 14px; color: #9ca3af; font-size: 12px; font-style: italic; }
+        .cgm-right { flex: 1; padding: 22px 24px; display: flex; flex-direction: column; gap: 18px; min-width: 0; }
+        .cgm-notice { margin: 0; font: 400 13.5px/1.6 "Segoe UI", system-ui, sans-serif; color: #374151;
+            background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 10px; padding: 14px 16px; }
+        .cgm-notice code { background: #dbeafe; color: #1d4ed8; padding: 1px 6px; border-radius: 4px; font-size: 12px; }
+        .cgm-check { display: flex; align-items: center; gap: 10px; font: 600 13.5px "Segoe UI", system-ui, sans-serif;
+            color: #1e3a5f; cursor: pointer; padding: 10px 12px; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 10px; }
+        .cgm-check input { accent-color: #16a34a; width: 16px; height: 16px; }
+        .cgm-footer { display: flex; justify-content: flex-end; gap: 10px; padding: 14px 22px; border-top: 1px solid #e5e7eb; background: #f8fafc; }
+        .cgm-btn-sec { padding: 8px 16px; border: 1px solid #d1d5db; background: #fff; color: #374151; border-radius: 8px; font: 600 12.5px "Segoe UI", system-ui, sans-serif; cursor: pointer; }
+        .cgm-btn-sec:hover { background: #f3f4f6; }
+        .cgm-btn-pri { padding: 8px 18px; border: none; background: #2563eb; color: #fff; border-radius: 8px; font: 600 12.5px "Segoe UI", system-ui, sans-serif; cursor: pointer; }
+        .cgm-btn-pri:hover { background: #1d4ed8; }
     </style>
 </head>
 <body>
@@ -67,7 +159,7 @@
         <div class="csv-tree-pane" id="csv-tree-pane">
             <button id="csv-gen-all" class="csv-gen-all" type="button" title="Générer tous les CSV de tous les groupes (dossier horodaté, un sous-dossier par groupe)">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                Générer tous les CSV
+                Générer tous les CSVs avec DELTA
             </button>
             <div class="csv-tree-head">
                 <span>Dossiers</span>
@@ -77,6 +169,7 @@
                 <p class="csv-tree-hint">Chargement...</p>
             </div>
             <div class="csv-file-section">
+                <div id="csv-sel-file" class="csv-sel-file" hidden></div>
                 <div class="csv-file-search-wrap">
                     <input type="text" id="csv-file-search" placeholder="Rechercher un fichier..." autocomplete="off">
                 </div>
@@ -94,6 +187,36 @@
     </footer>
 
     <div id="toast" class="toast" aria-live="polite"></div>
+
+    <!-- Modale « Générer tous les CSV » : choix du dossier de référence + comparaison (delta) -->
+    <div id="csv-gen-modal" class="cgm-overlay" hidden>
+        <div class="cgm-box">
+            <div class="cgm-header">
+                <span class="cgm-title">Générer tous les CSV</span>
+                <button id="cgm-close" class="cgm-close" type="button" title="Fermer">×</button>
+            </div>
+            <div class="cgm-body">
+                <div class="cgm-left">
+                    <div class="cgm-left-title">Dossier de référence</div>
+                    <div id="cgm-run-list" class="cgm-run-list"></div>
+                </div>
+                <div class="cgm-right">
+                    <p class="cgm-notice">
+                        La génération crée un <b>nouveau dossier horodaté</b> avec tous les CSV (historique).<br><br>
+                        Si la comparaison est activée, un <b>delta</b> est calculé entre les fichiers <b>générés maintenant</b>
+                        et le <b>dossier sélectionné à gauche</b> (clé&nbsp;: <b>adresse mail</b>). Il est écrit dans le
+                        sous-dossier <b>__DELTA CSVs</b> du nouveau dossier (même arborescence), chaque fichier listant les
+                        <b>ajouts / suppressions</b> (<code>samAccountName;mail;type</code>).
+                    </p>
+                    <label class="cgm-check"><input type="checkbox" id="cgm-compare" checked> Comparer avec le dossier sélectionné</label>
+                </div>
+            </div>
+            <div class="cgm-footer">
+                <button id="cgm-cancel" class="cgm-btn-sec" type="button">Annuler</button>
+                <button id="cgm-ok" class="cgm-btn-pri" type="button">Générer</button>
+            </div>
+        </div>
+    </div>
 
     <script src="/app.js"></script>
 </body>

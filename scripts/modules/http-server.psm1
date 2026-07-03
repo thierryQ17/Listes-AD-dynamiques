@@ -332,6 +332,28 @@ function Start-AppServer {
             }
         }
 
+        # Ouvre un dossier de résultats dans l'explorateur Windows (serveur = machine de l'utilisateur).
+        Add-PodeRoute -Method Post -Path '/api/output/open' -ScriptBlock {
+            try {
+                $body        = ConvertFrom-Json $WebEvent.Request.Body
+                $reqPath     = "$($body.path)"
+                $settingsDir = $global:path."r_settings" -replace '/', '\'
+                $base        = [System.IO.Path]::GetFullPath((Join-Path (Split-Path (Split-Path $settingsDir -Parent) -Parent) "application\output")).TrimEnd('\') + '\'
+                $resolved    = [System.IO.Path]::GetFullPath($reqPath)
+                if (-not $resolved.StartsWith($base, [System.StringComparison]::OrdinalIgnoreCase)) {
+                    Send-Json -Body '{"ok":false,"error":"Chemin non autorise"}' -StatusCode 403
+                } elseif (-not (Test-Path $resolved)) {
+                    Send-Json -Body '{"ok":false,"error":"Dossier introuvable"}' -StatusCode 404
+                } else {
+                    Start-Process -FilePath 'explorer.exe' -ArgumentList "`"$resolved`""
+                    Send-Json -Body '{"ok":true}'
+                }
+            } catch {
+                $e = $_.Exception.Message -replace '"', "'"
+                Send-Json -Body "{`"ok`":false,`"error`":`"$e`"}"
+            }
+        }
+
         # ==================== API — Génération de TOUS les CSV (tous les groupes) ====================
         # Crée un dossier horodaté ; puis, par règle, un sous-dossier <label> avec ses CSV récursifs
         # (même structure que FORMATEURS/ADMINISTRATIF via Write-RuleCsvSet).
@@ -339,8 +361,8 @@ function Start-AppServer {
             try {
                 $settingsDir = $global:path."r_settings" -replace '/', '\'
                 $baseDir     = Join-Path (Split-Path (Split-Path $settingsDir -Parent) -Parent) "application\output"
-                $ts          = (Get-Date).ToString("yyyy-MM-dd_HH-mm-ss")
-                $dir         = Join-Path $baseDir "${ts}_TOUS-LES-GROUPES"
+                $ts          = (Get-Date).ToString("yyyy-MM-dd_HH-mm")
+                $dir         = Join-Path $baseDir $ts
                 New-Item -ItemType Directory -Path $dir -Force | Out-Null
                 Send-Json -Body (ConvertTo-Json -InputObject @{ ok = $true; dir = $dir } -Compress)
             } catch {
@@ -384,6 +406,36 @@ function Start-AppServer {
                 New-Item -ItemType Directory -Path $subDir -Force | Out-Null
                 $files = Write-RuleCsvSet -Rule $rule -Users $filtered -OutDir $subDir
                 Send-Json -Body (ConvertTo-Json -InputObject @{ ok = $true; count = @($files).Count } -Compress)
+            } catch {
+                $e = $_.Exception.Message -replace '"', "'"
+                Send-Json -Body "{`"ok`":false,`"error`":`"$e`"}"
+            }
+        }
+
+        # DELTA entre la génération courante (newDir) et un dossier de référence (refDir), clé = mail.
+        # Résultat écrit dans <newDir>\__DELTA CSVs\ (même arbo GROUPE\<mail>.csv). AUCUNE écriture AD.
+        Add-PodeRoute -Method Post -Path '/api/csv/delta' -ScriptBlock {
+            try {
+                $body   = ConvertFrom-Json $WebEvent.Request.Body
+                $newDir = "$($body.newDir)"
+                $refDir = "$($body.refDir)"
+                $settingsDir = $global:path."r_settings" -replace '/', '\'
+                $base   = [System.IO.Path]::GetFullPath((Join-Path (Split-Path (Split-Path $settingsDir -Parent) -Parent) "application\output")).TrimEnd('\') + '\'
+                $rNew   = [System.IO.Path]::GetFullPath($newDir)
+                $rRef   = [System.IO.Path]::GetFullPath($refDir)
+                if (-not $rNew.StartsWith($base, [System.StringComparison]::OrdinalIgnoreCase) -or -not $rRef.StartsWith($base, [System.StringComparison]::OrdinalIgnoreCase)) {
+                    Send-Json -Body '{"ok":false,"error":"Chemin non autorise"}' -StatusCode 403
+                } elseif (-not (Test-Path $rNew) -or -not (Test-Path $rRef)) {
+                    Send-Json -Body '{"ok":false,"error":"Dossier introuvable"}' -StatusCode 404
+                } else {
+                    # Suffixe = date du dossier de référence (yyyy-MM-dd_HH-mm, sans les secondes)
+                    $refName = Split-Path $rRef -Leaf
+                    $suffix  = if ($refName -match '^(\d{4}-\d{2}-\d{2}_\d{2}-\d{2})') { $matches[1] } else { $refName }
+                    $deltaDir = Join-Path $rNew ("__DELTA CSVs -- " + $suffix)
+                    New-Item -ItemType Directory -Path $deltaDir -Force | Out-Null
+                    $res = Write-CsvDelta -NewDir $rNew -RefDir $rRef -DeltaDir $deltaDir
+                    Send-Json -Body (ConvertTo-Json -InputObject @{ ok = $true; deltaDir = $deltaDir; files = $res.files; adds = $res.adds; removes = $res.removes } -Compress)
+                }
             } catch {
                 $e = $_.Exception.Message -replace '"', "'"
                 Send-Json -Body "{`"ok`":false,`"error`":`"$e`"}"

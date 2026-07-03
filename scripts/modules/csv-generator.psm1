@@ -387,6 +387,8 @@ function Write-RuleCsvSet {
     }
     $usersRows = { param($Grp) $l = [System.Collections.Generic.List[string]]::new(); foreach ($u in ($Grp | Sort-Object samAccountName)) { $l.Add("$($u.samAccountName);$($u.mail)") }; $l }
     $childRow  = { param($Id) $sam = ($Id.mail -split '@')[0]; "$sam;$($Id.mail)" }
+    # Nom de fichier CSV = adresse mail COMPLÈTE du groupe (avec le domaine), pour chaque niveau
+    $mailBase  = { param($Id) "$($Id.mail)" }
     $glId = Resolve-GroupIdentity -Naming $naming -DefaultBase $lbl -MailDomain $mailDomain -Prefix $lbl -DoName '' -Centre '' -Level 'global'
 
     if ($niveau -ge 3) {
@@ -399,27 +401,78 @@ function Write-RuleCsvSet {
             foreach ($cGrp in ($doGrp.Group | Group-Object { Get-CentreFromDN $_.dn })) {
                 $cClean = Clean-ForFileName $cGrp.Name
                 $cId    = Resolve-GroupIdentity -Naming $naming -DefaultBase "$lbl-$doClean-$cClean" -MailDomain $mailDomain -Prefix $lbl -DoName $doGrp.Name -Centre $cGrp.Name -Level 'centre'
-                & $writeCsv $cId.name (& $usersRows $cGrp.Group)
+                & $writeCsv (& $mailBase $cId) (& $usersRows $cGrp.Group)
                 $cChildRows.Add((& $childRow $cId))
             }
-            & $writeCsv $doId.name $cChildRows
+            & $writeCsv (& $mailBase $doId) $cChildRows
             $doChildRows.Add((& $childRow $doId))
         }
-        & $writeCsv $glId.name $doChildRows
+        & $writeCsv (& $mailBase $glId) $doChildRows
     } elseif ($niveau -eq 2) {
         $doChildRows = [System.Collections.Generic.List[string]]::new()
         $byDO = $filtered | Group-Object { Get-RegionFromDN $_.dn } | Where-Object { $_.Name -and $_.Name -ne 'MONCHY' }
         foreach ($doGrp in $byDO) {
             $doClean = Clean-ForFileName $doGrp.Name
             $doId    = Resolve-GroupIdentity -Naming $naming -DefaultBase "$lbl-$doClean" -MailDomain $mailDomain -Prefix $lbl -DoName $doGrp.Name -Centre '' -Level 'do'
-            & $writeCsv $doId.name (& $usersRows $doGrp.Group)
+            & $writeCsv (& $mailBase $doId) (& $usersRows $doGrp.Group)
             $doChildRows.Add((& $childRow $doId))
         }
-        & $writeCsv $glId.name $doChildRows
+        & $writeCsv (& $mailBase $glId) $doChildRows
     } else {
-        & $writeCsv $glId.name (& $usersRows $filtered)
+        & $writeCsv (& $mailBase $glId) (& $usersRows $filtered)
     }
     return @($written)
+}
+
+function Read-CsvMailMap {
+    # Lit un CSV "samAccountName;mail" → @{ mail = samAccountName } (clé = ADRESSE MAIL).
+    param([string]$Path)
+    $map = @{}
+    if (-not (Test-Path $Path)) { return $map }
+    $lines = [System.IO.File]::ReadAllLines($Path, [System.Text.Encoding]::UTF8)
+    for ($i = 1; $i -lt $lines.Count; $i++) {   # saute l'en-tête
+        $line = $lines[$i].Trim()
+        if (-not $line) { continue }
+        $parts = $line -split ';'
+        $sam   = if ($parts.Count -ge 1) { $parts[0].Trim().Trim('"') } else { '' }
+        $mail  = if ($parts.Count -ge 2) { $parts[1].Trim().Trim('"') } else { '' }
+        if ($mail) { $map[$mail] = $sam }
+    }
+    return $map
+}
+
+function Get-DeltaRelCsv {
+    # Chemins relatifs des CSV d'un dossier de run, en EXCLUANT le sous-dossier __DELTA CSVs.
+    param([string]$Dir)
+    if (-not (Test-Path $Dir)) { return @() }
+    @(Get-ChildItem -Path $Dir -Filter '*.csv' -Recurse -ErrorAction SilentlyContinue |
+        ForEach-Object { $_.FullName.Substring($Dir.Length).TrimStart('\') } |
+        Where-Object { $_ -notlike '__DELTA CSVs*' })   # exclut tous les sous-dossiers delta (avec suffixe date)
+}
+
+function Write-CsvDelta {
+    # Compare NewDir vs RefDir (clé = adresse mail) → écrit le delta dans DeltaDir (MÊME arborescence
+    # GROUPE\<mail>.csv). Chaque fichier delta : en-tête "samAccountName;mail;type" (ajout|suppression).
+    # Seuls les fichiers présentant au moins une différence sont écrits.
+    param([string]$NewDir, [string]$RefDir, [string]$DeltaDir)
+    $utf8Bom = New-Object System.Text.UTF8Encoding($true)
+    $rels = @(@(Get-DeltaRelCsv $NewDir) + @(Get-DeltaRelCsv $RefDir)) | Sort-Object -Unique
+    $files = 0; $adds = 0; $removes = 0
+    foreach ($rel in $rels) {
+        $new = Read-CsvMailMap (Join-Path $NewDir $rel)
+        $ref = Read-CsvMailMap (Join-Path $RefDir $rel)
+        $lines = [System.Collections.Generic.List[string]]::new()
+        $lines.Add("samAccountName;mail;type")
+        foreach ($mail in $new.Keys) { if (-not $ref.ContainsKey($mail)) { $lines.Add("$($new[$mail]);$mail;ajout");       $adds++ } }
+        foreach ($mail in $ref.Keys) { if (-not $new.ContainsKey($mail)) { $lines.Add("$($ref[$mail]);$mail;suppression"); $removes++ } }
+        if ($lines.Count -gt 1) {
+            $out = Join-Path $DeltaDir $rel
+            New-Item -ItemType Directory -Path (Split-Path $out -Parent) -Force | Out-Null
+            [System.IO.File]::WriteAllText($out, ($lines -join "`r`n"), $utf8Bom)
+            $files++
+        }
+    }
+    return @{ files = $files; adds = $adds; removes = $removes }
 }
 
 function Get-RuleGroupCount {

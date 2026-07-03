@@ -240,14 +240,41 @@ async function loadRules() {
 
 // Nombre total de groupes (global + DO + centres) par règle — pour la pastille de la liste.
 // Calcul léger côté serveur (cache en mémoire, sans les membres) ; re-rend la liste à réception.
+// Nom de fichier = label assaini (miroir de Get-SafeFileName côté serveur) — clé de meta.counts
+function safeFileName(s) {
+    s = (s == null ? '' : String(s));
+    if (!s.trim()) return 'SANS-NOM';
+    const out = s.replace(/[<>:"/\\|?*]/g, ' ').replace(/\s{2,}/g, ' ').trim().replace(/^\.+|\.+$/g, '').trim();
+    return out || 'SANS-NOM';
+}
+
 async function loadGroupCounts() {
     try {
-        const r = await fetch('/api/regles/counts');
-        const data = await r.json();
-        if (data && !data.error) {
-            groupCounts = data;
-            renderList();
-            updateTotalGroupsBadge();
+        // INSTANTANÉ : compteurs mémorisés dans le cache HTML des groupes (.sig), via meta.
+        // (même mécanisme que les pastilles de l'onglet GROUPES / de l'onglet Fichiers CSVs)
+        const meta   = await fetch('/api/groupes/html-cache/meta').then(r => r.json()).catch(() => ({ counts: {} }));
+        const cached = (meta && meta.counts) ? meta.counts : {};
+        groupCounts = {};
+        let anyMissing = false;
+        for (const rule of rules) {
+            const c = cached[safeFileName(rule.label)];
+            if (typeof c === 'number') groupCounts[rule.id] = c;
+            else anyMissing = true;
+        }
+        renderList();
+        updateTotalGroupsBadge();
+
+        // Repli LENT (/api/regles/counts ~26 s) UNIQUEMENT si des règles n'ont pas de compteur en cache
+        // (ex. pages GROUPES pas encore générées) — en arrière-plan, sans bloquer.
+        if (anyMissing) {
+            fetch('/api/regles/counts').then(r => r.json()).then(cc => {
+                if (!cc || cc.error) return;
+                for (const rule of rules) {
+                    if (typeof groupCounts[rule.id] !== 'number' && typeof cc[rule.id] === 'number') groupCounts[rule.id] = cc[rule.id];
+                }
+                renderList();
+                updateTotalGroupsBadge();
+            }).catch(() => { /* silencieux */ });
         }
     } catch { /* silencieux — la pastille est un confort, pas un bloquant */ }
 }

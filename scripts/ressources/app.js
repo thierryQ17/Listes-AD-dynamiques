@@ -22,7 +22,11 @@ document.addEventListener('DOMContentLoaded', () => {
     loadOutputList();
     document.getElementById('csv-refresh').addEventListener('click', loadOutputList);
     document.getElementById('csv-file-search').addEventListener('input', renderFileList);
-    document.getElementById('csv-gen-all').addEventListener('click', generateAllCsv);
+    document.getElementById('csv-gen-all').addEventListener('click', openGenModal);
+    document.getElementById('cgm-ok').addEventListener('click', onGenConfirm);
+    document.getElementById('cgm-cancel').addEventListener('click', closeGenModal);
+    document.getElementById('cgm-close').addEventListener('click', closeGenModal);
+    document.getElementById('csv-gen-modal').addEventListener('click', e => { if (e.target.id === 'csv-gen-modal') closeGenModal(); });
     setupResizer();
 });
 
@@ -57,9 +61,41 @@ function setupResizer() {
 function csvOverlay(on, title)  { try { window.top.postMessage({ type: 'groupes-generating', on: !!on, title }, '*'); } catch { /* hors iframe */ } }
 function csvProgress(done, total, label) { try { window.top.postMessage({ type: 'groupes-progress', done, total, label }, '*'); } catch { /* ignore */ } }
 
-async function generateAllCsv() {
-    if (!confirm('Générer TOUS les fichiers CSV de tous les groupes ?\n\nUn dossier horodaté sera créé, avec un sous-dossier par groupe (CSV niveaux 1/2/3).\nL’application sera bloquée le temps de la génération.')) return;
+// Ouvre la modale : choix du dossier de référence (le plus récent pré-coché) + option comparaison.
+function openGenModal() {
+    const modal = document.getElementById('csv-gen-modal');
+    const list  = document.getElementById('cgm-run-list');
+    const runs  = allRuns || [];
+    list.innerHTML = '';
+    if (!runs.length) {
+        list.innerHTML = '<p class="cgm-empty">Aucun dossier existant — la comparaison sera ignorée.</p>';
+    } else {
+        runs.forEach((run, i) => {
+            const lbl = document.createElement('label');
+            lbl.className = 'cgm-run';
+            const rad = document.createElement('input');
+            rad.type = 'radio'; rad.name = 'cgm-ref'; rad.value = run.path;
+            if (i === 0) rad.checked = true;   // le plus récent (liste triée descendant)
+            const sp = document.createElement('span');
+            sp.textContent = run.run; sp.title = run.run;
+            lbl.appendChild(rad); lbl.appendChild(sp);
+            list.appendChild(lbl);
+        });
+    }
+    modal.removeAttribute('hidden');
+}
+function closeGenModal() { document.getElementById('csv-gen-modal').setAttribute('hidden', ''); }
 
+async function onGenConfirm() {
+    const compare = document.getElementById('cgm-compare').checked;
+    const ref     = document.querySelector('input[name="cgm-ref"]:checked');
+    const refDir  = ref ? ref.value : '';
+    closeGenModal();
+    await runGenerationAndDelta(compare && !!refDir, refDir);
+}
+
+// Génère tous les CSV (nouveau dossier horodaté) puis, si demandé, calcule le delta vs refDir.
+async function runGenerationAndDelta(compare, refDir) {
     let rules;
     try { rules = await fetchJSON('/api/regles'); } catch { showToast('Erreur : chargement des règles', 'error'); return; }
     if (!Array.isArray(rules) || !rules.length) { showToast('Aucune règle définie', 'error'); return; }
@@ -77,6 +113,7 @@ async function generateAllCsv() {
         dir = j.dir;
     } catch { csvOverlay(false); showToast('Erreur lors de la création du dossier', 'error'); return; }
 
+    let deltaMsg = '';
     try {
         const queue = rules.slice();
         let done = 0;
@@ -96,10 +133,24 @@ async function generateAllCsv() {
             }
         }
         await Promise.all(Array.from({ length: CONC }, worker));
+
+        // Delta (optionnel) : génération courante vs dossier de référence, écrit dans <dir>\__DELTA CSVs\
+        if (compare && refDir) {
+            csvProgress(total, total, 'Comparaison (delta)…');
+            try {
+                const r = await fetch('/api/csv/delta', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ newDir: dir, refDir }),
+                });
+                const j = await r.json();
+                if (j.ok) deltaMsg = ` · delta : ${j.files} fichier(s), ${j.adds} ajout(s), ${j.removes} suppression(s)`;
+                else deltaMsg = ' · delta : ' + (j.error || 'erreur');
+            } catch { deltaMsg = ' · erreur lors du calcul du delta'; }
+        }
     } finally {
         csvOverlay(false);
     }
-    showToast('Tous les CSV ont été générés', 'success');
+    showToast('CSV générés' + deltaMsg, 'success');
     loadOutputList();
 }
 
@@ -465,6 +516,24 @@ function renderRunList(runs) {
         label.title = run.run;
         item.appendChild(label);
 
+        // Indicateur : le dossier contient un delta (sous-dossier __DELTA CSVs avec des fichiers)
+        const hasDelta = Array.isArray(run.files) && run.files.some(f => f.indexOf('__DELTA CSVs') === 0);
+        if (hasDelta) {
+            const dbadge = document.createElement('span');
+            dbadge.className = 'csv-run-delta';
+            dbadge.textContent = 'Δ';
+            dbadge.title = 'Contient un delta (__DELTA CSVs)';
+            item.appendChild(dbadge);
+        }
+
+        const open = document.createElement('button');
+        open.className = 'csv-run-open';
+        open.type = 'button';
+        open.title = 'Ouvrir dans l\'explorateur Windows';
+        open.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>';
+        open.addEventListener('click', e => { e.stopPropagation(); openRunFolder(run); });
+        item.appendChild(open);
+
         const del = document.createElement('button');
         del.className = 'csv-run-del';
         del.type = 'button';
@@ -474,6 +543,22 @@ function renderRunList(runs) {
         item.appendChild(del);
 
         runList.appendChild(item);
+    }
+}
+
+async function openRunFolder(run) {
+    try {
+        const r   = await fetch('/api/output/open', {
+            method:  'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body:    JSON.stringify({ path: run.path }),
+        });
+        const txt = await r.text();
+        let j = {};
+        try { j = JSON.parse(txt); } catch { /* non-JSON */ }
+        if (!r.ok || !j.ok) throw new Error(j.error || ('HTTP ' + r.status + (r.status === 404 ? ' — redémarrez le serveur' : '')));
+    } catch (e) {
+        showToast('Impossible d\'ouvrir l\'explorateur : ' + e.message, 'error');
     }
 }
 
@@ -499,6 +584,8 @@ async function deleteRun(run) {
     currentRunFiles = [];
     document.getElementById('csv-file-list').innerHTML = '';
     document.getElementById('csv-view').innerHTML = '<p class="csv-view-hint">Sélectionner un fichier</p>';
+    const selEl = document.getElementById('csv-sel-file');
+    if (selEl) { selEl.hidden = true; selEl.textContent = ''; }
     loadOutputList();   // recharge les dossiers ; sélectionne le 1er → remplit la zone du bas
 }
 
@@ -507,6 +594,8 @@ function selectRun(run) {
     currentRunFiles = run.files || [];
     document.querySelectorAll('.csv-run-item').forEach(el =>
         el.classList.toggle('active', el.dataset.path === run.path));
+    const selEl = document.getElementById('csv-sel-file');   // bandeau = nom du dossier sélectionné
+    if (selEl) { selEl.textContent = run.run; selEl.title = run.path; selEl.hidden = false; }
     document.getElementById('csv-file-search').value = '';
     renderFileList();
 }
@@ -536,11 +625,17 @@ function renderFileList() {
         return el;
     };
 
-    for (const [g, gf] of groups) {
+    // __DELTA CSVs en PREMIER, puis les autres groupes par ordre alphabétique
+    const entries = [...groups.entries()].sort((a, b) => {
+        const pa = a[0].startsWith('__DELTA CSVs') ? 0 : 1;
+        const pb = b[0].startsWith('__DELTA CSVs') ? 0 : 1;
+        return (pa !== pb) ? (pa - pb) : a[0].localeCompare(b[0], 'fr');
+    });
+    for (const [g, gf] of entries) {
         if (!g) { gf.forEach(f => list.appendChild(makeFile(f, f, false))); continue; }
         const collapsed = !q;   // replié par défaut ; déplié pendant une recherche
         const head = document.createElement('div');
-        head.className = 'csv-tree-group';
+        head.className = 'csv-tree-group' + (g.startsWith('__DELTA CSVs') ? ' csv-tree-group-delta' : '');
         head.title = g;
         head.innerHTML = '<span class="csv-tree-caret"></span><span class="csv-tree-group-name"></span><span class="csv-tree-group-count"></span>';
         head.querySelector('.csv-tree-caret').textContent      = collapsed ? '▸' : '▾';
@@ -550,8 +645,17 @@ function renderFileList() {
         wrap.className = 'csv-tree-group-files' + (collapsed ? ' collapsed' : '');
         gf.forEach(f => wrap.appendChild(makeFile(f, f.slice(g.length + 1), true)));
         head.addEventListener('click', () => {
-            const c = wrap.classList.toggle('collapsed');
-            head.querySelector('.csv-tree-caret').textContent = c ? '▸' : '▾';
+            const wasCollapsed = wrap.classList.contains('collapsed');
+            // Accordéon : replie TOUS les groupes + retire la couleur active…
+            list.querySelectorAll('.csv-tree-group-files').forEach(w => w.classList.add('collapsed'));
+            list.querySelectorAll('.csv-tree-caret').forEach(c => { c.textContent = '▸'; });
+            list.querySelectorAll('.csv-tree-group').forEach(h => h.classList.remove('active'));
+            // …puis déplie celui-ci uniquement s'il était replié (sinon on le laisse fermé)
+            if (wasCollapsed) {
+                wrap.classList.remove('collapsed');
+                head.querySelector('.csv-tree-caret').textContent = '▾';
+                head.classList.add('active');   // groupe ouvert = en couleur
+            }
         });
         list.appendChild(head);
         list.appendChild(wrap);
@@ -563,20 +667,42 @@ async function openCsvFile(filePath, itemEl) {
     csvActiveItem = itemEl;
     itemEl.classList.add('active');
 
+    const name = filePath.split(/[/\\]/).pop() || filePath;
+
     const view = document.getElementById('csv-view');
     view.innerHTML = '<p class="csv-view-hint">Chargement...</p>';
     try {
         const data = await fetchJSON('/api/output/read?path=' + encodeURIComponent(filePath));
-        renderCsvTable(data);
+        renderCsvTable(data, name);
     } catch (e) {
         view.innerHTML = `<p class="csv-view-hint">Erreur : ${esc(e.message)}</p>`;
     }
 }
 
-function renderCsvTable(data) {
+function renderCsvTable(data, name) {
     const view = document.getElementById('csv-view');
+    view.innerHTML = '';
+
+    // En-tête des résultats : nb de lignes à gauche, NOM DU FICHIER à droite
+    const hdr = document.createElement('div');
+    hdr.className = 'csv-view-hdr';
+    const cnt = document.createElement('span');
+    cnt.className = 'csv-view-count';
+    const nr = (data.rows && data.rows.length) || 0;
+    cnt.textContent = nr + ' ligne' + (nr > 1 ? 's' : '');
+    const fname = document.createElement('span');
+    fname.className = 'csv-view-fname';
+    fname.textContent = name || '';
+    fname.title = name || '';
+    hdr.appendChild(fname);   // nom du fichier à GAUCHE
+    hdr.appendChild(cnt);     // nombre de lignes à droite
+    view.appendChild(hdr);
+
     if (!data.headers || data.headers.length === 0) {
-        view.innerHTML = '<p class="csv-view-hint">Fichier vide</p>';
+        const p = document.createElement('p');
+        p.className = 'csv-view-hint';
+        p.textContent = 'Fichier vide';
+        view.appendChild(p);
         return;
     }
     const table = document.createElement('table');
@@ -603,8 +729,7 @@ function renderCsvTable(data) {
             td.textContent = row[h] != null ? row[h] : '';
         }
     });
-    view.innerHTML = '';
-    view.appendChild(table);
+    view.appendChild(table);   // l'en-tête (nom du fichier) a déjà été ajouté plus haut
 }
 
 let toastTimer;
