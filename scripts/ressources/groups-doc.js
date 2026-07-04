@@ -73,7 +73,7 @@ function buildGroupsHtmlDoc(data, rule) {
         const k = gk(g);
         if (!_ddgScripts[k]) return;
         let ddg = g.ddgMembers; ddg = Array.isArray(ddg) ? ddg : (ddg ? [ddg] : []);
-        const proj = m => ({ name: m.name, title: m.title || '', sam: m.sam || m.name, office: m.office || '' });
+        const proj = m => ({ name: m.name, title: m.title || '', sam: m.sam || m.name, office: m.office || '', centre: m.centre || '' });
         ddgData[k] = { name: g.name, office: g.office || '', script: _ddgScripts[k], mine: (g.members || []).map(proj), ddg: ddg.map(proj) };
     });
 
@@ -276,7 +276,7 @@ function buildGroupsHtmlDoc(data, rule) {
         .grp-ddg-btn:hover{background:#1e293b;color:#fff;border-color:#1e293b;}
         .ddg-modal{position:fixed;inset:0;z-index:1002;background:rgba(15,23,42,.5);display:flex;align-items:center;justify-content:center;padding:20px;}
         .ddg-modal[hidden]{display:none;}
-        .ddg-box{background:#fff;color:#1f2430;border-radius:12px;border-top:4px solid #6d28d9;box-shadow:0 16px 50px rgba(0,0,0,.35);width:min(1000px,96vw);max-height:90vh;overflow:auto;padding:20px 24px;position:relative;}
+        .ddg-box{background:#fff;color:#1f2430;border-radius:12px;border-top:4px solid #6d28d9;box-shadow:0 16px 50px rgba(0,0,0,.35);width:min(1320px,97vw);max-height:92vh;overflow:auto;padding:20px 26px;position:relative;}
         .ddg-close{position:absolute;top:10px;right:14px;background:none;border:none;font-size:22px;line-height:1;color:#6b7280;cursor:pointer;}
         .ddg-close:hover{color:#111827;}
         .ddg-modal-title{font-size:15px;font-weight:700;color:#4c1d95;margin:0 30px 12px 0;}
@@ -287,9 +287,12 @@ function buildGroupsHtmlDoc(data, rule) {
         .ddg-ex-hd{font-size:12.5px;font-weight:700;margin-bottom:4px;}
         .ddg-ex-hd.drop{color:#b91c1c;} .ddg-ex-hd.add{color:#b45309;}
         .ddg-explain ul{list-style:none;margin:0;padding:0;}
-        .ddg-explain li{display:flex;gap:10px;align-items:baseline;padding:2px 0;font-size:.86rem;flex-wrap:wrap;}
-        .ddg-explain li b{color:#1e293b;font-weight:600;}
+        .ddg-explain li{display:grid;grid-template-columns:minmax(140px,1.2fr) minmax(100px,.9fr) minmax(100px,.9fr) minmax(0,2.2fr);gap:14px;align-items:baseline;padding:3px 2px;font-size:.84rem;border-bottom:1px solid #f1f5f9;}
+        .ddg-ex-name{font-weight:600;color:#1e293b;}
+        .ddg-ex-off{font-family:'Cascadia Code','Consolas',monospace;font-size:.78rem;color:#334155;}
         .ddg-ex-why{color:#6b7280;font-size:.8rem;}
+        .ddg-ex-head{font-weight:700;font-size:.68rem;text-transform:uppercase;letter-spacing:.04em;color:#94a3b8;border-bottom:2px solid #e2e8f0;}
+        .ddg-ex-head .ddg-ex-off{font-family:inherit;color:#94a3b8;} .ddg-ex-head .ddg-ex-why{color:#94a3b8;}
         .ddg-noecart{color:#047857;background:#e9faf2;border-radius:6px;padding:8px 12px;font-size:.86rem;}
         .mem-box{background:#fff;color:#1f2430;border-radius:12px;border-top:4px solid #2563eb;box-shadow:0 16px 50px rgba(0,0,0,.3);width:min(620px,95vw);max-height:88vh;overflow:auto;padding:22px 26px;position:relative;}
         .mem-close{position:absolute;top:10px;right:14px;background:none;border:none;font-size:22px;line-height:1;color:#6b7280;cursor:pointer;}
@@ -680,18 +683,20 @@ function buildGroupsHtmlDoc(data, rule) {
     var dropped=d.mine.filter(function(m){return !ddgSam[m.sam];});
     var added=d.ddg.filter(function(m){return !mineSam[m.sam];});
     var h='';
+    var exHead='<li class="ddg-ex-head"><span class="ddg-ex-name">Nom</span><span class="ddg-ex-off">Bureau (Office)</span><span class="ddg-ex-off">OU / Ville</span><span class="ddg-ex-why">Pourquoi</span></li>';
     if(dropped.length){
-      h+='<div class="ddg-ex-grp"><div class="ddg-ex-hd drop">'+dropped.length+' perdu(s) par le DDG</div><ul>';
+      h+='<div class="ddg-ex-grp"><div class="ddg-ex-hd drop">'+dropped.length+' perdu(s) par le DDG</div><ul>'+exHead;
       dropped.forEach(function(m){
-        var why=(m.office&&d.office&&m.office!==d.office)?('Bureau « '+ddgEsc(m.office)+' » différent de « '+ddgEsc(d.office)+' » du groupe (hors filtre Office du DDG)'):(!m.office?'aucun Bureau renseigné':'critère non reproductible en filtre OPATH (description / OU)');
-        h+='<li><b>'+ddgEsc(m.name)+'</b><span class="ddg-ex-why">'+why+'</span></li>';
+        var why=(m.office&&d.office&&m.office!==d.office)?('dans ce centre par son OU · Bureau ≠ « '+ddgEsc(d.office)+' » (du groupe) → le DDG ne le prend pas'):(!m.office?'dans ce centre par son OU · aucun Bureau → le DDG ne le prend pas':'critère non reproductible en filtre OPATH (description / OU)');
+        h+='<li><span class="ddg-ex-name">'+ddgEsc(m.name)+'</span><span class="ddg-ex-off">'+ddgEsc(m.office||'—')+'</span><span class="ddg-ex-off">'+ddgEsc(m.centre||'—')+'</span><span class="ddg-ex-why">'+why+'</span></li>';
       });
       h+='</ul></div>';
     }
     if(added.length){
-      h+='<div class="ddg-ex-grp"><div class="ddg-ex-hd add">'+added.length+' ajouté(s) par le DDG</div><ul>';
+      h+='<div class="ddg-ex-grp"><div class="ddg-ex-hd add">'+added.length+' ajouté(s) par le DDG</div><ul>'+exHead;
       added.forEach(function(m){
-        h+='<li><b>'+ddgEsc(m.name)+'</b><span class="ddg-ex-why">présent dans Exchange (Bureau correspond) mais absent du mécanisme actuel : compte exclu (ex. Ricoh) ou hors du cache</span></li>';
+        var ou=m.centre?('en réalité au centre « '+ddgEsc(m.centre)+' » (autre OU)'):('rattaché à un AUTRE centre par son OU');
+        h+='<li><span class="ddg-ex-name">'+ddgEsc(m.name)+'</span><span class="ddg-ex-off">'+ddgEsc(m.office||'—')+'</span><span class="ddg-ex-off">'+ddgEsc(m.centre||'—')+'</span><span class="ddg-ex-why">Bureau = celui du groupe → le DDG le prend, mais '+ou+' → absent du mécanisme actuel</span></li>';
       });
       h+='</ul></div>';
     }

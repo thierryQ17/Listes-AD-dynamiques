@@ -328,7 +328,22 @@ body {
     flex-direction: column;
     overflow: hidden;
     transition: width .2s ease;
+    position: relative;
 }
+.explorer-right-panel.resizing { transition: none; user-select: none; }
+
+/* Poignée de redimensionnement (bord gauche du panneau) */
+.detail-resizer {
+    position: absolute;
+    left: -3px; top: 0; bottom: 0;
+    width: 7px;
+    cursor: ew-resize;
+    z-index: 6;
+}
+.detail-resizer:hover, .explorer-right-panel.resizing .detail-resizer {
+    background: var(--accent-lt, #dbeafe);
+}
+.explorer-right-panel.detail-collapsed .detail-resizer { display: none; }
 
 .explorer-right-panel.detail-collapsed {
     width: 30px;
@@ -515,6 +530,34 @@ body {
     font-size: 13px;
     color: var(--text);
     word-break: break-all;
+}
+
+/* Le reste des champs sur 2 colonnes (OU + Bureau restent pleine largeur au-dessus) */
+.detail-fields-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    column-gap: 16px;
+}
+/* OU + Bureau : pleine largeur, mis en avant (ils vont ensemble) */
+.detail-field-wide {
+    background: var(--accent-lt, #eef2ff);
+    border-radius: 6px;
+    border-bottom: none;
+    padding: 8px 10px;
+    margin-bottom: 3px;
+}
+/* Tag « CSV » : champ pris en charge par la mise à jour AD via CSV (ancien onglet « MAJ AD ») */
+.detail-csv-tag {
+    display: inline-block;
+    margin-left: 6px;
+    padding: 0 5px;
+    font-size: 8.5px;
+    font-weight: 700;
+    letter-spacing: .03em;
+    background: #dcfce7;
+    color: #15803d;
+    border-radius: 4px;
+    vertical-align: middle;
 }
 
 /* Champ sans valeur : tiret grisé (le champ reste affiché pour un panneau homogène) */
@@ -795,6 +838,36 @@ tr.row-selected td {
 
 .users-table th.sort-asc .sort-icon::after  { content: ' ↑'; }
 .users-table th.sort-desc .sort-icon::after { content: ' ↓'; }
+
+/* Colonnes masquables (menu « Colonnes ») */
+.users-table.hide-name   .col-name,
+.users-table.hide-desc   .col-desc,
+.users-table.hide-func   .col-func,
+.users-table.hide-mail   .col-mail,
+.users-table.hide-dept   .col-dept,
+.users-table.hide-ville  .col-ville,
+.users-table.hide-office .col-office { display: none; }
+
+/* Menu déroulant « Colonnes » */
+.col-menu-wrap { position: relative; }
+.btn-col-menu {
+    height: 30px; padding: 0 12px; border: 1px solid var(--border); border-radius: var(--radius-sm);
+    background: var(--bg); color: var(--text); font-size: 12.5px; font-family: inherit; cursor: pointer; white-space: nowrap;
+}
+.btn-col-menu:hover { border-color: var(--accent); color: var(--accent); }
+.col-menu {
+    position: absolute; right: 0; top: calc(100% + 4px); z-index: 20;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(15,23,42,.15); padding: 6px; min-width: 220px;
+    display: flex; flex-direction: column; gap: 1px;
+}
+.col-menu[hidden] { display: none; }
+.col-menu-item {
+    display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 5px;
+    font-size: 12.5px; color: var(--text); cursor: pointer; user-select: none;
+}
+.col-menu-item:hover { background: var(--border-lt); }
+.col-menu-item input { cursor: pointer; }
 
 .sort-icon {
     color: #c4bdb5;

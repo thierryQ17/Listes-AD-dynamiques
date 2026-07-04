@@ -267,6 +267,35 @@ document.addEventListener('DOMContentLoaded', () => {
         detailToggle.innerHTML = collapsed ? SVG_CHEVRON_RIGHT : SVG_CHEVRON_LEFT;
         detailToggle.title     = collapsed ? 'Afficher le panneau Détail' : 'Masquer le panneau Détail';
     });
+
+    // ── Redimensionnement du panneau Détail (poignée bord gauche) ─────────────
+    if (detailPanel && !detailPanel.querySelector('.detail-resizer')) {
+        const rz = document.createElement('div');
+        rz.className = 'detail-resizer';
+        rz.title = 'Glisser pour élargir / rétrécir';
+        detailPanel.appendChild(rz);
+        let startX = 0, startW = 0;
+        rz.addEventListener('pointerdown', e => {
+            if (detailPanel.classList.contains('detail-collapsed')) return;
+            startX = e.clientX; startW = detailPanel.offsetWidth;
+            detailPanel.classList.add('resizing');
+            rz.setPointerCapture(e.pointerId);
+            e.preventDefault();
+        });
+        rz.addEventListener('pointermove', e => {
+            if (!rz.hasPointerCapture(e.pointerId)) return;
+            const w = Math.min(1000, Math.max(300, startW + (startX - e.clientX)));   // glisser vers la gauche → élargit
+            detailPanel.style.width = w + 'px';
+        });
+        const endDrag = e => {
+            if (rz.hasPointerCapture(e.pointerId)) rz.releasePointerCapture(e.pointerId);
+            detailPanel.classList.remove('resizing');
+        };
+        rz.addEventListener('pointerup', endDrag);
+        rz.addEventListener('pointercancel', endDrag);
+    }
+
+    setupColumnMenu();
 });
 
 // ============================================================
@@ -784,7 +813,7 @@ function renderFlat(users) {
     tbody.innerHTML = '';
 
     if (!users || users.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="5" class="td-hint">Aucun utilisateur dans ce site</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7" class="td-hint">Aucun utilisateur dans ce site</td></tr>';
         return;
     }
 
@@ -803,7 +832,7 @@ function renderGrouped(users, groupBy) {
     tbody.innerHTML = '';
 
     if (!users || users.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="5" class="td-hint">Aucun utilisateur dans ce site</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7" class="td-hint">Aucun utilisateur dans ce site</td></tr>';
         return;
     }
 
@@ -835,7 +864,7 @@ function renderGrouped(users, groupBy) {
             + (isFormateur ? ' group-formateur' : '')
             + (isCategory  ? ' group-category'  : '');
         headerTr.innerHTML = `
-            <td colspan="5">
+            <td colspan="7">
                 <span class="group-toggle expanded">▼</span>
                 <span class="group-label">${esc(key)}</span>
                 <span class="group-count">${groupUsers.length}</span>
@@ -860,7 +889,7 @@ function renderCategoryGrouped(users) {
     tbody.innerHTML = '';
 
     if (!users || users.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="5" class="td-hint">Aucun utilisateur dans ce site</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7" class="td-hint">Aucun utilisateur dans ce site</td></tr>';
         return;
     }
 
@@ -878,7 +907,7 @@ function renderCategoryGrouped(users) {
 
         const mainTr = document.createElement('tr');
         mainTr.className = 'group-header group-category' + (isFormateur ? ' group-formateur' : '');
-        mainTr.innerHTML = `<td colspan="5">
+        mainTr.innerHTML = `<td colspan="7">
             <span class="group-toggle expanded">▼</span>
             <span class="group-label">${esc(catKey)}</span>
             <span class="group-count">${catUsers.length}</span>
@@ -899,7 +928,7 @@ function renderCategoryGrouped(users) {
 
             const subTr = document.createElement('tr');
             subTr.className = 'group-header group-sub' + (isFormateur ? ' group-formateur' : '');
-            subTr.innerHTML = `<td colspan="5">
+            subTr.innerHTML = `<td colspan="7">
                 <span class="group-toggle expanded">▼</span>
                 <span class="group-label">${esc(title)}</span>
                 <span class="group-count">${titleUsers.length}</span>
@@ -953,6 +982,60 @@ function toggleGroupRows(headerTr) {
 let _selectedUserRow = null;
 let _detailUserSam   = null;   // samAccountName de l'utilisateur affiché dans le panneau détail
 
+// Ville du site depuis l'OU : « OU=A28020 - Garonor,… » → « Garonor ».
+function ouVille(ouDn) {
+    if (!ouDn) return '';
+    for (const part of String(ouDn).split(',')) {
+        let m = part.match(/^OU=A\d{5}\s*-\s*(.+)$/);
+        if (m) return m[1].trim();
+        m = part.match(/^OU=(A\d{5})$/);
+        if (m) return m[1];
+    }
+    return '';
+}
+
+// ── Colonnes affichables (menu déroulant, mémorisé dans localStorage) ──────────
+const COLUMNS = [
+    { c: 'name',   label: 'Nom' },
+    { c: 'desc',   label: 'Description' },
+    { c: 'func',   label: 'Fonction' },
+    { c: 'mail',   label: 'Adresse de messagerie' },
+    { c: 'dept',   label: 'Service' },
+    { c: 'ville',  label: 'Ville (OU)' },
+    { c: 'office', label: 'Bureau (office)' },
+];
+const COL_LS_KEY = 'explorer_hidden_cols';
+function getHiddenCols() {
+    try { return new Set(JSON.parse(localStorage.getItem(COL_LS_KEY) || '[]')); } catch { return new Set(); }
+}
+function applyHiddenCols() {
+    const table = document.querySelector('.users-table');
+    if (!table) return;
+    const hidden = getHiddenCols();
+    COLUMNS.forEach(col => table.classList.toggle('hide-' + col.c, hidden.has(col.c)));
+}
+function setupColumnMenu() {
+    const btn = document.getElementById('col-menu-btn');
+    const menu = document.getElementById('col-menu');
+    if (!btn || !menu) return;
+    const hidden = getHiddenCols();
+    menu.innerHTML = COLUMNS.map(col =>
+        `<label class="col-menu-item"><input type="checkbox" data-col="${col.c}"${hidden.has(col.c) ? '' : ' checked'}> ${esc(col.label)}</label>`
+    ).join('');
+    applyHiddenCols();
+    btn.addEventListener('click', e => { e.stopPropagation(); menu.hidden = !menu.hidden; });
+    menu.addEventListener('click', e => e.stopPropagation());
+    menu.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+        cb.addEventListener('change', () => {
+            const h = getHiddenCols();
+            if (cb.checked) h.delete(cb.dataset.col); else h.add(cb.dataset.col);
+            localStorage.setItem(COL_LS_KEY, JSON.stringify([...h]));
+            applyHiddenCols();
+        });
+    });
+    document.addEventListener('click', () => { menu.hidden = true; });
+}
+
 function createUserRow(u, siteDn) {
     const tr = document.createElement('tr');
     const disabledTag = u.enabled === false ? '<span class="tag-disabled">désactivé</span>' : '';
@@ -961,7 +1044,9 @@ function createUserRow(u, siteDn) {
         <td class="col-desc">${esc(u.description || '')}</td>
         <td class="col-func${u.title ? ' func-clickable' : ''}">${esc(u.title || '')}</td>
         <td class="col-mail">${esc(u.mail || '')}</td>
-        <td class="col-dept">${esc(u.department || '')}</td>`;
+        <td class="col-dept">${esc(u.department || '')}</td>
+        <td class="col-ville">${esc(ouVille(u.ouDn))}</td>
+        <td class="col-office">${esc(u.office || '')}</td>`;
     if (u.enabled === false) tr.classList.add('row-disabled');
     tr.addEventListener('click', () => {
         if (_selectedUserRow) _selectedUserRow.classList.remove('row-selected');
@@ -1014,95 +1099,61 @@ function showUserDetail(u) {
         ? '<span class="detail-status detail-disabled">Compte désactivé</span>'
         : '<span class="detail-status detail-enabled">Compte actif</span>';
 
-    // ---- Onglet Détail (champs d'origine) ----
-    const scalarFields = [
-        { label: 'Identifiant',  value: u.samAccountName },
-        { label: 'Fonction',     value: u.title },
-        { label: 'Service',      value: u.department },
-        { label: 'Description',  value: u.description },
-        { label: 'Messagerie',   value: u.mail },
-        { label: 'OU',           value: u.ouDn },
+    // ---- Panneau UNIQUE (fusion « Détail » + « MAJ AD ») ----
+    // OU + Bureau en tête (pleine largeur, ils vont ensemble) ; le reste sur 2 colonnes.
+    // Les champs vides sont TOUJOURS affichés (« — »).
+    // csv = true → champ issu de l'ancien onglet « MAJ AD » (données de mise à jour AD par CSV) : tag « CSV ».
+    const detailField = (label, value, wide, csv) => {
+        const empty = value == null || String(value).trim() === '';
+        const tag = csv ? ' <span class="detail-csv-tag" title="Champ pris en charge par la mise à jour AD (MAJ AD)">MAJ AD</span>' : '';
+        return `<div class="detail-field${wide ? ' detail-field-wide' : ''}">
+                    <span class="detail-label">${esc(label)}${tag}</span>
+                    <span class="detail-value${empty ? ' detail-value-empty' : ''}">${empty ? '—' : esc(String(value))}</span>
+                </div>`;
+    };
+    // [label, value, csv?] — csv = champ de l'ancien onglet « MAJ AD ».
+    const gridFields = [
+        ['Identifiant (samAccountName)', u.samAccountName,   false],
+        ['Fonction (title)',             u.title,            true],
+        ['Service (department)',         u.department,       true],
+        ['Société (company)',            u.company,          true],
+        ['Matricule (employeeNumber)',   u.employeeNumber,   true],
+        ['Responsable (manager)',        u.manager,          true],
+        ['UPN (userPrincipalName)',      u.userPrincipalName, true],
+        ['Type',                         u.type,             true],
+        ['extensionAttribute1',          u.extensionAttribute1, true],
+        ['Messagerie (mail)',            u.mail,             false],
+        ['Code postal (postalCode)',     u.postalCode,       true],
+        ['Adresse (streetAddress)',      u.streetAddress,    true],
+        ['Description',                  u.description,      false],
     ];
 
-    const paneInfo = `
+    body.innerHTML = `
         <div class="detail-card">
             <div class="detail-avatar">${esc(initials)}</div>
             <div class="detail-name">${esc(u.displayName || u.samAccountName)}</div>
             ${statusHtml}
             <div class="detail-fields">
-                ${scalarFields.map(f => {
-                    const empty = f.value == null || String(f.value).trim() === '';
-                    return `
-                    <div class="detail-field">
-                        <span class="detail-label">${esc(f.label)}</span>
-                        <span class="detail-value${empty ? ' detail-value-empty' : ''}">${empty ? '—' : esc(String(f.value))}</span>
-                    </div>`;
-                }).join('')}
+                ${detailField('OU (arborescence)', u.ouDn, true, false)}
+                ${detailField('Bureau (office)', u.office, true, true)}
+                <div class="detail-fields-grid">
+                    ${gridFields.map(([l, v, csv]) => detailField(l, v, false, csv)).join('')}
+                </div>
                 ${buildProxyHtml(u)}
             </div>
         </div>`;
-
-    // ---- Onglet MAJ AD (nouveaux champs AD) ----
-    const majFields = [
-        { label: 'UPN (userPrincipalName)',      key: 'userPrincipalName' },
-        { label: 'Type',                         key: 'type' },
-        { label: 'Société (company)',             key: 'company' },
-        { label: 'Matricule (employeeNumber)',    key: 'employeeNumber' },
-        { label: 'Fonction (title)',              key: 'title' },
-        { label: 'Responsable (manager)',         key: 'manager' },
-        { label: 'Service (department)',          key: 'department' },
-        { label: 'Bureau (office)',               key: 'office' },
-        { label: 'extensionAttribute1',           key: 'extensionAttribute1' },
-        { label: 'Code postal (postalCode)',      key: 'postalCode' },
-        { label: 'Adresse (streetAddress)',       key: 'streetAddress' },
-    ];
-
-    const paneMaj = `
-        <div class="detail-card">
-            <div class="detail-avatar">${esc(initials)}</div>
-            <div class="detail-name">${esc(u.displayName || u.samAccountName)}</div>
-            ${statusHtml}
-            <div class="detail-fields">
-                ${majFields.map(f => {
-                    const raw = u[f.key];
-                    const empty = raw == null || String(raw).trim() === '';
-                    return `
-                    <div class="detail-field">
-                        <span class="detail-label">${esc(f.label)}</span>
-                        <span class="detail-value${empty ? ' detail-value-empty' : ''}">${empty ? '—' : esc(String(raw))}</span>
-                    </div>`;
-                }).join('')}
-            </div>
-        </div>`;
-
-    body.innerHTML = `
-        <div class="detail-tabs">
-            <span class="detail-tab active" data-tab="info">Détail</span>
-            <span class="detail-tab" data-tab="maj">MAJ AD</span>
-        </div>
-        <div class="detail-tab-pane active" data-pane="info">${paneInfo}</div>
-        <div class="detail-tab-pane" data-pane="maj">${paneMaj}</div>`;
-
-    body.querySelectorAll('.detail-tab').forEach(tab => {
-        tab.addEventListener('click', () => {
-            body.querySelectorAll('.detail-tab').forEach(t => t.classList.remove('active'));
-            body.querySelectorAll('.detail-tab-pane').forEach(p => p.classList.remove('active'));
-            tab.classList.add('active');
-            body.querySelector(`.detail-tab-pane[data-pane="${tab.dataset.tab}"]`).classList.add('active');
-        });
-    });
 }
 
 function renderUsers(users) { displayUsers(users); }
 
 function setTableLoading() {
     document.getElementById('users-tbody').innerHTML =
-        '<tr><td colspan="5" class="td-loading">Chargement…</td></tr>';
+        '<tr><td colspan="7" class="td-loading">Chargement…</td></tr>';
 }
 
 function setTableError(msg) {
     document.getElementById('users-tbody').innerHTML =
-        `<tr><td colspan="5" class="td-hint" style="color:#dc2626">Erreur : ${esc(msg)}</td></tr>`;
+        `<tr><td colspan="7" class="td-hint" style="color:#dc2626">Erreur : ${esc(msg)}</td></tr>`;
 }
 
 // ============================================================
@@ -1308,7 +1359,7 @@ function renderCrossSiteResults(q, preserveScroll) {
     tbody.innerHTML = '';
 
     if (results.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="5" class="td-hint">Aucun résultat trouvé</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7" class="td-hint">Aucun résultat trouvé</td></tr>';
         return;
     }
 
@@ -1318,7 +1369,7 @@ function renderCrossSiteResults(q, preserveScroll) {
         headerTr.className = 'group-header';
         headerTr.dataset.dn = dn;
         headerTr.innerHTML = `
-            <td colspan="5">
+            <td colspan="7">
                 <span class="group-toggle ${uncached ? '' : 'expanded'}">▼</span>
                 <span class="group-label">${hlText(siteName, lq)}</span>
                 <span class="group-count">${uncached ? '?' : users.length}</span>
@@ -1337,7 +1388,7 @@ function renderCrossSiteResults(q, preserveScroll) {
         if (uncached) {
             const tr = document.createElement('tr');
             tr.className = 'group-member';
-            tr.innerHTML = `<td colspan="5" class="td-hint search-uncached-hint">Cache non disponible · cliquer sur le nom du site ci-dessus pour charger</td>`;
+            tr.innerHTML = `<td colspan="7" class="td-hint search-uncached-hint">Cache non disponible · cliquer sur le nom du site ci-dessus pour charger</td>`;
             frag.appendChild(tr);
         } else {
             for (const u of users.sort((a, b) =>
@@ -1423,10 +1474,9 @@ function setupSort() {
 }
 
 function getSortedUsers(users) {
+    const val = u => String(state.sortCol === 'ouVille' ? ouVille(u.ouDn) : (u[state.sortCol] || '')).toLowerCase();
     return [...users].sort((a, b) => {
-        const va = (a[state.sortCol] || '').toLowerCase();
-        const vb = (b[state.sortCol] || '').toLowerCase();
-        const cmp = va.localeCompare(vb, 'fr');
+        const cmp = val(a).localeCompare(val(b), 'fr');
         return state.sortDir === 'asc' ? cmp : -cmp;
     });
 }

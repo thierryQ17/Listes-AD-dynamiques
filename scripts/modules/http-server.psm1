@@ -568,7 +568,7 @@ function Start-AppServer {
                         $ddgAll = @($allUsers | Where-Object { (((-not [string]::IsNullOrWhiteSpace("$($_.primarySmtpAddress)")) -or (-not [string]::IsNullOrWhiteSpace("$($_.mail)")))) -and (Test-UserMatchesRule -User $_ -Conditions $ddgConds) })
                     }
                     # Projection membre commune (name / title / sam) — sam pour l'appariement (diff) frontend.
-                    $ddgProj = { param($set) @($set | Sort-Object displayName | ForEach-Object { [ordered]@{ name = if ($_.displayName) { "$($_.displayName)" } else { "$($_.samAccountName)" }; title = if ($_.title) { "$($_.title)" } else { '' }; sam = "$($_.samAccountName)"; office = "$($_.office)" } }) }
+                    $ddgProj = { param($set) @($set | Sort-Object displayName | ForEach-Object { [ordered]@{ name = if ($_.displayName) { "$($_.displayName)" } else { "$($_.samAccountName)" }; title = if ($_.title) { "$($_.title)" } else { '' }; sam = "$($_.samAccountName)"; office = "$($_.office)"; centre = (Get-CentreFromDN $_.dn) } }) }
                     # Regroupement DDG par DO/centre avec les MÊMES clés que le mécanisme (appariement carte à carte).
                     $ddgCentreMembers = @{}; $ddgDoMembers = @{}
                     foreach ($dGrp in ($ddgAll | Group-Object { Get-RegionFromDN $_.dn } | Where-Object { $_.Name -and $_.Name -ne 'MONCHY' })) {
@@ -598,7 +598,7 @@ function Start-AppServer {
                             $allRulesA = if (Test-Path $rPathA) { @(ConvertFrom-Json ([System.IO.File]::ReadAllText($rPathA, [System.Text.Encoding]::UTF8))) } else { @() }
                             $opathBase = Build-OpathBaseFilter -Rule $rule -AllRules $allRulesA
                             foreach ($eGrp in (@(Invoke-ExoRecipientPreview -Filter $opathBase) | Where-Object { "$($_.office)".Trim() } | Group-Object { "$($_.office)".Trim() })) {
-                                $exoByOffice[$eGrp.Name] = @($eGrp.Group | ForEach-Object { [ordered]@{ name = "$($_.name)"; title = "$($_.title)"; sam = "$($_.sam)"; office = "$($_.office)" } })
+                                $exoByOffice[$eGrp.Name] = @($eGrp.Group | ForEach-Object { [ordered]@{ name = "$($_.name)"; title = "$($_.title)"; sam = "$($_.sam)"; office = "$($_.office)"; centre = '' } })
                             }
                             $ddgSource = 'exo'
                         } catch {
@@ -641,6 +641,7 @@ function Start-AppServer {
                                         title  = if ($_.title)       { "$($_.title)"        } else { '' }
                                         sam    = "$($_.samAccountName)"
                                         office = "$($_.office)"
+                                        centre = (Get-CentreFromDN $_.dn)
                                     }
                                 })
                                 $cId = Resolve-GroupIdentity -Naming $naming -DefaultBase $cBase -MailDomain $mailDomain -Prefix $lbl -DoName $doName -Centre $cName -Level 'centre'
