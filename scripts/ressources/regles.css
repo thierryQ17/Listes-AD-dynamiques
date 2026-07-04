@@ -2727,6 +2727,27 @@ body { overflow: hidden; }
 }
 .ddg-copy-btn:hover { filter: brightness(1.08); }
 
+/* Filtres d'affichage des lignes (New- / Set- / Get- / Get-Recipient) */
+.ddg-filter { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.ddg-filter-btn {
+    cursor: pointer;
+    font-family: 'Cascadia Code', 'Consolas', monospace;
+    font-size: 11px; font-weight: 600;
+    padding: 3px 9px; border-radius: 999px;
+    border: 1px solid #d1d5db; background: #f3f4f6; color: #6b7280;
+    transition: background .12s, color .12s, border-color .12s, opacity .12s;
+}
+.ddg-filter-btn.active { background: #ede9fe; color: #7c3aed; border-color: #c4b5fd; }
+.ddg-filter-btn:not(.active) { opacity: .6; text-decoration: line-through; }
+.ddg-filter-btn:hover { filter: brightness(.97); }
+
+/* Masquage par catégorie : le <span> englobe son \n → aucune ligne vide résiduelle */
+.ddg-line { display: inline; }
+.ddg-code.ddg-hide-new .ddg-cat-new,
+.ddg-code.ddg-hide-set .ddg-cat-set,
+.ddg-code.ddg-hide-get .ddg-cat-get,
+.ddg-code.ddg-hide-recipient .ddg-cat-recipient { display: none; }
+
 .ddg-code {
     height: calc(100vh - 210px);
     min-height: 340px;

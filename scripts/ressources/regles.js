@@ -6,6 +6,7 @@ let editingId  = null;
 let activeFormTab = 'params';
 let apercuCache = {};   // cache du rendu de l'onglet « Aperçu groupes », par signature de règle
 let ddgCache    = {};   // cache du rendu de l'onglet « DDG », par signature de règle
+let ddgVisible  = { new: true, set: true, get: true, recipient: true };   // filtres d'affichage des lignes DDG (persistant)
 let groupByNiveau = (() => { try { return localStorage.getItem('regles_group_niveau') === '1'; } catch { return false; } })();
 
 
@@ -759,9 +760,15 @@ function renderForm(rule) {
         `</div>` +
         `<div class="form-tab-pane" id="tab-ddg" hidden>` +
             `<div class="ddg-toolbar">` +
-                `<span class="ddg-toolbar-title">Scripts <code>New-DynamicDistributionGroup</code></span>` +
+                `<span class="ddg-toolbar-title">Scripts DDG</span>` +
+                `<div class="ddg-filter" role="group" aria-label="Afficher ou masquer des lignes">` +
+                    `<button type="button" class="ddg-filter-btn active" data-cat="new" aria-pressed="true" title="Afficher/masquer les lignes New-DynamicDistributionGroup">New-</button>` +
+                    `<button type="button" class="ddg-filter-btn active" data-cat="set" aria-pressed="true" title="Afficher/masquer les lignes Set-DynamicDistributionGroup (+ commentaire)">Set-</button>` +
+                    `<button type="button" class="ddg-filter-btn active" data-cat="get" aria-pressed="true" title="Afficher/masquer les lignes Get-DynamicDistributionGroup (+ commentaire)">Get-</button>` +
+                    `<button type="button" class="ddg-filter-btn active" data-cat="recipient" aria-pressed="true" title="Afficher/masquer les lignes Get-Recipient (+ commentaire)">Get-Recipient</button>` +
+                `</div>` +
                 `<span class="ddg-toolbar-note">Texte uniquement — aucune action AD/Exchange. À copier et exécuter manuellement.</span>` +
-                `<button type="button" class="ddg-copy-btn" id="ddg-copy-btn" title="Copier tous les scripts">Copier</button>` +
+                `<button type="button" class="ddg-copy-btn" id="ddg-copy-btn" title="Copier les lignes affichées">Copier</button>` +
             `</div>` +
             `<pre class="ddg-code" id="ddg-code"><span class="ddg-hint">Chargement…</span></pre>` +
         `</div>` +
@@ -873,13 +880,33 @@ function renderForm(rule) {
     updateLdapDisplay();
 
     // DDG : cache indexé par signature de règle (loadDdg) → pas besoin d'invalidation manuelle
+    // Copie UNIQUEMENT les lignes affichées (catégories actives + lignes 'other' toujours visibles).
     document.getElementById('ddg-copy-btn')?.addEventListener('click', () => {
-        const txt = document.getElementById('ddg-code')?.dataset.raw || '';
-        if (!txt) { showToast('Aucun script à copier', 'error'); return; }
+        const lines = document.getElementById('ddg-code')?._ddgLines || [];
+        const txt = lines
+            .filter(o => o.cat === 'other' || ddgVisible[o.cat])
+            .map(o => o.text)
+            .join('\n');
+        if (!txt.trim()) { showToast('Aucun script à copier', 'error'); return; }
         navigator.clipboard?.writeText(txt).then(
-            () => showToast('Scripts copiés', 'success'),
+            () => showToast('Lignes affichées copiées', 'success'),
             () => showToast('Copie impossible', 'error'),
         );
+    });
+
+    // DDG : boutons filtres New- / Set- / Get- / Get-Recipient (affiche/masque les lignes + commentaires)
+    document.querySelectorAll('.ddg-filter-btn').forEach(btn => {
+        const cat = btn.dataset.cat;
+        // Resynchronise l'état visuel avec ddgVisible (persistant entre ouvertures de règle)
+        btn.classList.toggle('active', ddgVisible[cat]);
+        btn.setAttribute('aria-pressed', String(ddgVisible[cat]));
+        btn.addEventListener('click', () => {
+            ddgVisible[cat] = !ddgVisible[cat];
+            btn.classList.toggle('active', ddgVisible[cat]);
+            btn.setAttribute('aria-pressed', String(ddgVisible[cat]));
+            const pre = document.getElementById('ddg-code');
+            if (pre) applyDdgVisibility(pre);
+        });
     });
 
     // Conserver l'onglet actif quand on change de règle (et recharger l'aperçu le cas échéant)
@@ -1529,6 +1556,26 @@ function highlightPowerShell(code) {
     return out + esc(code.slice(last));
 }
 
+// Bloc « créer / mettre à jour / lire » d'un groupe : New-DDG (-Name, crée),
+// Set-DDG (-Identity, met à jour un DDG existant) avec EXACTEMENT les mêmes paramètres,
+// puis Get-DDG (-Identity, lit la définition — PAS les membres, lecture seule).
+// TEXTE seul, jamais exécuté par l'app. `dq` = RecipientFilter déjà échappé.
+// Retourne des lignes catégorisées { cat, text } : le commentaire d'une commande
+// porte la MÊME catégorie qu'elle (masquage « ligne + son commentaire »).
+function ddgManageLines(g, dq, indent = '') {
+    const isCentre = g.type === 'centre';
+    const smtp = g.mail ? ` -PrimarySmtpAddress "${g.mail}"` : '';
+    const cont = (!isCentre && g.containerDN) ? ` -RecipientContainer "${g.containerDN}"` : '';   // centre : pas d'OU (EXO)
+    const filt = ` -RecipientFilter "${dq}"`;
+    return [
+        { cat: 'new', text: `${indent}New-DynamicDistributionGroup -Name "${g.name}"${smtp}${cont}${filt}` },
+        { cat: 'set', text: `${indent}# Ou, pour METTRE A JOUR un DDG existant (memes parametres, cible par -Identity) :` },
+        { cat: 'set', text: `${indent}Set-DynamicDistributionGroup -Identity "${g.name}"${smtp}${cont}${filt}` },
+        { cat: 'get', text: `${indent}# Lire la definition d'un DDG existant (proprietes/filtre, PAS les membres) :` },
+        { cat: 'get', text: `${indent}Get-DynamicDistributionGroup -Identity "${g.name}"` },
+    ];
+}
+
 // Assemble le TEXTE brut des scripts (arborescence global ▸ DO ▸ centre).
 function buildDdgScriptText(data, rule) {
     const { filter, skipped } = buildOpathFilter(rule);   // filtre OPATH de base (le $null est échappé par groupe)
@@ -1547,6 +1594,7 @@ function buildDdgScriptText(data, rule) {
     }
     L.push(`#   - global/DO : scope par -RecipientContainer (OU). CENTRE : scope par (Office -eq '...')`);
     L.push(`#     car Exchange Online ne resout pas les OU on-prem (hybride). Office peut etre incoherent.`);
+    L.push(`#   - chaque groupe fournit New- (creer), Set- (mettre a jour, memes params) et Get- (lire la definition).`);
     L.push('');
     L.push(`# Prerequis — session Exchange Online (INTERACTIF : ouvre une fenetre de connexion) :`);
     L.push(`Connect-ExchangeOnline`);
@@ -1578,18 +1626,14 @@ function buildDdgScriptText(data, rule) {
         if (g.type === 'do' && g.multiBase) {
             L.push(`${ind}# /!\\ region multi-OU : -RecipientContainer approxime au parent « ${container} ».`);
         }
-        let cmd = `${ind}New-DynamicDistributionGroup -Name "${g.name}"`;
-        if (g.mail)                cmd += ` -PrimarySmtpAddress "${g.mail}"`;
-        if (!isCentre && container) cmd += ` -RecipientContainer "${container}"`;   // centre : pas d'OU (EXO)
-        cmd += ` -RecipientFilter "${dq}"`;
-        L.push(cmd);
+        ddgManageLines(g, dq, ind).forEach(l => L.push(l));
         // Équivalent Get-Recipient : un DDG n'expose PAS ses membres → on prévisualise
         // le contenu via le même filtre (lecture seule, sans créer le DDG).
-        L.push(`${ind}# Voir le contenu (un DDG ne montre pas ses membres) :`);
+        L.push({ cat: 'recipient', text: `${ind}# Voir le contenu (un DDG ne montre pas ses membres) :` });
         let ctrl = `${ind}Get-Recipient -RecipientPreviewFilter "${dq}"`;
         if (!isCentre && container) ctrl += ` -OrganizationalUnit "${container}"`;   // centre : pas d'OU (EXO)
         ctrl += ` -ResultSize Unlimited | Sort-Object DisplayName | Select-Object DisplayName,@{Name='Fonction';Expression={$_.Title}}`;
-        L.push(ctrl);
+        L.push({ cat: 'recipient', text: ctrl });
         L.push('');
     };
 
@@ -1604,10 +1648,11 @@ function buildDdgScriptText(data, rule) {
     // Centres sans DO parent identifié (sécurité) — émis en fin.
     centres.filter(c => !dos.some(g => gk(g) === (c.parent ?? ''))).forEach(emit);
 
-    return L.join('\n');
+    // Normalise : les entrées « string » (en-têtes, commentaires, blancs) sont toujours visibles.
+    return L.map(x => typeof x === 'string' ? { cat: 'other', text: x } : x);
 }
 
-// Script DDG (New-DDG + Get-Recipient) pour UN groupe — pour la modale « détail » de la page groupes.
+// Script DDG (New-DDG + Set-DDG + Get-DDG + Get-Recipient) pour UN groupe — pour la modale « détail » de la page groupes.
 function ddgScriptForGroup(g, rule) {
     const { filter } = buildOpathFilter(rule);
     const isCentre = g.type === 'centre';
@@ -1620,11 +1665,7 @@ function ddgScriptForGroup(g, rule) {
         L.push(`# /!\\ Office incoherent : ${g.officeMismatch} membre(s) au Bureau != '${g.office}' -> le DDG les manquera.`);
     }
     L.push(`Connect-ExchangeOnline`);
-    let cmd = `New-DynamicDistributionGroup -Name "${g.name}"`;
-    if (g.mail)                    cmd += ` -PrimarySmtpAddress "${g.mail}"`;
-    if (!isCentre && g.containerDN) cmd += ` -RecipientContainer "${g.containerDN}"`;
-    cmd += ` -RecipientFilter "${dq}"`;
-    L.push(cmd);
+    ddgManageLines(g, dq).forEach(l => L.push(l.text));   // modale : texte brut (pas de filtre par catégorie)
     L.push(`# Voir le contenu (un DDG ne montre pas ses membres) :`);
     let ctrl = `Get-Recipient -RecipientPreviewFilter "${dq}"`;
     if (!isCentre && g.containerDN) ctrl += ` -OrganizationalUnit "${g.containerDN}"`;
@@ -1641,18 +1682,36 @@ function attachDdgScripts(data, rule) {
     });
 }
 
+// Rend chaque ligne { cat, text } comme un <span> catégorisé (avec son \n interne) :
+// masquer un <span> retire aussi son saut de ligne → pas de trou dans le rendu.
+function ddgLinesToHtml(lines) {
+    return lines.map(o =>
+        `<span class="ddg-line ddg-cat-${o.cat}">${highlightPowerShell(o.text)}\n</span>`
+    ).join('');
+}
+// Applique l'état des filtres (ddgVisible) au <pre> via des classes CSS — aucun re-render.
+function applyDdgVisibility(pre) {
+    ['new', 'set', 'get', 'recipient'].forEach(c =>
+        pre.classList.toggle('ddg-hide-' + c, !ddgVisible[c]));
+}
+function applyDdgRender(pre, html, lines) {
+    pre.innerHTML = html;
+    pre._ddgLines = lines;        // pour la copie « lignes affichées »
+    applyDdgVisibility(pre);
+}
+
 async function loadDdg() {
     const pre = document.getElementById('ddg-code');
     if (!pre) return;
     const rule = readForm();
-    if (!rule) { pre.innerHTML = '<span class="ddg-hint">Complétez la règle (nom + conditions) pour générer les scripts.</span>'; delete pre.dataset.raw; return; }
+    if (!rule) { pre.innerHTML = '<span class="ddg-hint">Complétez la règle (nom + conditions) pour générer les scripts.</span>'; pre._ddgLines = []; return; }
 
     const sig = JSON.stringify({
         id: editingId, label: rule.label, prefix: rule.prefix,
         niveau: rule.niveau, invertOf: rule.invertOf,
         conditions: rule.conditions, naming: rule.naming,
     });
-    if (ddgCache[sig]) { pre.innerHTML = ddgCache[sig].html; pre.dataset.raw = ddgCache[sig].raw; return; }
+    if (ddgCache[sig]) { applyDdgRender(pre, ddgCache[sig].html, ddgCache[sig].lines); return; }
 
     pre.innerHTML = '<span class="ddg-hint">Chargement…</span>';
     try {
@@ -1661,15 +1720,14 @@ async function loadDdg() {
             body: JSON.stringify(rule),
         });
         const data = await r.json();
-        if (data.error) { pre.innerHTML = `<span class="ddg-hint">${esc(data.error)}</span>`; delete pre.dataset.raw; return; }
-        const text = buildDdgScriptText(data, rule);
-        const html = highlightPowerShell(text);
-        ddgCache[sig] = { html, raw: text };
-        pre.innerHTML = html;
-        pre.dataset.raw = text;
+        if (data.error) { pre.innerHTML = `<span class="ddg-hint">${esc(data.error)}</span>`; pre._ddgLines = []; return; }
+        const lines = buildDdgScriptText(data, rule);
+        const html  = ddgLinesToHtml(lines);
+        ddgCache[sig] = { html, lines };
+        applyDdgRender(pre, html, lines);
     } catch {
         pre.innerHTML = '<span class="ddg-hint">Erreur lors de la génération des scripts.</span>';
-        delete pre.dataset.raw;
+        pre._ddgLines = [];
     }
 }
 
