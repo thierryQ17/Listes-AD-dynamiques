@@ -359,9 +359,11 @@ const PATTERN_TOKENS = ['{{prefix}}', '{{region}}', '{{nomCentre}}'];
 // fallback: champ dont on hérite la valeur si le champ cible est vide — les 3 mails
 // héritent par défaut du gabarit « Nom groupe » (f-name-pattern).
 const PATTERN_KINDS = {
-    name:       { id: 'f-name-pattern',        title: 'Gabarit — Nom du groupe',            isMail: false, level: 'centre', fallback: null },
-    mailGlobal: { id: 'f-mail-pattern-global', title: 'Gabarit — Mail · groupe Global',     isMail: true,  level: 'global', fallback: 'f-name-pattern' },
-    mailDo:     { id: 'f-mail-pattern-do',     title: 'Gabarit — Mail · groupes DO',        isMail: true,  level: 'do',     fallback: 'f-name-pattern' },
+    nameGlobal: { id: 'f-name-pattern-global', title: 'Gabarit — Nom · groupe Global',      isMail: false, level: 'global', fallback: null },
+    nameDo:     { id: 'f-name-pattern-do',     title: 'Gabarit — Nom · groupes DO',         isMail: false, level: 'do',     fallback: null },
+    name:       { id: 'f-name-pattern',        title: 'Gabarit — Nom · groupes Centre',     isMail: false, level: 'centre', fallback: null },
+    mailGlobal: { id: 'f-mail-pattern-global', title: 'Gabarit — Mail · groupe Global',     isMail: true,  level: 'global', fallback: 'f-name-pattern-global' },
+    mailDo:     { id: 'f-mail-pattern-do',     title: 'Gabarit — Mail · groupes DO',        isMail: true,  level: 'do',     fallback: 'f-name-pattern-do' },
     mailCentre: { id: 'f-mail-pattern',        title: 'Gabarit — Mail · groupes Centre',    isMail: true,  level: 'centre', fallback: 'f-name-pattern' },
 };
 
@@ -491,11 +493,15 @@ function toMailBase(s) {
 //   - Mail Global   : base mail (minuscule, sans accent, tirets)
 //   - Mail DO/Centre: base mail + un point final (séparateur avant le token {{region}}/{{nomCentre}})
 const DERIVED_FIELDS = [
+    { id: 'f-name-pattern-global', fn: s => (s || '').toUpperCase() },
+    { id: 'f-name-pattern-do',     fn: s => (s || '').toUpperCase() },
     { id: 'f-name-pattern',        fn: s => (s || '').toUpperCase() },
     { id: 'f-mail-pattern-global', fn: s => toMailBase(s) },
     { id: 'f-mail-pattern-do',     fn: s => { const b = toMailBase(s); return b ? b + '.' : ''; } },
     { id: 'f-mail-pattern',        fn: s => { const b = toMailBase(s); return b ? b + '.' : ''; } },
 ];
+// Les 3 gabarits de NOM (Global / DO / Centre). f-name-pattern = Centre (retro-compat).
+const NAME_FIELD_IDS = ['f-name-pattern-global', 'f-name-pattern-do', 'f-name-pattern'];
 function derivedCfg(id) { return DERIVED_FIELDS.find(d => d.id === id) || null; }
 
 // Câble : NOM DE LA RÈGLE → NOM GROUPE + 3 mails (dérivation live tant que non personnalisé),
@@ -529,9 +535,18 @@ function setupNamingFields() {
     });
 
     // Tout sélectionner au focus (Nom groupe + 3 mails). setTimeout(0) pour survivre au clic.
-    ['f-name-pattern', ...MAIL_FIELD_IDS].forEach(id => {
+    [...NAME_FIELD_IDS, ...MAIL_FIELD_IDS].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.addEventListener('focus', () => setTimeout(() => { try { el.select(); } catch { /* ignore */ } }, 0));
+    });
+}
+
+// Affiche/masque les lignes de nommage selon le niveau de groupement : 1=Global, 2=+DO, 3=+Centre.
+function applyNamingNiveau() {
+    const r = document.querySelector('input[name="f-niveau"]:checked');
+    const niv = r ? parseInt(r.value) : 3;
+    document.querySelectorAll('.naming-grid-row[data-lvl]').forEach(row => {
+        row.hidden = parseInt(row.dataset.lvl) > niv;
     });
 }
 
@@ -642,32 +657,26 @@ function renderForm(rule) {
             `</div>` +
 
             `<div class="form-group naming-group">` +
-                `<div class="naming-fields" id="naming-fields">` +
-                    `<div class="form-row-top">` +
-                        `<div class="form-row-top-col">` +
-                            `<label class="form-label" for="f-name-pattern">Nom groupe</label>` +
-                            `<div class="pattern-input-wrap">` +
-                                `<input id="f-name-pattern" class="form-input" type="text" placeholder="ex. Formateurs-{{region}}-{{nomCentre}}" value="${esc(rule?.naming?.namePattern || '')}">` +
-                                `<button type="button" class="pattern-edit-btn" id="btn-name-pattern" title="Éditer le gabarit du nom">${SVG_PATTERN_EDIT}</button>` +
-                            `</div>` +
-                        `</div>` +
-                        `<div class="form-row-top-col">` +
-                            `<label class="form-label">Adresse mail <span class="form-label-opt">(Global · DO · Centre)</span></label>` +
-                            `<div class="naming-mail-stack">` +
-                                `<div class="pattern-input-wrap">` +
-                                    `<input id="f-mail-pattern-global" class="form-input" type="text" placeholder="Global — ex. centres-aftral" title="Mail du groupe Global" value="${esc(rule?.naming?.mailPatternGlobal || '')}">` +
-                                    `<button type="button" class="pattern-edit-btn" id="btn-mail-pattern-global" title="Éditer le gabarit du mail (Global)">${SVG_PATTERN_EDIT}</button>` +
-                                `</div>` +
-                                `<div class="pattern-input-wrap">` +
-                                    `<input id="f-mail-pattern-do" class="form-input" type="text" placeholder="DO — ex. centres-aftral-{{region}}" title="Mail des groupes DO" value="${esc(rule?.naming?.mailPatternDo || '')}">` +
-                                    `<button type="button" class="pattern-edit-btn" id="btn-mail-pattern-do" title="Éditer le gabarit du mail (DO)">${SVG_PATTERN_EDIT}</button>` +
-                                `</div>` +
-                                `<div class="pattern-input-wrap">` +
-                                    `<input id="f-mail-pattern" class="form-input" type="text" placeholder="Centre — ex. {{nomCentre}}" title="Mail des groupes Centre" value="${esc(rule?.naming?.mailPattern || '')}">` +
-                                    `<button type="button" class="pattern-edit-btn" id="btn-mail-pattern" title="Éditer le gabarit du mail (Centre)">${SVG_PATTERN_EDIT}</button>` +
-                                `</div>` +
-                            `</div>` +
-                        `</div>` +
+                `<div class="naming-grid" id="naming-fields">` +
+                    `<div class="naming-grid-hd">` +
+                        `<span></span>` +
+                        `<label class="form-label">Nom groupe</label>` +
+                        `<label class="form-label">Adresse mail</label>` +
+                    `</div>` +
+                    `<div class="naming-grid-row" data-lvl="1">` +
+                        `<span class="naming-lvl">Niveau 1 <span class="naming-lvl-sub">(GLOBAL)</span></span>` +
+                        `<div class="pattern-input-wrap"><input id="f-name-pattern-global" class="form-input" type="text" placeholder="ex. Formateurs" title="Nom du groupe Global" value="${esc(rule?.naming?.namePatternGlobal || '')}"><button type="button" class="pattern-edit-btn" id="btn-name-pattern-global" title="Éditer le gabarit du nom (Global)">${SVG_PATTERN_EDIT}</button></div>` +
+                        `<div class="pattern-input-wrap"><input id="f-mail-pattern-global" class="form-input" type="text" placeholder="ex. centres-aftral" title="Mail du groupe Global" value="${esc(rule?.naming?.mailPatternGlobal || '')}"><button type="button" class="pattern-edit-btn" id="btn-mail-pattern-global" title="Éditer le gabarit du mail (Global)">${SVG_PATTERN_EDIT}</button></div>` +
+                    `</div>` +
+                    `<div class="naming-grid-row" data-lvl="2">` +
+                        `<span class="naming-lvl">Niveau 2 <span class="naming-lvl-sub">(Par DO)</span></span>` +
+                        `<div class="pattern-input-wrap"><input id="f-name-pattern-do" class="form-input" type="text" placeholder="ex. Formateurs-{{region}}" title="Nom des groupes DO" value="${esc(rule?.naming?.namePatternDo || '')}"><button type="button" class="pattern-edit-btn" id="btn-name-pattern-do" title="Éditer le gabarit du nom (DO)">${SVG_PATTERN_EDIT}</button></div>` +
+                        `<div class="pattern-input-wrap"><input id="f-mail-pattern-do" class="form-input" type="text" placeholder="ex. centres-aftral.{{region}}" title="Mail des groupes DO" value="${esc(rule?.naming?.mailPatternDo || '')}"><button type="button" class="pattern-edit-btn" id="btn-mail-pattern-do" title="Éditer le gabarit du mail (DO)">${SVG_PATTERN_EDIT}</button></div>` +
+                    `</div>` +
+                    `<div class="naming-grid-row" data-lvl="3">` +
+                        `<span class="naming-lvl">Niveau 3 <span class="naming-lvl-sub">(Par centre)</span></span>` +
+                        `<div class="pattern-input-wrap"><input id="f-name-pattern" class="form-input" type="text" placeholder="ex. Formateurs-{{nomCentre}}" title="Nom des groupes Centre" value="${esc(rule?.naming?.namePattern || '')}"><button type="button" class="pattern-edit-btn" id="btn-name-pattern" title="Éditer le gabarit du nom (Centre)">${SVG_PATTERN_EDIT}</button></div>` +
+                        `<div class="pattern-input-wrap"><input id="f-mail-pattern" class="form-input" type="text" placeholder="ex. {{nomCentre}}" title="Mail des groupes Centre" value="${esc(rule?.naming?.mailPattern || '')}"><button type="button" class="pattern-edit-btn" id="btn-mail-pattern" title="Éditer le gabarit du mail (Centre)">${SVG_PATTERN_EDIT}</button></div>` +
                     `</div>` +
                 `</div>` +
             `</div>` +
@@ -805,12 +814,14 @@ function renderForm(rule) {
             opt.classList.add('selected');
             opt.querySelector('input').checked = true;
             autoUpdateDesc();
+            applyNamingNiveau();
             const d = document.getElementById('niveau-desc');
             if (d) d.innerHTML = NIV_DESCRIPTIONS[parseInt(opt.dataset.n)] || '';
         });
     });
     const initNivDesc = document.getElementById('niveau-desc');
     if (initNivDesc) initNivDesc.innerHTML = NIV_DESCRIPTIONS[niveau] || '';
+    applyNamingNiveau();
 
     document.getElementById('btn-add-include')?.addEventListener('click', () => { addCondRow('cond-include'); autoUpdateDesc(); });
     document.getElementById('btn-add-exclude')?.addEventListener('click', () => { addCondRow('cond-exclude'); autoUpdateDesc(); });
@@ -838,6 +849,8 @@ function renderForm(rule) {
         }
     });
 
+    document.getElementById('btn-name-pattern-global')?.addEventListener('click', () => openPatternModal('nameGlobal'));
+    document.getElementById('btn-name-pattern-do')?.addEventListener('click', () => openPatternModal('nameDo'));
     document.getElementById('btn-name-pattern')?.addEventListener('click', () => openPatternModal('name'));
     document.getElementById('btn-mail-pattern-global')?.addEventListener('click', () => openPatternModal('mailGlobal'));
     document.getElementById('btn-mail-pattern-do')?.addEventListener('click', () => openPatternModal('mailDo'));
@@ -959,13 +972,17 @@ function readForm() {
         return (!el || el.dataset.inherited === '1') ? '' : (el.value.trim() || '');
     };
     const namePattern       = document.getElementById('f-name-pattern')?.value.trim() || '';
+    const namePatternDo     = mailVal('f-name-pattern-do');
+    const namePatternGlobal = mailVal('f-name-pattern-global');
     const mailPattern       = mailVal('f-mail-pattern');
     const mailPatternDo     = mailVal('f-mail-pattern-do');
     const mailPatternGlobal = mailVal('f-mail-pattern-global');
-    const naming = (namePattern || mailPattern || mailPatternDo || mailPatternGlobal)
+    const naming = (namePattern || namePatternDo || namePatternGlobal || mailPattern || mailPatternDo || mailPatternGlobal)
         ? {
             usePattern: !!namePattern,
             namePattern,
+            ...(namePatternDo     ? { namePatternDo }     : {}),
+            ...(namePatternGlobal ? { namePatternGlobal } : {}),
             mailPattern,
             ...(mailPatternDo     ? { mailPatternDo }     : {}),
             ...(mailPatternGlobal ? { mailPatternGlobal } : {}),
@@ -1339,7 +1356,7 @@ async function showGroupsHtmlPage() {
         const w = window.open('', '_blank');
         if (!w) { showToast('Pop-up bloquée — autorisez les fenêtres pour ce site', 'error'); return; }
         w.document.open();
-        w.document.write(buildGroupsHtmlDoc(data, rule));
+        w.document.write((attachDdgScripts(data, rule), buildGroupsHtmlDoc(data, rule)));
         w.document.close();
     } catch {
         showToast('Erreur lors de la génération de la page HTML', 'error');
@@ -1421,7 +1438,7 @@ async function loadApercuGroupes() {
         const data = await r.json();
         if (data.error) { frame.srcdoc = apercuMsgDoc(data.error); return; }
         // Exactement la même page que « Afficher page HTML », dans l'iframe
-        const doc = buildGroupsHtmlDoc(data, rule);
+        const doc = (attachDdgScripts(data, rule), buildGroupsHtmlDoc(data, rule));
         apercuCache[sig] = doc;
         frame.srcdoc = doc;
     } catch {
@@ -1590,6 +1607,40 @@ function buildDdgScriptText(data, rule) {
     return L.join('\n');
 }
 
+// Script DDG (New-DDG + Get-Recipient) pour UN groupe — pour la modale « détail » de la page groupes.
+function ddgScriptForGroup(g, rule) {
+    const { filter } = buildOpathFilter(rule);
+    const isCentre = g.type === 'centre';
+    let groupFilter = filter;
+    if (isCentre && g.office) groupFilter = `${filter} -and (Office -eq ${opathVal(g.office)})`;
+    const dq = groupFilter.replace(/\$null/g, '`$null');
+    const L = [];
+    L.push(`# ${g.name}  (${g.count} membre(s) — mécanisme actuel)`);
+    if (isCentre && g.office && g.officeMismatch > 0) {
+        L.push(`# /!\\ Office incoherent : ${g.officeMismatch} membre(s) au Bureau != '${g.office}' -> le DDG les manquera.`);
+    }
+    L.push(`Connect-ExchangeOnline`);
+    let cmd = `New-DynamicDistributionGroup -Name "${g.name}"`;
+    if (g.mail)                    cmd += ` -PrimarySmtpAddress "${g.mail}"`;
+    if (!isCentre && g.containerDN) cmd += ` -RecipientContainer "${g.containerDN}"`;
+    cmd += ` -RecipientFilter "${dq}"`;
+    L.push(cmd);
+    L.push(`# Voir le contenu (un DDG ne montre pas ses membres) :`);
+    let ctrl = `Get-Recipient -RecipientPreviewFilter "${dq}"`;
+    if (!isCentre && g.containerDN) ctrl += ` -OrganizationalUnit "${g.containerDN}"`;
+    ctrl += ` -ResultSize Unlimited | Sort-Object DisplayName | Select-Object DisplayName,@{Name='Fonction';Expression={$_.Title}}`;
+    L.push(ctrl);
+    return L.join('\n');
+}
+
+// Attache la map { cléGroupe : scriptDDG } aux données (centres) pour la page groupes.
+function attachDdgScripts(data, rule) {
+    data._ddgScripts = {};
+    (data.groups || []).filter(g => g.type === 'centre').forEach(g => {
+        data._ddgScripts[g.key ?? g.name] = highlightPowerShell(ddgScriptForGroup(g, rule));   // HTML déjà colorié
+    });
+}
+
 async function loadDdg() {
     const pre = document.getElementById('ddg-code');
     if (!pre) return;
@@ -1635,7 +1686,7 @@ window.recalcGroupsHtmlPage = async function (win, rule) {
         const data = await r.json();
         if (data.error) { showToast(data.error, 'error'); return; }
         win.document.open();
-        win.document.write(buildGroupsHtmlDoc(data, rule));
+        win.document.write((attachDdgScripts(data, rule), buildGroupsHtmlDoc(data, rule)));
         win.document.close();
     } catch {
         showToast('Erreur lors du recalcul de la page HTML', 'error');

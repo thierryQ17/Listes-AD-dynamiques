@@ -2,6 +2,16 @@
 
 ## En cours
 
+### Modale « détail DDG » par centre (page Aperçu groupes)
+- Icône `</>` sur chaque carte CENTRE (à gauche du pill compteur) → ouvre une modale large.
+- Modale : (A) code PowerShell du groupe (`New-DynamicDistributionGroup` + `Get-Recipient`)
+  dans un div noir colorié comme l'onglet DDG ; (B) explication **par personne** des écarts.
+- Décisions : explication détaillée par membre · icône centres seulement (niveau 3).
+- Étapes : 1) backend enrichir membres (`office`) ; 2) `regles.js` pré-calcule la map
+  scripts par groupe + l'embarque dans le doc ; 3) `groups-doc.js` icône + modale +
+  colorateur PS inline + explication (raison : Office ≠ groupe / EXO seul / non-OPATH).
+
+
 ## A faire
 
 ### Patterns de nommage pour les groupes FORMATEURS et ADMIN (demain)

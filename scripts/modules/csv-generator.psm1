@@ -319,21 +319,25 @@ function Resolve-GroupIdentity {
         [string]$Centre,
         [string]$Level = 'centre'
     )
-    if ($Naming -and $Naming.namePattern) {
+    if ($Naming -and ($Naming.namePattern -or $Naming.namePatternGlobal -or $Naming.namePatternDo)) {
         $tokens = @{
             prefix    = "$Prefix"
             region    = (Get-RegionToken $DoName)
             nomCentre = "$Centre"
         }
-        $name    = Resolve-Pattern -Pattern $Naming.namePattern -Tokens $tokens
-        # Mail : chaque niveau utilise SON gabarit dédié s'il est renseigné
-        # (mailPatternGlobal / mailPatternDo / mailPattern=Centre) ; sinon il HÉRITE du
-        # gabarit « Nom groupe » (namePattern). Un champ vide = hérite du nom du groupe.
+        # Nom : chaque niveau utilise SON gabarit dédié s'il est renseigné
+        # (namePatternGlobal / namePatternDo / namePattern=Centre) ; sinon il HÉRITE du gabarit Centre.
+        $namePat =
+            if     ("$Level" -eq 'global' -and $Naming.namePatternGlobal) { $Naming.namePatternGlobal }
+            elseif ("$Level" -eq 'do'     -and $Naming.namePatternDo)     { $Naming.namePatternDo }
+            else                                                           { $Naming.namePattern }
+        $name    = Resolve-Pattern -Pattern $namePat -Tokens $tokens
+        # Mail : idem par niveau ; sinon il HÉRITE du gabarit NOM du MÊME niveau. Champ vide = hérite du nom.
         $mailPat =
             if     ("$Level" -eq 'global' -and $Naming.mailPatternGlobal) { $Naming.mailPatternGlobal }
             elseif ("$Level" -eq 'do'     -and $Naming.mailPatternDo)     { $Naming.mailPatternDo }
             elseif ("$Level" -eq 'centre' -and $Naming.mailPattern)       { $Naming.mailPattern }
-            else                                                           { $Naming.namePattern }
+            else                                                           { $namePat }
         $mail    = (Resolve-Pattern -Pattern $mailPat -Tokens $tokens).ToLower()
         # Une adresse mail ne peut pas contenir d'espace : un centre multi-mots
         # (ex. "Le Havre" -> "le-havre", "Lyon 6" -> "lyon-6") voit ses espaces

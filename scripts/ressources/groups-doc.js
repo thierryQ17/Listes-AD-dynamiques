@@ -66,6 +66,17 @@ function buildGroupsHtmlDoc(data, rule) {
         g._hasDiff    = (mine.length - common > 0) || (ddg.length - common > 0);
     });
 
+    // Détail DDG par centre (script pré-colorié + populations Actuel/DDG) pour la modale </>.
+    const _ddgScripts = data._ddgScripts || {};
+    const ddgData = {};
+    groups.filter(g => g.type === 'centre').forEach(g => {
+        const k = gk(g);
+        if (!_ddgScripts[k]) return;
+        let ddg = g.ddgMembers; ddg = Array.isArray(ddg) ? ddg : (ddg ? [ddg] : []);
+        const proj = m => ({ name: m.name, title: m.title || '', sam: m.sam || m.name, office: m.office || '' });
+        ddgData[k] = { name: g.name, office: g.office || '', script: _ddgScripts[k], mine: (g.members || []).map(proj), ddg: ddg.map(proj) };
+    });
+
     // Rendu comparatif « mon mécanisme » (gauche) vs « DDG estimé » (droite, zone rouge).
     // La liste de gauche reste un <ul class="members"> intact (recherche/catégorisation inchangées) ;
     // la droite est un <ul class="ddg-list"> distinct. Diff par sam : mem-drop = perdu par le DDG,
@@ -88,14 +99,14 @@ function buildGroupsHtmlDoc(data, rule) {
         const added   = ddg.length - common;    // dans le DDG, absents de mon mécanisme (sans exclusion Ricoh…)
         const mineCol =
             '<div class="cmp-col">' +
-                '<div class="cmp-hd cmp-hd-mine">Mon mécanisme · ' + mine.length + '</div>' +
-                (mine.length ? '<ul class="members">' + mine.map(m => li(m, ddgKeys.has(key(m)) ? '' : 'mem-drop')).join('') + '</ul>'
+                '<div class="cmp-hd cmp-hd-mine">Actuel · ' + mine.length + '</div>' +
+                (mine.length ? '<ul class="members">' + mine.map(m => li(m, ddgKeys.has(key(m)) ? 'mem-common' : 'mem-drop')).join('') + '</ul>'
                              : '<div class="cmp-empty">—</div>') +
             '</div>';
         const ddgCol =
             '<div class="cmp-col cmp-col-ddg">' +
-                '<div class="cmp-hd cmp-hd-ddg" title="' + esc(data.ddgSource === 'exo' ? 'Population RÉELLE Exchange Online (Get-Recipient, lecture seule), scopée par Office.' : ('Simulation locale' + (data.ddgError ? ' — EXO indisponible : ' + data.ddgError : ''))) + '">' + (data.ddgSource === 'exo' ? 'DDG (Exchange)' : 'DDG estimé') + ' · ' + ddg.length + '</div>' +
-                (ddg.length ? '<ul class="ddg-list">' + ddg.map(m => li(m, mineKeys.has(key(m)) ? '' : 'mem-add')).join('') + '</ul>'
+                '<div class="cmp-hd cmp-hd-ddg" title="' + esc(data.ddgSource === 'exo' ? 'Population RÉELLE Exchange Online (Get-Recipient, lecture seule), scopée par Office.' : ('Simulation locale' + (data.ddgError ? ' — EXO indisponible : ' + data.ddgError : ''))) + '">' + (data.ddgSource === 'exo' ? 'DDG (Exchange)' : 'DDG') + ' · ' + ddg.length + '</div>' +
+                (ddg.length ? '<ul class="ddg-list">' + ddg.map(m => li(m, mineKeys.has(key(m)) ? 'mem-common' : 'mem-add')).join('') + '</ul>'
                             : '<div class="cmp-empty">aucune BAL estimée</div>') +
             '</div>';
         const delta =
@@ -121,6 +132,7 @@ function buildGroupsHtmlDoc(data, rule) {
                 (badge ? '<span class="grp-badge">' + badge + '</span>' : '') +
                 nameHtml +
                 ((lvl < 3 && g._grpCount) ? '<span class="grp-gcount" title="Nombre de groupes">' + g._grpCount + ' gr.</span>' : '') +
+                (g.type === 'centre' && ddgData[gk(g)] ? '<button class="grp-ddg-btn" type="button" data-ddgkey="' + esc(gk(g)) + '" title="Détail DDG : script PowerShell + explication des écarts"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg></button>' : '') +
                 '<span class="grp-count" title="Nombre d\'utilisateurs">' + (g.count ?? 0) + '</span>' +
             '</div>' +
             mailHtml +
@@ -193,7 +205,8 @@ function buildGroupsHtmlDoc(data, rule) {
             (hasBranches ? '<button id="collapseAll" type="button">Tout replier</button>' : '') +
             '<button id="toggleMembers" type="button">Masquer les membres</button>' +
             '<button id="toggleCategories" type="button">Catégoriser</button>' +
-            '<button id="toggleDiff" type="button" title="N\'afficher que les groupes ayant un écart mécanisme vs DDG">Écarts DDG</button>' +
+            '<button id="toggleDiff" type="button" title="Cliquer : 1) groupes divergents  2) + membres divergents seulement  3) tout">Écarts DDG</button>' +
+            '<button id="toggleFn" type="button">Cacher les fonctions</button>' +
             '<span class="count" id="count"></span>' +
         '</div>';
 
@@ -258,6 +271,26 @@ function buildGroupsHtmlDoc(data, rule) {
         .mail-hint{margin-left:8px;font-size:.66rem;font-weight:700;color:#1d4ed8;background:#eff6ff;border:1px solid #bfdbfe;border-radius:999px;padding:1px 7px;text-decoration:none;white-space:nowrap;vertical-align:middle;}
         .mem-modal{position:fixed;inset:0;z-index:1001;background:rgba(15,23,42,.45);display:flex;align-items:center;justify-content:center;padding:20px;}
         .mem-modal[hidden]{display:none;}
+        /* Icone </> + modale « detail DDG » (script colorie + explication des ecarts) */
+        .grp-ddg-btn{flex:none;display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;margin-left:4px;padding:0;border:1px solid #cbd5e1;border-radius:6px;background:#f8fafc;color:#475569;cursor:pointer;}
+        .grp-ddg-btn:hover{background:#1e293b;color:#fff;border-color:#1e293b;}
+        .ddg-modal{position:fixed;inset:0;z-index:1002;background:rgba(15,23,42,.5);display:flex;align-items:center;justify-content:center;padding:20px;}
+        .ddg-modal[hidden]{display:none;}
+        .ddg-box{background:#fff;color:#1f2430;border-radius:12px;border-top:4px solid #6d28d9;box-shadow:0 16px 50px rgba(0,0,0,.35);width:min(1000px,96vw);max-height:90vh;overflow:auto;padding:20px 24px;position:relative;}
+        .ddg-close{position:absolute;top:10px;right:14px;background:none;border:none;font-size:22px;line-height:1;color:#6b7280;cursor:pointer;}
+        .ddg-close:hover{color:#111827;}
+        .ddg-modal-title{font-size:15px;font-weight:700;color:#4c1d95;margin:0 30px 12px 0;}
+        .ddg-section-hd{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#6b7280;margin:14px 0 6px;}
+        .ddg-modal-code{margin:0;padding:14px 16px;background:#1e1e2e;color:#cdd6f4;border:1px solid #2d2d3f;border-radius:8px;font-family:'Cascadia Code','Consolas',monospace;font-size:12px;line-height:1.55;white-space:pre;overflow:auto;}
+        .ps-cmd{color:#f9e2af;} .ps-param{color:#89b4fa;} .ps-op{color:#f38ba8;} .ps-str{color:#a6e3a1;} .ps-var{color:#fab387;} .ps-comment{color:#6c7086;font-style:italic;}
+        .ddg-ex-grp{margin:8px 0;}
+        .ddg-ex-hd{font-size:12.5px;font-weight:700;margin-bottom:4px;}
+        .ddg-ex-hd.drop{color:#b91c1c;} .ddg-ex-hd.add{color:#b45309;}
+        .ddg-explain ul{list-style:none;margin:0;padding:0;}
+        .ddg-explain li{display:flex;gap:10px;align-items:baseline;padding:2px 0;font-size:.86rem;flex-wrap:wrap;}
+        .ddg-explain li b{color:#1e293b;font-weight:600;}
+        .ddg-ex-why{color:#6b7280;font-size:.8rem;}
+        .ddg-noecart{color:#047857;background:#e9faf2;border-radius:6px;padding:8px 12px;font-size:.86rem;}
         .mem-box{background:#fff;color:#1f2430;border-radius:12px;border-top:4px solid #2563eb;box-shadow:0 16px 50px rgba(0,0,0,.3);width:min(620px,95vw);max-height:88vh;overflow:auto;padding:22px 26px;position:relative;}
         .mem-close{position:absolute;top:10px;right:14px;background:none;border:none;font-size:22px;line-height:1;color:#6b7280;cursor:pointer;}
         .mem-close:hover{color:#111827;}
@@ -369,13 +402,13 @@ function buildGroupsHtmlDoc(data, rule) {
         .m-title{color:#6b7280;text-transform:uppercase;font-size:.72rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
         .grp.hide,.branch.hide,.mem.hide{display:none;}
         #tree.hide-members .members{display:none;}
-        .members .mem-fn-hdr{display:flex;align-items:center;gap:8px;column-span:all;break-inside:avoid;margin:10px 0 5px;padding:3px 10px;border-radius:6px;border-left:3px solid #6366f1;background:#eef2ff;color:#3730a3;font-size:.72rem;font-weight:500;text-transform:uppercase;letter-spacing:.03em;}
-        .members .mem-fn-hdr:first-child{margin-top:0;}
-        .members .mem-fn-hdr .fn-lbl{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-        .members .mem-fn-hdr .fn-c{margin-left:auto;color:#fff;background:#6366f1;border-radius:999px;padding:0 8px;font-size:.68rem;font-weight:700;flex:none;}
-        .members .mem-fn-hdr.hide{display:none;}
-        #tree.categorized .members .mem{grid-template-columns:1fr;padding-left:15px;}
-        #tree.categorized .members .mem .m-title{display:none;}
+        .grp-cmp .mem-fn-hdr,.members .mem-fn-hdr{display:flex;align-items:center;gap:8px;column-span:all;break-inside:avoid;margin:10px 0 5px;padding:3px 10px;border-radius:6px;border-left:3px solid #6366f1;background:#eef2ff;color:#3730a3;font-size:.72rem;font-weight:500;text-transform:uppercase;letter-spacing:.03em;}
+        .grp-cmp .mem-fn-hdr:first-child,.members .mem-fn-hdr:first-child{margin-top:0;}
+        .grp-cmp .mem-fn-hdr .fn-lbl,.members .mem-fn-hdr .fn-lbl{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+        .grp-cmp .mem-fn-hdr .fn-c,.members .mem-fn-hdr .fn-c{margin-left:auto;color:#fff;background:#6366f1;border-radius:999px;padding:0 8px;font-size:.68rem;font-weight:700;flex:none;}
+        .grp-cmp .mem-fn-hdr.hide,.members .mem-fn-hdr.hide{display:none;}
+        #tree.categorized .grp-cmp .mem,#tree.categorized .members .mem{grid-template-columns:1fr;padding-left:15px;}
+        #tree.categorized .grp-cmp .mem .m-title,#tree.categorized .members .mem .m-title{display:none;}
         /* Comparaison mon mécanisme vs DDG (zone rouge) */
         .grp-cmp{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:9px;padding-top:8px;border-top:1px dashed #d5dae1;}
         .cmp-col{min-width:0;}
@@ -385,14 +418,27 @@ function buildGroupsHtmlDoc(data, rule) {
         .cmp-hd-ddg{color:#b91c1c;}
         .grp-cmp .members,.grp-cmp .ddg-list{columns:1;list-style:none;margin:0;padding:0;border-top:none;}
         .grp-cmp .members li,.grp-cmp .ddg-list li,.do-centres .grp-cmp .members li{display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:6px;align-items:baseline;padding:1px 0;font-size:.78rem;break-inside:avoid;}
-        .mem-drop .m-name{color:#b91c1c;text-decoration:line-through;text-decoration-thickness:1px;}
-        .mem-add .m-name{color:#b45309;}
+        /* Differences BIEN visibles : fond + bordure gauche coloree */
+        .mem-drop,.mem-add{border-radius:3px;padding:2px 5px;margin:1px 0;}
+        .mem-drop{background:#fee2e2;border-left:3px solid #ef4444;}
+        .mem-drop .m-name{color:#991b1b;text-decoration:line-through;text-decoration-thickness:1px;font-weight:600;}
+        .mem-drop .m-title{color:#b91c1c;}
+        .mem-add{background:#ffedd5;border-left:3px solid #f59e0b;}
+        .mem-add .m-name{color:#9a3412;font-weight:700;}
+        .mem-add .m-title{color:#b45309;}
+        /* Carte de centre avec ecart : accent ambre pour la reperer dans la grille */
+        .grp.grp-has-diff{border-left-color:#f59e0b !important;background:#fffdf5;}
+        .grp.grp-has-diff .grp-name::after{content:' ⚠';color:#d97706;font-size:.8em;}
         .cmp-empty{color:#9ca3af;font-size:.72rem;font-style:italic;padding:2px 0;}
         .cmp-delta{display:flex;gap:12px;flex-wrap:wrap;margin-top:6px;font-size:.7rem;font-weight:700;}
         .cd-eq{color:#374151;} .cd-drop{color:#b91c1c;} .cd-add{color:#b45309;}
         #tree.hide-members .grp-cmp,#tree.hide-members .cmp-delta{display:none;}
         /* Filtre « Écarts DDG » : ne montrer que les cartes ayant un ecart mecanisme vs DDG */
         #tree.diff-only .grp-no-diff{display:none;}
+        /* 3e etat : masquer aussi les membres presents des DEUX cotes (ne garder que les ecarts) */
+        #tree.diff-members .mem-common{display:none;}
+        /* Bouton « Cacher les fonctions » : masque la colonne fonction (title) des membres */
+        #tree.hide-fn .m-title{display:none;}
         .toolbar #toggleDiff.active{background:#b91c1c;color:#fff;border-color:#b91c1c;}
         .empty{color:#6b7280;font-style:italic;}
         @media print{.toolbar{display:none;}body{background:#fff;}.doc-hd,.grp{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}
@@ -412,7 +458,7 @@ function buildGroupsHtmlDoc(data, rule) {
   var branches=[].slice.call(document.querySelectorAll('.branch, .do-centres'));
   var g1=document.querySelector('.grp.lvl1');
   var catBtn=document.getElementById('toggleCategories');
-  var memLists=[].slice.call(document.querySelectorAll('.members'));
+  var memLists=[].slice.call(document.querySelectorAll('.members, .ddg-list'));   // les 2 colonnes (Actuel + DDG)
   memLists.forEach(function(ul){ ul._orig=[].slice.call(ul.children); });
   var categorized=false;
   function apply(){
@@ -572,8 +618,18 @@ function buildGroupsHtmlDoc(data, rule) {
   var tmBtn=document.getElementById('toggleMembers');
   var treeEl=document.getElementById('tree');
   if(tmBtn&&treeEl)tmBtn.addEventListener('click',function(){ var h=treeEl.classList.toggle('hide-members'); tmBtn.textContent=h?'Afficher les membres':'Masquer les membres'; });
-  var tdBtn=document.getElementById('toggleDiff');
-  if(tdBtn&&treeEl)tdBtn.addEventListener('click',function(){ var on=treeEl.classList.toggle('diff-only'); tdBtn.classList.toggle('active',on); tdBtn.textContent=on?'Tous les groupes':'Écarts DDG'; });
+  // Bouton « Écarts DDG » a 3 etats : 0=tout, 1=groupes divergents, 2=+ membres divergents seulement
+  var tdBtn=document.getElementById('toggleDiff'); var diffState=0;
+  if(tdBtn&&treeEl)tdBtn.addEventListener('click',function(){
+    diffState=(diffState+1)%3;
+    treeEl.classList.toggle('diff-only', diffState>=1);
+    treeEl.classList.toggle('diff-members', diffState===2);
+    tdBtn.classList.toggle('active', diffState>0);
+    tdBtn.textContent = diffState===0 ? 'Écarts DDG' : diffState===1 ? 'Écarts : groupes' : 'Écarts : membres';
+  });
+  // Bouton « Cacher les fonctions » : masque/affiche la colonne fonction des membres
+  var fnBtn=document.getElementById('toggleFn');
+  if(fnBtn&&treeEl)fnBtn.addEventListener('click',function(){ var h=treeEl.classList.toggle('hide-fn'); fnBtn.textContent=h?'Afficher les fonctions':'Cacher les fonctions'; });
   var CATPAL=[['#1d4ed8','#eef4ff'],['#7c3aed','#f5f0ff'],['#be185d','#fdeff6'],['#047857','#e9faf2'],['#b45309','#fdf4e6'],['#0e7490','#e8f7fb'],['#b91c1c','#fdefef'],['#4338ca','#eff0fe'],['#4d7c0f','#f2f8e7'],['#a21caf','#fbeffc'],['#0f766e','#e7f7f5'],['#c2410c','#fdf1ea']];
   function catColor(t){ var h=0; for(var i=0;i<t.length;i++){h=(h*31+t.charCodeAt(i))>>>0;} return CATPAL[h%CATPAL.length]; }
   function categorize(on){
@@ -609,6 +665,44 @@ function buildGroupsHtmlDoc(data, rule) {
   }
   if(catBtn)catBtn.addEventListener('click',function(){ categorized=!categorized; categorize(categorized); catBtn.textContent=categorized?'Décatégoriser':'Catégoriser'; apply(); });
   apply();
+  // Modale « detail DDG » (icone </> sur les cartes centres) : script colorie + explication des ecarts
+  var DDG=window.DDGDATA||{};
+  var ddgModal=document.getElementById('ddgModal');
+  function ddgEsc(s){ return String(s).replace(/[&<>"]/g,function(c){ return c==='&'?'&amp;':c==='<'?'&lt;':c==='>'?'&gt;':'&quot;'; }); }
+  function closeDdg(){ if(ddgModal)ddgModal.setAttribute('hidden',''); }
+  function openDdg(key){
+    var d=DDG[key]; if(!d||!ddgModal)return;
+    document.getElementById('ddgModalTitle').textContent=d.name+'  —  Bureau : '+(d.office||'?');
+    document.getElementById('ddgModalCode').innerHTML=d.script;
+    var mineSam={},ddgSam={};
+    d.mine.forEach(function(m){mineSam[m.sam]=m;});
+    d.ddg.forEach(function(m){ddgSam[m.sam]=m;});
+    var dropped=d.mine.filter(function(m){return !ddgSam[m.sam];});
+    var added=d.ddg.filter(function(m){return !mineSam[m.sam];});
+    var h='';
+    if(dropped.length){
+      h+='<div class="ddg-ex-grp"><div class="ddg-ex-hd drop">'+dropped.length+' perdu(s) par le DDG</div><ul>';
+      dropped.forEach(function(m){
+        var why=(m.office&&d.office&&m.office!==d.office)?('Bureau « '+ddgEsc(m.office)+' » différent de « '+ddgEsc(d.office)+' » du groupe (hors filtre Office du DDG)'):(!m.office?'aucun Bureau renseigné':'critère non reproductible en filtre OPATH (description / OU)');
+        h+='<li><b>'+ddgEsc(m.name)+'</b><span class="ddg-ex-why">'+why+'</span></li>';
+      });
+      h+='</ul></div>';
+    }
+    if(added.length){
+      h+='<div class="ddg-ex-grp"><div class="ddg-ex-hd add">'+added.length+' ajouté(s) par le DDG</div><ul>';
+      added.forEach(function(m){
+        h+='<li><b>'+ddgEsc(m.name)+'</b><span class="ddg-ex-why">présent dans Exchange (Bureau correspond) mais absent du mécanisme actuel : compte exclu (ex. Ricoh) ou hors du cache</span></li>';
+      });
+      h+='</ul></div>';
+    }
+    if(!h)h='<div class="ddg-noecart">Aucun écart : les deux populations sont identiques.</div>';
+    document.getElementById('ddgExplain').innerHTML=h;
+    ddgModal.removeAttribute('hidden');
+  }
+  [].slice.call(document.querySelectorAll('.grp-ddg-btn')).forEach(function(b){ b.addEventListener('click',function(e){ e.stopPropagation(); openDdg(b.getAttribute('data-ddgkey')); }); });
+  var ddgCloseBtn=document.getElementById('ddgClose'); if(ddgCloseBtn)ddgCloseBtn.addEventListener('click',closeDdg);
+  if(ddgModal)ddgModal.addEventListener('click',function(e){ if(e.target===ddgModal)closeDdg(); });
+  document.addEventListener('keydown',function(e){ if(e.key==='Escape')closeDdg(); });
 })();`;
 
     return '<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8">' +
@@ -659,7 +753,15 @@ function buildGroupsHtmlDoc(data, rule) {
             '<div class="mem-title" id="memTitle"></div>' +
             '<div class="mem-list" id="memList"></div>' +
         '</div></div>' +
-        '<script>window.MAILTREE=' + JSON.stringify(mailTree).replace(/</g, '\\u003c') + ';window.GROUPMEMBERS=' + JSON.stringify(groupMembers).replace(/</g, '\\u003c') + ';window.RULE=' + JSON.stringify(rule || {}).replace(/</g, '\\u003c') + ';</script>' +
+        '<div class="ddg-modal" id="ddgModal" hidden><div class="ddg-box">' +
+            '<button class="ddg-close" id="ddgClose" type="button" aria-label="Fermer">×</button>' +
+            '<div class="ddg-modal-title" id="ddgModalTitle"></div>' +
+            '<div class="ddg-section-hd">Script PowerShell (à copier — texte seul, aucune exécution)</div>' +
+            '<pre class="ddg-modal-code" id="ddgModalCode"></pre>' +
+            '<div class="ddg-section-hd" id="ddgExplainHd">Écarts — pourquoi&nbsp;?</div>' +
+            '<div class="ddg-explain" id="ddgExplain"></div>' +
+        '</div></div>' +
+        '<script>window.MAILTREE=' + JSON.stringify(mailTree).replace(/</g, '\\u003c') + ';window.GROUPMEMBERS=' + JSON.stringify(groupMembers).replace(/</g, '\\u003c') + ';window.RULE=' + JSON.stringify(rule || {}).replace(/</g, '\\u003c') + ';window.DDGDATA=' + JSON.stringify(ddgData).replace(/</g, '\\u003c') + ';</script>' +
         '<script>' + pageScript + '</script>' +
         '</body></html>';
 }
