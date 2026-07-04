@@ -1477,7 +1477,7 @@ async function loadApercuGroupes() {
 // ==================== Onglet DDG — génération de scripts (TEXTE seul) ====================
 // Pour chaque groupe de la règle (global ▸ DO ▸ centre), produit un script
 // New-DynamicDistributionGroup. AUCUNE action AD/Exchange : uniquement du texte à copier.
-// Le contrôle de population (mon mécanisme vs DDG) se branchera ensuite sur cette même base.
+// Le contrôle de population (groupes de référence vs DDG) se branchera ensuite sur cette même base.
 
 // Champ de règle -> propriété de filtre OPATH Exchange. null = pas d'équivalent fiable
 // (description, OU) → signalé et NON traduit (évite un filtre faussement rassurant).
@@ -1584,11 +1584,11 @@ function buildDdgScriptText(data, rule) {
 
     L.push(`# ${'='.repeat(70)}`);
     L.push(`# Scripts DDG — regle « ${rule.label || ''} »  (${data.total} membre(s), ${groups.length} groupe(s))`);
-    L.push(`# Genere depuis le mecanisme actuel — cache du ${data.cacheTs || '?'}`);
+    L.push(`# Genere depuis les groupes de reference — cache du ${data.cacheTs || '?'}`);
     L.push(`# ${'='.repeat(70)}`);
-    L.push(`# ATTENTION — ecarts possibles vs mon mecanisme :`);
+    L.push(`# ATTENTION — ecarts possibles vs les groupes de reference :`);
     L.push(`#   - le DDG n'inclut QUE les boites aux lettres (RecipientTypeDetails=UserMailbox) :`);
-    L.push(`#     un compte sans BAL present dans mes groupes sera absent du DDG.`);
+    L.push(`#     un compte sans BAL present dans les groupes de reference sera absent du DDG.`);
     if (skipped.length) {
         L.push(`#   - critere(s) NON traduisible(s) en OPATH, ignore(s) ici : ${skipped.map(f => FIELD_LABELS[f] || f).join(', ')}.`);
     }
@@ -1660,7 +1660,7 @@ function ddgScriptForGroup(g, rule) {
     if (isCentre && g.office) groupFilter = `${filter} -and (Office -eq ${opathVal(g.office)})`;
     const dq = groupFilter.replace(/\$null/g, '`$null');
     const L = [];
-    L.push(`# ${g.name}  (${g.count} membre(s) — mécanisme actuel)`);
+    L.push(`# ${g.name}  (${g.count} membre(s) — groupes de référence)`);
     if (isCentre && g.office && g.officeMismatch > 0) {
         L.push(`# /!\\ Office incoherent : ${g.officeMismatch} membre(s) au Bureau != '${g.office}' -> le DDG les manquera.`);
     }

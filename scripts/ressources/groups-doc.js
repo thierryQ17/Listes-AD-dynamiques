@@ -77,10 +77,10 @@ function buildGroupsHtmlDoc(data, rule) {
         ddgData[k] = { name: g.name, office: g.office || '', script: _ddgScripts[k], mine: (g.members || []).map(proj), ddg: ddg.map(proj) };
     });
 
-    // Rendu comparatif « mon mécanisme » (gauche) vs « DDG estimé » (droite, zone rouge).
+    // Rendu comparatif « groupes de référence » (gauche) vs « DDG estimé » (droite, zone rouge).
     // La liste de gauche reste un <ul class="members"> intact (recherche/catégorisation inchangées) ;
     // la droite est un <ul class="ddg-list"> distinct. Diff par sam : mem-drop = perdu par le DDG,
-    // mem-add = présent dans le DDG mais pas dans mon mécanisme.
+    // mem-add = présent dans le DDG mais pas dans les groupes de référence.
     const memHtml = g => {
         const mine = g.members || [];
         let ddg = g.ddgMembers;
@@ -95,8 +95,8 @@ function buildGroupsHtmlDoc(data, rule) {
                 (m.title ? '<span class="m-title">' + esc(m.title) + '</span>' : '') +
             '</li>';
         const common  = mine.filter(m => ddgKeys.has(key(m))).length;
-        const dropped = mine.length - common;   // dans mon mécanisme, absents du DDG (sans BAL / critère non-OPATH)
-        const added   = ddg.length - common;    // dans le DDG, absents de mon mécanisme (sans exclusion Ricoh…)
+        const dropped = mine.length - common;   // dans les groupes de référence, absents du DDG (sans BAL / critère non-OPATH)
+        const added   = ddg.length - common;    // dans le DDG, absents des groupes de référence (sans exclusion Ricoh…)
         const mineCol =
             '<div class="cmp-col">' +
                 '<div class="cmp-hd cmp-hd-mine">Actuel · ' + mine.length + '</div>' +
@@ -412,7 +412,7 @@ function buildGroupsHtmlDoc(data, rule) {
         .grp-cmp .mem-fn-hdr.hide,.members .mem-fn-hdr.hide{display:none;}
         #tree.categorized .grp-cmp .mem,#tree.categorized .members .mem{grid-template-columns:1fr;padding-left:15px;}
         #tree.categorized .grp-cmp .mem .m-title,#tree.categorized .members .mem .m-title{display:none;}
-        /* Comparaison mon mécanisme vs DDG (zone rouge) */
+        /* Comparaison groupes de référence vs DDG (zone rouge) */
         .grp-cmp{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:9px;padding-top:8px;border-top:1px dashed #d5dae1;}
         .cmp-col{min-width:0;}
         .cmp-col-ddg{background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:6px 9px;}
@@ -696,7 +696,7 @@ function buildGroupsHtmlDoc(data, rule) {
       h+='<div class="ddg-ex-grp"><div class="ddg-ex-hd add">'+added.length+' ajouté(s) par le DDG</div><ul>'+exHead;
       added.forEach(function(m){
         var ou=m.centre?('en réalité au centre « '+ddgEsc(m.centre)+' » (autre OU)'):('rattaché à un AUTRE centre par son OU');
-        h+='<li><span class="ddg-ex-name">'+ddgEsc(m.name)+'</span><span class="ddg-ex-off">'+ddgEsc(m.office||'—')+'</span><span class="ddg-ex-off">'+ddgEsc(m.centre||'—')+'</span><span class="ddg-ex-why">Bureau = celui du groupe → le DDG le prend, mais '+ou+' → absent du mécanisme actuel</span></li>';
+        h+='<li><span class="ddg-ex-name">'+ddgEsc(m.name)+'</span><span class="ddg-ex-off">'+ddgEsc(m.office||'—')+'</span><span class="ddg-ex-off">'+ddgEsc(m.centre||'—')+'</span><span class="ddg-ex-why">Bureau = celui du groupe → le DDG le prend, mais '+ou+' → absent des groupes de référence</span></li>';
       });
       h+='</ul></div>';
     }
