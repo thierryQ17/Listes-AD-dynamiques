@@ -53,6 +53,19 @@ function buildGroupsHtmlDoc(data, rule) {
     if (global) global._grpCount = doGroups.length;
     doGroups.forEach(dg => { dg._grpCount = dg._centres.length; });
 
+    // Pré-calcul : un groupe a-t-il un ÉCART mécanisme vs DDG (perdu par DDG ou DDG seul) ?
+    // Sert au bouton « Écarts DDG » (filtre) et à marquer les cartes.
+    const _diffKey = m => m.sam || m.name;
+    groups.forEach(g => {
+        const mine = g.members || [];
+        let ddg = g.ddgMembers; ddg = Array.isArray(ddg) ? ddg : (ddg ? [ddg] : []);
+        if (!mine.length && !ddg.length) { g._hasDiff = false; g._hasCompare = false; return; }
+        const ddgKeys = new Set(ddg.map(_diffKey));
+        const common  = mine.filter(m => ddgKeys.has(_diffKey(m))).length;
+        g._hasCompare = true;
+        g._hasDiff    = (mine.length - common > 0) || (ddg.length - common > 0);
+    });
+
     // Rendu comparatif « mon mécanisme » (gauche) vs « DDG estimé » (droite, zone rouge).
     // La liste de gauche reste un <ul class="members"> intact (recherche/catégorisation inchangées) ;
     // la droite est un <ul class="ddg-list"> distinct. Diff par sam : mem-drop = perdu par le DDG,
@@ -81,7 +94,7 @@ function buildGroupsHtmlDoc(data, rule) {
             '</div>';
         const ddgCol =
             '<div class="cmp-col cmp-col-ddg">' +
-                '<div class="cmp-hd cmp-hd-ddg" title="Estimation locale du filtre OPATH (BAL = primarySmtpAddress ; sans l\'exclusion Ricoh). Vérité terrain : commande Get-Recipient de l\'onglet DDG.">DDG estimé · ' + ddg.length + '</div>' +
+                '<div class="cmp-hd cmp-hd-ddg" title="' + esc(data.ddgSource === 'exo' ? 'Population RÉELLE Exchange Online (Get-Recipient, lecture seule), scopée par Office.' : ('Simulation locale' + (data.ddgError ? ' — EXO indisponible : ' + data.ddgError : ''))) + '">' + (data.ddgSource === 'exo' ? 'DDG (Exchange)' : 'DDG estimé') + ' · ' + ddg.length + '</div>' +
                 (ddg.length ? '<ul class="ddg-list">' + ddg.map(m => li(m, mineKeys.has(key(m)) ? '' : 'mem-add')).join('') + '</ul>'
                             : '<div class="cmp-empty">aucune BAL estimée</div>') +
             '</div>';
@@ -102,7 +115,7 @@ function buildGroupsHtmlDoc(data, rule) {
                 ? '<div class="grp-mail grp-mail-link grp-mail-cta" data-key="' + esc(gk(g) || '') + '" title="Voir les groupes et leurs membres">' + esc(g.mail) + '</div>'
                 : '<div class="grp-mail">' + esc(g.mail) + '</div>')
             : '';
-        return '<div class="grp lvl' + lvl + (cls ? ' ' + cls : '') + '" data-name="' + esc((g.name || '').toLowerCase()) + '">' +
+        return '<div class="grp lvl' + lvl + (cls ? ' ' + cls : '') + (g._hasCompare ? (g._hasDiff ? ' grp-has-diff' : ' grp-no-diff') : '') + '" data-name="' + esc((g.name || '').toLowerCase()) + '">' +
             '<div class="grp-hd">' +
                 (toggle ? '<span class="do-toggle">▾</span>' : '') +
                 (badge ? '<span class="grp-badge">' + badge + '</span>' : '') +
@@ -180,6 +193,7 @@ function buildGroupsHtmlDoc(data, rule) {
             (hasBranches ? '<button id="collapseAll" type="button">Tout replier</button>' : '') +
             '<button id="toggleMembers" type="button">Masquer les membres</button>' +
             '<button id="toggleCategories" type="button">Catégoriser</button>' +
+            '<button id="toggleDiff" type="button" title="N\'afficher que les groupes ayant un écart mécanisme vs DDG">Écarts DDG</button>' +
             '<span class="count" id="count"></span>' +
         '</div>';
 
@@ -377,6 +391,9 @@ function buildGroupsHtmlDoc(data, rule) {
         .cmp-delta{display:flex;gap:12px;flex-wrap:wrap;margin-top:6px;font-size:.7rem;font-weight:700;}
         .cd-eq{color:#374151;} .cd-drop{color:#b91c1c;} .cd-add{color:#b45309;}
         #tree.hide-members .grp-cmp,#tree.hide-members .cmp-delta{display:none;}
+        /* Filtre « Écarts DDG » : ne montrer que les cartes ayant un ecart mecanisme vs DDG */
+        #tree.diff-only .grp-no-diff{display:none;}
+        .toolbar #toggleDiff.active{background:#b91c1c;color:#fff;border-color:#b91c1c;}
         .empty{color:#6b7280;font-style:italic;}
         @media print{.toolbar{display:none;}body{background:#fff;}.doc-hd,.grp{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}
     `;
@@ -555,6 +572,8 @@ function buildGroupsHtmlDoc(data, rule) {
   var tmBtn=document.getElementById('toggleMembers');
   var treeEl=document.getElementById('tree');
   if(tmBtn&&treeEl)tmBtn.addEventListener('click',function(){ var h=treeEl.classList.toggle('hide-members'); tmBtn.textContent=h?'Afficher les membres':'Masquer les membres'; });
+  var tdBtn=document.getElementById('toggleDiff');
+  if(tdBtn&&treeEl)tdBtn.addEventListener('click',function(){ var on=treeEl.classList.toggle('diff-only'); tdBtn.classList.toggle('active',on); tdBtn.textContent=on?'Tous les groupes':'Écarts DDG'; });
   var CATPAL=[['#1d4ed8','#eef4ff'],['#7c3aed','#f5f0ff'],['#be185d','#fdeff6'],['#047857','#e9faf2'],['#b45309','#fdf4e6'],['#0e7490','#e8f7fb'],['#b91c1c','#fdefef'],['#4338ca','#eff0fe'],['#4d7c0f','#f2f8e7'],['#a21caf','#fbeffc'],['#0f766e','#e7f7f5'],['#c2410c','#fdf1ea']];
   function catColor(t){ var h=0; for(var i=0;i<t.length;i++){h=(h*31+t.charCodeAt(i))>>>0;} return CATPAL[h%CATPAL.length]; }
   function categorize(on){

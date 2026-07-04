@@ -1514,8 +1514,7 @@ function highlightPowerShell(code) {
 
 // Assemble le TEXTE brut des scripts (arborescence global ▸ DO ▸ centre).
 function buildDdgScriptText(data, rule) {
-    const { filter, skipped } = buildOpathFilter(rule);
-    const dqFilter = filter.replace(/\$null/g, '`$null');   // évite l'interpolation de $null en chaîne "…"
+    const { filter, skipped } = buildOpathFilter(rule);   // filtre OPATH de base (le $null est échappé par groupe)
     const groups = data.groups || [];
     const L = [];
 
@@ -1529,7 +1528,8 @@ function buildDdgScriptText(data, rule) {
     if (skipped.length) {
         L.push(`#   - critere(s) NON traduisible(s) en OPATH, ignore(s) ici : ${skipped.map(f => FIELD_LABELS[f] || f).join(', ')}.`);
     }
-    L.push(`#   - le decoupage DO/centre est porte par -RecipientContainer (OU), pas par le filtre.`);
+    L.push(`#   - global/DO : scope par -RecipientContainer (OU). CENTRE : scope par (Office -eq '...')`);
+    L.push(`#     car Exchange Online ne resout pas les OU on-prem (hybride). Office peut etre incoherent.`);
     L.push('');
     L.push(`# Prerequis — session Exchange Online (INTERACTIF : ouvre une fenetre de connexion) :`);
     L.push(`Connect-ExchangeOnline`);
@@ -1542,22 +1542,36 @@ function buildDdgScriptText(data, rule) {
     const emit = g => {
         const ind = INDENT[g.type] || '';
         const container = g.containerDN || '';
+        const isCentre  = g.type === 'centre';
+        // Niveau 3 (centre) : les OU on-prem ne sont PAS resolues dans Exchange Online
+        // (-OrganizationalUnit/-RecipientContainer echouent). On scope par le champ Office
+        // (Bureau) dans le filtre, sans conteneur OU.
+        let groupFilter = filter;
+        if (isCentre && g.office) groupFilter = `${filter} -and (Office -eq ${opathVal(g.office)})`;
+        const dq = groupFilter.replace(/\$null/g, '`$null');
+
         const nameWarn = (g.name && g.name.length > 64) ? '   /!\\ nom > 64 caracteres (limite Exchange)' : '';
         L.push(`${ind}# -- ${TYPE_LBL[g.type] || g.type} : ${g.name}   (${g.count} membre(s))${nameWarn}`);
+        if (isCentre && !g.office) {
+            L.push(`${ind}# /!\\ aucun Bureau (Office) sur ce centre -> filtre NON restreint au centre.`);
+        }
+        if (isCentre && g.office && g.officeMismatch > 0) {
+            L.push(`${ind}# /!\\ Office incoherent : ${g.officeMismatch} membre(s) ont un Bureau != '${g.office}' -> le DDG les manquera.`);
+        }
         if (g.type === 'do' && g.multiBase) {
             L.push(`${ind}# /!\\ region multi-OU : -RecipientContainer approxime au parent « ${container} ».`);
         }
         let cmd = `${ind}New-DynamicDistributionGroup -Name "${g.name}"`;
-        if (g.mail)    cmd += ` -PrimarySmtpAddress "${g.mail}"`;
-        if (container) cmd += ` -RecipientContainer "${container}"`;
-        cmd += ` -RecipientFilter "${dqFilter}"`;
+        if (g.mail)                cmd += ` -PrimarySmtpAddress "${g.mail}"`;
+        if (!isCentre && container) cmd += ` -RecipientContainer "${container}"`;   // centre : pas d'OU (EXO)
+        cmd += ` -RecipientFilter "${dq}"`;
         L.push(cmd);
         // Équivalent Get-Recipient : un DDG n'expose PAS ses membres → on prévisualise
         // le contenu via le même filtre (lecture seule, sans créer le DDG).
         L.push(`${ind}# Voir le contenu (un DDG ne montre pas ses membres) :`);
-        let ctrl = `${ind}Get-Recipient -RecipientPreviewFilter "${dqFilter}"`;
-        if (container) ctrl += ` -OrganizationalUnit "${container}"`;
-        ctrl += ` -ResultSize Unlimited | Select-Object DisplayName,@{Name='Fonction';Expression={$_.Title}}`;
+        let ctrl = `${ind}Get-Recipient -RecipientPreviewFilter "${dq}"`;
+        if (!isCentre && container) ctrl += ` -OrganizationalUnit "${container}"`;   // centre : pas d'OU (EXO)
+        ctrl += ` -ResultSize Unlimited | Sort-Object DisplayName | Select-Object DisplayName,@{Name='Fonction';Expression={$_.Title}}`;
         L.push(ctrl);
         L.push('');
     };

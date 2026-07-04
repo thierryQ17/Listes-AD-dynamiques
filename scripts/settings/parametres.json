@@ -48,5 +48,10 @@
   },
   "server": {
     "port": 8888
+  },
+  "exchangeOnline": {
+    "appId": "586536fa-3f68-40b6-b282-a502ea328cf1",
+    "certificateThumbprint": "21500B0521947B30848D080CA75EFA4F107FF16D",
+    "organization": "aftiftim365.onmicrosoft.com"
   }
 }

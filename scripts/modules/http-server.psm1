@@ -242,6 +242,27 @@ function Start-AppServer {
             Send-Json -Body "{`"cached`":$(if($cached){'true'}else{'false'}),`"count`":$count}"
         }
 
+        # ==================== API — Exchange Online (LECTURE SEULE) ====================
+        # Test de connexion EXO (app-only certificat, runspace dedie).
+        Add-PodeRoute -Method Get -Path '/api/exo/ping' -ScriptBlock {
+            $st = Test-ExoConnection
+            Send-Json -Body (ConvertTo-Json -InputObject $st -Compress)
+        }
+        # Previsualisation d'un RecipientFilter (comme un DDG) — LECTURE SEULE, ne cree rien.
+        Add-PodeRoute -Method Post -Path '/api/exo/preview' -ScriptBlock {
+            try {
+                $body   = ConvertFrom-Json $WebEvent.Request.Body
+                $filter = "$($body.filter)"
+                $ou     = if ($body.ou) { "$($body.ou)" } else { '' }
+                if (-not $filter) { Send-Json -Body '{"ok":false,"error":"filter manquant"}' -StatusCode 400; return }
+                $members = @(Invoke-ExoRecipientPreview -Filter $filter -OrganizationalUnit $ou)
+                Send-Json -Body (ConvertTo-Json -InputObject @{ ok = $true; count = $members.Count; members = $members } -Depth 4 -Compress)
+            } catch {
+                $e = $_.Exception.Message -replace '"', "'"
+                Send-Json -Body "{`"ok`":false,`"error`":`"$e`"}" -StatusCode 500
+            }
+        }
+
         # ==================== API — CSV / sorties ====================
         Add-PodeRoute -Method Get -Path '/api/csv/read' -ScriptBlock {
             $dir  = $WebEvent.Query['dir']
@@ -558,6 +579,34 @@ function Start-AppServer {
                         }
                     }
                     $ddgGlobalMembers = & $ddgProj $ddgAll
+                    # DDG CENTRE aligné sur le VRAI script (scope par Office, pas par OU) : population par Bureau.
+                    $ddgByOffice = @{}
+                    foreach ($oGrp in ($ddgAll | Where-Object { "$($_.office)".Trim() } | Group-Object { "$($_.office)".Trim() })) {
+                        $ddgByOffice[$oGrp.Name] = & $ddgProj $oGrp.Group
+                    }
+
+                    # --- Population DDG REELLE via Exchange Online (LECTURE SEULE), NIVEAU 3 (centres) ---
+                    # 1 appel Get-Recipient pour la regle (filtre de base), partitionne par Office
+                    # (= le scope 'centre' du vrai script DDG). Repli sur la simulation locale si EXO indispo.
+                    # EXO SYNCHRONE = trop lent au chargement (~58s pour 1585 destinataires) : desactive par
+                    # defaut. La page utilise la simulation locale (alignee Office, instantanee) ; le REEL se
+                    # recupere a la demande par centre via POST /api/exo/preview. Opt-in : rule.exoLive = true.
+                    $exoByOffice = @{}; $exoError = ''; $ddgSource = 'local'
+                    if ($rule.niveau -eq 3 -and $rule.exoLive -eq $true) {
+                        try {
+                            $rPathA    = Join-Path ($global:path."r_settings" -replace '/', '\') "regles.json"
+                            $allRulesA = if (Test-Path $rPathA) { @(ConvertFrom-Json ([System.IO.File]::ReadAllText($rPathA, [System.Text.Encoding]::UTF8))) } else { @() }
+                            $opathBase = Build-OpathBaseFilter -Rule $rule -AllRules $allRulesA
+                            foreach ($eGrp in (@(Invoke-ExoRecipientPreview -Filter $opathBase) | Where-Object { "$($_.office)".Trim() } | Group-Object { "$($_.office)".Trim() })) {
+                                $exoByOffice[$eGrp.Name] = @($eGrp.Group | ForEach-Object { [ordered]@{ name = "$($_.name)"; title = "$($_.title)"; sam = "$($_.sam)" } })
+                            }
+                            $ddgSource = 'exo'
+                        } catch {
+                            $exoError = "$($_.Exception.Message)"; $ddgSource = 'local'
+                        }
+                    }
+                    # Source des populations DDG « centre » : EXO reel si dispo, sinon simulation locale.
+                    $ddgOffice = if ($ddgSource -eq 'exo') { $exoByOffice } else { $ddgByOffice }
 
                     if ($rule.niveau -eq 3) {
                         # Hiérarchie complète pour la prévisualisation (monoNiveau n'affecte que la génération CSV)
@@ -602,8 +651,14 @@ function Start-AppServer {
                                 # Indispensable quand le gabarit produit des noms identiques entre DO
                                 # (ex. "Centre AFTRAL" sans {{region}}) : la liaison DO->centre doit
                                 # se faire par cle, pas par nom, sinon chaque centre apparait sous tous les DO.
-                                $ddgCentre = if ($ddgCentreMembers.ContainsKey($cBase)) { $ddgCentreMembers[$cBase] } else { @() }
-                                $groups.Add(@{ key = $cBase; name = $cId.name; mail = $cId.mail; parent = $doBase; type = 'centre'; count = $cGrp.Group.Count; members = $centreMembers; baseLabel = $baseLabel; containerDN = $cContainer; ddgMembers = @($ddgCentre); ddgCount = @($ddgCentre).Count })
+                                # DDG niveau 3 (EXO) : scope par le champ Office (Bureau) au lieu de l'OU.
+                                # Bureau dominant du centre + nombre de membres au Bureau divergent (Office incohérent).
+                                $offGrp     = @($cGrp.Group | Where-Object { "$($_.office)".Trim() } | Group-Object { "$($_.office)".Trim() } | Sort-Object Count -Descending)
+                                $domOffice  = if ($offGrp.Count) { "$($offGrp[0].Name)" } else { '' }
+                                $offMismatch = @($cGrp.Group | Where-Object { "$($_.office)".Trim() -ne $domOffice }).Count
+                                # DDG du centre = population scopée par Office (EXO réel si dispo, sinon simulation locale).
+                                $ddgCentre  = if ($domOffice -and $ddgOffice.ContainsKey($domOffice)) { $ddgOffice[$domOffice] } else { @() }
+                                $groups.Add(@{ key = $cBase; name = $cId.name; mail = $cId.mail; parent = $doBase; type = 'centre'; count = $cGrp.Group.Count; members = $centreMembers; baseLabel = $baseLabel; containerDN = $cContainer; office = $domOffice; officeMismatch = $offMismatch; ddgMembers = @($ddgCentre); ddgCount = @($ddgCentre).Count })
                             }
                             # DDG : OU du DO. Une region multi-base (NORD+IDF) n'a pas d'OU unique -> parent commun.
                             $doContainer = if ($isMultiBase) { $adminOU } elseif ($regionCfg -and $regionCfg.bases) { @($regionCfg.bases)[0] } else { $adminOU }
@@ -654,6 +709,8 @@ function Start-AppServer {
                         niveau     = [int]$rule.niveau
                         monoNiveau = ($rule.monoNiveau -eq $true)
                         cacheTs    = $cacheTs
+                        ddgSource  = $ddgSource
+                        ddgError   = $exoError
                         groups     = @($groups)
                     }
                     Send-Json -Body (ConvertTo-Json -InputObject $result -Depth 6 -Compress)

@@ -9,6 +9,15 @@
 - Ne jamais proposer, suggérer ou écrire du code qui modifie l'AD **sauf si l'utilisateur le demande explicitement**
 - L'utilisateur introduira les opérations d'écriture (`Set-AD*`, `Add-ADGroupMember`, etc.) en temps voulu — attendre sa demande explicite avant d'en écrire
 
+## RÈGLE ABSOLUE — Exchange Online en LECTURE SEULE
+
+**Toute interaction avec Exchange Online (EXO) est STRICTEMENT en lecture seule.**
+
+- Utiliser UNIQUEMENT des cmdlets `Get-*` : `Get-Recipient`, `Get-Mailbox`, `Get-EXOMailbox`, `Get-DistributionGroup`, `Get-DistributionGroupMember`, `Get-DynamicDistributionGroup`, `Get-DynamicDistributionGroupMember`, `Get-ConnectionInformation`
+- **INTERDITS sans exception** : `New-*`, `Set-*`, `Remove-*`, `Add-*`, `Update-*`, `Enable-*`, `Disable-*`, `Rename-*` (ex. `New-DynamicDistributionGroup`, `Set-Mailbox`, `Add-DistributionGroupMember`). `New-DynamicDistributionGroup` reste du **TEXTE généré**, jamais exécuté par l'application.
+- La connexion (`Connect-ExchangeOnline`, app-only par certificat) DOIT limiter les cmdlets importés aux `Get-*` via **`-CommandName`** (jamais de cmdlet d'écriture importée).
+- Ne jamais proposer, suggérer ou écrire du code qui modifie Exchange **sauf demande explicite de l'utilisateur**.
+
 ## RÈGLE — TOUT passe par le CACHE
 
 **Aucune recherche (utilisateurs, OUs, personnes, valeurs de champs…) ne doit interroger l'AD en direct.** Toute l'application gravite autour des caches JSON locaux ; l'AD n'est interrogé QUE pour (re)construire un cache.
