@@ -8,6 +8,8 @@
 - Icône « copier » dans la gouttière gauche de CHAQUE ligne de commande (aperçu DDG
   `#ddg-code` ET modale détail de la page groupes). Commentaires/lignes vides = gouttière
   invisible (alignement). `ddgLineGutter()`, `ddgScriptToLinesHtml()`.
+- Pas d'icône de copie sur `New-DynamicDistributionGroup` (commande de création) —
+  géré dans `ddgLineGutter()`.
 - **BUG corrigé** : le handler de copie inséré dans `pageScript` (template literal de
   `groups-doc.js`) contenait `/\n+$/` → le `\n` devenait un vrai saut de ligne DANS le
   littéral regex → SyntaxError → tout le script de la page générée mort → clic `<>`

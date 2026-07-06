@@ -1704,8 +1704,10 @@ const DDG_COPY_SVG = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none
 // espace réservé (invisible) pour les commentaires / lignes vides — alignement constant.
 function ddgLineGutter(text) {
     const t = (text || '').trim();
-    const isCmd = t !== '' && t[0] !== '#';
-    return isCmd
+    // Icône de copie sur les commandes, SAUF la création (New-DynamicDistributionGroup) ;
+    // rien sur les commentaires / lignes vides. Gouttière invisible sinon (alignement).
+    const isCopyable = t !== '' && t[0] !== '#' && !t.startsWith('New-DynamicDistributionGroup');
+    return isCopyable
         ? `<button class="ddg-line-copy" type="button" tabindex="-1" title="Copier cette commande" aria-label="Copier cette commande">${DDG_COPY_SVG}</button>`
         : `<span class="ddg-line-gutter" aria-hidden="true"></span>`;
 }
