@@ -91,10 +91,13 @@ async function setMode(mode) {
     if (table) table.classList.toggle('mode-ecarts', mode === 'ecarts');
 
     if (mode === 'ecarts') {
+        // Arbre : ne garder que les sites ayant des écarts (compteurs = nb d'écarts).
+        applyEcartTreeFilter();
         // Défaut : TOUS les écarts, toutes les OU, aucun filtre de site.
         showAllEcarts();
     } else {
-        // Retour AD : le tri « Statut » n'existe plus ; réafficher le site courant s'il y en a un.
+        // Retour AD : restaurer l'arbre complet + compteurs utilisateurs.
+        clearEcartTreeFilter();
         state.ecartsAll = false;
         if (state.sortCol === 'status') { state.sortCol = 'displayName'; state.sortDir = 'asc'; resetSortIcons(); }
         updateTreeSelection();
@@ -146,6 +149,54 @@ function reRenderCurrent() {
     document.getElementById('user-count').textContent = fq
         ? `${shownFiltered} / ${shownTotal} ${unit()}`
         : `${shownTotal} ${unit()}`;
+}
+
+// ── Arbre en mode Écarts : ne montrer que les sites ayant des écarts ─────────
+// Rattache chaque compte en écart à son site via le suffixe de son ouDn
+// (l'ouDn du compte se termine toujours par le DN de son centre).
+function ecartSiteCounts() {
+    const counts = {};
+    const dns = [];
+    document.querySelectorAll('.tree-site').forEach(el => dns.push(el.dataset.dn));
+    for (const u of state.ecartUsers) {
+        const od = u.ouDn || '';
+        for (const dn of dns) {
+            if (dn && od.endsWith(dn)) { counts[dn] = (counts[dn] || 0) + 1; break; }
+        }
+    }
+    return counts;
+}
+
+function applyEcartTreeFilter() {
+    const counts = ecartSiteCounts();
+    document.querySelectorAll('.tree-region').forEach(region => {
+        let regionTotal = 0;
+        region.querySelectorAll('.tree-site').forEach(el => {
+            const n = counts[el.dataset.dn] || 0;
+            regionTotal += n;
+            el.classList.toggle('ecart-empty', n === 0);
+            const badge = el.querySelector('.site-count');
+            if (badge) {
+                if (badge.dataset.adCount === undefined) badge.dataset.adCount = badge.textContent;
+                badge.textContent = n;
+                badge.classList.add('is-ecart-count');
+            }
+        });
+        region.classList.toggle('ecart-empty', regionTotal === 0);
+        const rc = region.querySelector('.region-count');
+        if (rc) {
+            if (rc.dataset.adCount === undefined) rc.dataset.adCount = rc.textContent;
+            rc.textContent = regionTotal;
+            rc.classList.add('is-ecart-count');
+        }
+    });
+}
+
+function clearEcartTreeFilter() {
+    document.querySelectorAll('.tree-site.ecart-empty, .tree-region.ecart-empty')
+        .forEach(el => el.classList.remove('ecart-empty'));
+    document.querySelectorAll('.site-count.is-ecart-count[data-ad-count], .region-count.is-ecart-count[data-ad-count]')
+        .forEach(b => { b.textContent = b.dataset.adCount; delete b.dataset.adCount; b.classList.remove('is-ecart-count'); });
 }
 
 const warmupDone    = new Set();
@@ -384,10 +435,6 @@ document.addEventListener('DOMContentLoaded', () => {
     window.addEventListener('beforeunload', saveSnapshot);
 
     document.getElementById('refresh-all-btn').addEventListener('click', refreshAllCache);
-
-    // Ouvre la page complète « Écarts Ville (OU) / Bureau » (vue globale groupée) dans un onglet.
-    const ecartsBtn = document.getElementById('ecarts-btn');
-    if (ecartsBtn) ecartsBtn.addEventListener('click', () => window.open('/ecarts', '_blank'));
 
     setupModeToggle();
 
@@ -758,6 +805,7 @@ async function refreshAllCache() {
         // Si l'on est en mode Écarts, recalculer et réafficher tout de suite.
         if (state.mode === 'ecarts') {
             try { await ensureEcartsLoaded(); } catch { /* réessai au prochain rendu */ }
+            applyEcartTreeFilter();
             reRenderCurrent();
         }
 
@@ -1438,7 +1486,13 @@ function filterTree(q) {
             });
         });
         updateToggleTreeBtn();
-        restoreMainPanel();
+        if (state.mode === 'ecarts') {
+            // Réappliquer le filtre « sites avec écarts » puis réafficher la vue Écarts.
+            applyEcartTreeFilter();
+            reRenderCurrent();
+        } else {
+            restoreMainPanel();
+        }
     }
 }
 

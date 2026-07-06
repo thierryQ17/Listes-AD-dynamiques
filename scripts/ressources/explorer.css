@@ -900,6 +900,14 @@ tr.row-selected td {
 /* Le menu « Colonnes » ne s'applique pas au jeu de colonnes figé du mode Écarts. */
 body.mode-ecarts .col-menu-wrap { display: none; }
 
+/* Mode Écarts : dans l'arbre, ne montrer que les sites (et DO) ayant des écarts. */
+body.mode-ecarts .tree-site.ecart-empty,
+body.mode-ecarts .tree-region.ecart-empty { display: none; }
+/* Compteurs de l'arbre en mode Écarts : teinte ambre = nombre d'écarts. */
+.site-count.is-ecart-count,
+.region-count.is-ecart-count { background: #fef3c7; color: #b45309; }
+.tree-site.selected .site-count.is-ecart-count { background: #fde68a; color: #92400e; }
+
 /* Badges de statut d'écart */
 .badge-status {
     display: inline-block;

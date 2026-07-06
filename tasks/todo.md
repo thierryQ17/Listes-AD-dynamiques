@@ -18,8 +18,14 @@
   depuis `/api/ecarts/office-ou` (aucune logique d'écart dupliquée en JS). Invalidé au
   rebuild de cache. `modeList()` filtre, `ecartStatusOf()` lit le statut.
 - Colonne `col-status` (8e, `colspan` passés à 8) masquée hors mode Écarts via CSS.
-- Revert de l'essai précédent : onglet `Écarts` retiré du shell ; bouton « ⚠ Écarts
-  OU/Bureau » rouvre la page complète `/ecarts` (vue globale groupée, conservée).
+- **Arbre en mode Écarts : ne montre QUE les sites ayant des écarts** (`ecartSiteCounts()`
+  rattache chaque compte à son site via le suffixe de l'ouDn ; `applyEcartTreeFilter()` /
+  `clearEcartTreeFilter()`). Sites/DO à 0 écart masqués (`.ecart-empty`) ; badges = nb
+  d'écarts (ambre). Les écarts « hors région » (sans site dans l'arbre) restent visibles
+  dans la vue globale « toutes les OU ».
+- Bouton « ⚠ Écarts OU/Bureau » (`#ecarts-btn`) **retiré** de la sidebar.
+- Revert de l'essai précédent : onglet `Écarts` retiré du shell. Page `/ecarts`
+  conservée (accessible en direct) mais plus liée depuis l'Explorateur.
 - Fix CSS partagé conservé : `.tree-search-clear[hidden]`/`.user-filter-clear[hidden]`.
 - Vérifié CDP + capture : AD (105 util., 7 col.) ↔ Écarts (2 écarts, 4 col., badges,
   surbrillance Bureau, Détail, tri Statut) ↔ retour AD OK.
