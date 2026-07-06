@@ -1,5 +1,19 @@
 # TODO
 
+## Terminé — 2026-07-06 (suite)
+
+### DDG : Office dans Get-Recipient + copie ligne-à-ligne
+- `Select-Object … , Office` ajouté aux 2 générations `Get-Recipient` (`buildDdgScriptText`
+  ligne aperçu + `ddgScriptForGroup` modale).
+- Icône « copier » dans la gouttière gauche de CHAQUE ligne de commande (aperçu DDG
+  `#ddg-code` ET modale détail de la page groupes). Commentaires/lignes vides = gouttière
+  invisible (alignement). `ddgLineGutter()`, `ddgScriptToLinesHtml()`.
+- **BUG corrigé** : le handler de copie inséré dans `pageScript` (template literal de
+  `groups-doc.js`) contenait `/\n+$/` → le `\n` devenait un vrai saut de ligne DANS le
+  littéral regex → SyntaxError → tout le script de la page générée mort → clic `<>`
+  sans effet. Remplacé par `.trim()`. Vérifié : le pageScript généré parse, la modale
+  s'ouvre (VISIBLE), 5 icônes de copie présentes.
+
 ## Terminé — 2026-07-06
 
 ### Mode AD / Écarts DANS l'Explorateur (bascule 2 boutons)

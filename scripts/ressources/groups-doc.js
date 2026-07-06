@@ -283,6 +283,12 @@ function buildGroupsHtmlDoc(data, rule) {
         .ddg-section-hd{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#6b7280;margin:14px 0 6px;}
         .ddg-modal-code{margin:0;padding:14px 16px;background:#1e1e2e;color:#cdd6f4;border:1px solid #2d2d3f;border-radius:8px;font-family:'Cascadia Code','Consolas',monospace;font-size:12px;line-height:1.55;white-space:pre;overflow:auto;}
         .ps-cmd{color:#f9e2af;} .ps-param{color:#89b4fa;} .ps-op{color:#f38ba8;} .ps-str{color:#a6e3a1;} .ps-var{color:#fab387;} .ps-comment{color:#6c7086;font-style:italic;}
+        .ddg-modal-code .ddg-line{display:inline;}
+        .ddg-line-copy,.ddg-line-gutter{display:inline-block;width:15px;margin-right:5px;vertical-align:-2px;}
+        .ddg-line-gutter{visibility:hidden;}
+        .ddg-line-copy{padding:0;border:none;background:none;cursor:pointer;color:#6c7086;opacity:.5;transition:opacity .12s,color .12s;}
+        .ddg-line-copy:hover{opacity:1;color:#89b4fa;}
+        .ddg-line-copy.copied{opacity:1;color:#a6e3a1;}
         .ddg-ex-grp{margin:8px 0;}
         .ddg-ex-hd{font-size:12.5px;font-weight:700;margin-bottom:4px;}
         .ddg-ex-hd.drop{color:#b91c1c;} .ddg-ex-hd.add{color:#b45309;}
@@ -705,6 +711,15 @@ function buildGroupsHtmlDoc(data, rule) {
     ddgModal.removeAttribute('hidden');
   }
   [].slice.call(document.querySelectorAll('.grp-ddg-btn')).forEach(function(b){ b.addEventListener('click',function(e){ e.stopPropagation(); openDdg(b.getAttribute('data-ddgkey')); }); });
+  // Copie ligne-à-ligne : clic sur l'icône « copier » de la gouttière gauche.
+  var ddgModalCodeEl=document.getElementById('ddgModalCode');
+  if(ddgModalCodeEl)ddgModalCodeEl.addEventListener('click',function(e){
+    var btn=e.target.closest?e.target.closest('.ddg-line-copy'):null; if(!btn)return;
+    var line=btn.closest('.ddg-line'); if(!line)return;
+    var text=line.textContent.trim(); if(!text)return;
+    try{ if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(text); }catch(err){}
+    btn.classList.add('copied'); setTimeout(function(){btn.classList.remove('copied');},1000);
+  });
   var ddgCloseBtn=document.getElementById('ddgClose'); if(ddgCloseBtn)ddgCloseBtn.addEventListener('click',closeDdg);
   if(ddgModal)ddgModal.addEventListener('click',function(e){ if(e.target===ddgModal)closeDdg(); });
   document.addEventListener('keydown',function(e){ if(e.key==='Escape')closeDdg(); });

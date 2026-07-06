@@ -894,6 +894,21 @@ function renderForm(rule) {
         );
     });
 
+    // DDG : copie ligne-à-ligne (icône « copier » de la gouttière gauche).
+    // Délégué sur le <pre> (recréé à chaque renderForm → pas d'accumulation d'écouteurs).
+    document.getElementById('ddg-code')?.addEventListener('click', (e) => {
+        const btn = e.target.closest && e.target.closest('.ddg-line-copy');
+        if (!btn) return;
+        const line = btn.closest('.ddg-line');
+        if (!line) return;
+        const text = line.textContent.replace(/\n+$/, '').replace(/^\s+/, '');
+        if (!text) return;
+        navigator.clipboard?.writeText(text).then(
+            () => { btn.classList.add('copied'); showToast('Commande copiée', 'success'); setTimeout(() => btn.classList.remove('copied'), 1000); },
+            () => showToast('Copie impossible', 'error'),
+        );
+    });
+
     // DDG : boutons filtres New- / Set- / Get- / Get-Recipient (affiche/masque les lignes + commentaires)
     document.querySelectorAll('.ddg-filter-btn').forEach(btn => {
         const cat = btn.dataset.cat;
@@ -1632,7 +1647,7 @@ function buildDdgScriptText(data, rule) {
         L.push({ cat: 'recipient', text: `${ind}# Voir le contenu (un DDG ne montre pas ses membres) :` });
         let ctrl = `${ind}Get-Recipient -RecipientPreviewFilter "${dq}"`;
         if (!isCentre && container) ctrl += ` -OrganizationalUnit "${container}"`;   // centre : pas d'OU (EXO)
-        ctrl += ` -ResultSize Unlimited | Sort-Object DisplayName | Select-Object DisplayName,@{Name='Fonction';Expression={$_.Title}}`;
+        ctrl += ` -ResultSize Unlimited | Sort-Object DisplayName | Select-Object DisplayName,@{Name='Fonction';Expression={$_.Title}}, Office`;
         L.push({ cat: 'recipient', text: ctrl });
         L.push('');
     };
@@ -1669,7 +1684,7 @@ function ddgScriptForGroup(g, rule) {
     L.push(`# Voir le contenu (un DDG ne montre pas ses membres) :`);
     let ctrl = `Get-Recipient -RecipientPreviewFilter "${dq}"`;
     if (!isCentre && g.containerDN) ctrl += ` -OrganizationalUnit "${g.containerDN}"`;
-    ctrl += ` -ResultSize Unlimited | Sort-Object DisplayName | Select-Object DisplayName,@{Name='Fonction';Expression={$_.Title}}`;
+    ctrl += ` -ResultSize Unlimited | Sort-Object DisplayName | Select-Object DisplayName,@{Name='Fonction';Expression={$_.Title}}, Office`;
     L.push(ctrl);
     return L.join('\n');
 }
@@ -1678,15 +1693,35 @@ function ddgScriptForGroup(g, rule) {
 function attachDdgScripts(data, rule) {
     data._ddgScripts = {};
     (data.groups || []).filter(g => g.type === 'centre').forEach(g => {
-        data._ddgScripts[g.key ?? g.name] = highlightPowerShell(ddgScriptForGroup(g, rule));   // HTML déjà colorié
+        data._ddgScripts[g.key ?? g.name] = ddgScriptToLinesHtml(ddgScriptForGroup(g, rule));   // HTML colorié + copie par ligne
     });
+}
+
+// Icône « copier » (contour) pour la copie ligne-à-ligne des commandes générées.
+const DDG_COPY_SVG = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
+
+// Gouttière gauche de chaque ligne : bouton « copier » pour une commande,
+// espace réservé (invisible) pour les commentaires / lignes vides — alignement constant.
+function ddgLineGutter(text) {
+    const t = (text || '').trim();
+    const isCmd = t !== '' && t[0] !== '#';
+    return isCmd
+        ? `<button class="ddg-line-copy" type="button" tabindex="-1" title="Copier cette commande" aria-label="Copier cette commande">${DDG_COPY_SVG}</button>`
+        : `<span class="ddg-line-gutter" aria-hidden="true"></span>`;
 }
 
 // Rend chaque ligne { cat, text } comme un <span> catégorisé (avec son \n interne) :
 // masquer un <span> retire aussi son saut de ligne → pas de trou dans le rendu.
 function ddgLinesToHtml(lines) {
     return lines.map(o =>
-        `<span class="ddg-line ddg-cat-${o.cat}">${highlightPowerShell(o.text)}\n</span>`
+        `<span class="ddg-line ddg-cat-${o.cat}">${ddgLineGutter(o.text)}${highlightPowerShell(o.text)}\n</span>`
+    ).join('');
+}
+
+// Variante pour un script « brut » (chaîne \n) — modale détail DDG de la page groupes.
+function ddgScriptToLinesHtml(script) {
+    return String(script).split('\n').map(raw =>
+        `<span class="ddg-line">${ddgLineGutter(raw)}${highlightPowerShell(raw)}\n</span>`
     ).join('');
 }
 // Applique l'état des filtres (ddgVisible) au <pre> via des classes CSS — aucun re-render.
