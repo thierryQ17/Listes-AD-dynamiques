@@ -279,7 +279,7 @@ function buildGroupsHtmlDoc(data, rule) {
         .ddg-box{background:#fff;color:#1f2430;border-radius:12px;border-top:4px solid #6d28d9;box-shadow:0 16px 50px rgba(0,0,0,.35);width:min(1320px,97vw);max-height:92vh;overflow:auto;padding:20px 26px;position:relative;}
         .ddg-close{position:absolute;top:10px;right:14px;background:none;border:none;font-size:22px;line-height:1;color:#6b7280;cursor:pointer;}
         .ddg-close:hover{color:#111827;}
-        .ddg-pwsh-btn{position:absolute;top:9px;right:44px;width:30px;height:26px;display:inline-flex;align-items:center;justify-content:center;padding:0;border:1px solid #d1d5db;border-radius:6px;background:#fff;color:#4b5563;cursor:pointer;}
+        .ddg-pwsh-btn{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;width:24px;height:21px;margin-left:8px;padding:0;border:1px solid #d1d5db;border-radius:5px;background:#fff;color:#4b5563;cursor:pointer;}
         .ddg-pwsh-btn:hover{background:#f3f4f6;color:#111827;border-color:#9ca3af;}
         .ddg-modal-title{font-size:15px;font-weight:700;color:#4c1d95;margin:0 30px 12px 0;}
         .ddg-section-hd{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#6b7280;margin:14px 0 6px;}
@@ -784,9 +784,10 @@ function buildGroupsHtmlDoc(data, rule) {
         '</div></div>' +
         '<div class="ddg-modal" id="ddgModal" hidden><div class="ddg-box">' +
             '<button class="ddg-close" id="ddgClose" type="button" aria-label="Fermer">×</button>' +
-            '<button class="ddg-pwsh-btn" id="ddgPwshBtn" type="button" title="Ouvrir une fenêtre PowerShell 7"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M6 9l3 3-3 3"/><line x1="12" y1="15" x2="16" y2="15"/></svg></button>' +
             '<div class="ddg-modal-title" id="ddgModalTitle"></div>' +
-            '<div class="ddg-section-hd">Script PowerShell (à copier — texte seul, aucune exécution)</div>' +
+            '<div class="ddg-section-hd">Script PowerShell (à copier — texte seul, aucune exécution)' +
+                '<button class="ddg-pwsh-btn" id="ddgPwshBtn" type="button" title="Ouvrir une fenêtre PowerShell 7"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M6 9l3 3-3 3"/><line x1="12" y1="15" x2="16" y2="15"/></svg></button>' +
+            '</div>' +
             '<pre class="ddg-modal-code" id="ddgModalCode"></pre>' +
             '<div class="ddg-section-hd" id="ddgExplainHd">Écarts — pourquoi&nbsp;?</div>' +
             '<div class="ddg-explain" id="ddgExplain"></div>' +
