@@ -10,6 +10,12 @@
   invisible (alignement). `ddgLineGutter()`, `ddgScriptToLinesHtml()`.
 - Pas d'icône de copie sur `New-DynamicDistributionGroup` (commande de création) —
   géré dans `ddgLineGutter()`.
+- **Icône « ouvrir PowerShell 7 »** : dans l'en-tête de la modale détail (page groupes)
+  ET dans l'onglet DDG (à gauche du bouton « Copier »). Route backend
+  `POST /api/open-pwsh` → `Start-Process pwsh.exe` (fenêtre interactive vierge, aucune
+  commande passée). ⚠ nécessite un REDÉMARRAGE du serveur (route Pode chargée au démarrage).
+  Piège template literal ÉVITÉ : pas de `\'` dans le handler injecté dans `pageScript`
+  (le `\'` deviendrait `'` et casserait la string générée) → formulation sans apostrophe.
 - **BUG corrigé** : le handler de copie inséré dans `pageScript` (template literal de
   `groups-doc.js`) contenait `/\n+$/` → le `\n` devenait un vrai saut de ligne DANS le
   littéral regex → SyntaxError → tout le script de la page générée mort → clic `<>`

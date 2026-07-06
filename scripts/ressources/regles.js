@@ -768,6 +768,7 @@ function renderForm(rule) {
                     `<button type="button" class="ddg-filter-btn active" data-cat="recipient" aria-pressed="true" title="Afficher/masquer les lignes Get-Recipient (+ commentaire)">Get-Recipient</button>` +
                 `</div>` +
                 `<span class="ddg-toolbar-note">Texte uniquement — aucune action AD/Exchange. À copier et exécuter manuellement.</span>` +
+                `<button type="button" class="ddg-pwsh-btn" id="ddg-pwsh-btn" title="Ouvrir une fenêtre PowerShell 7"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M6 9l3 3-3 3"/><line x1="12" y1="15" x2="16" y2="15"/></svg></button>` +
                 `<button type="button" class="ddg-copy-btn" id="ddg-copy-btn" title="Copier les lignes affichées">Copier</button>` +
             `</div>` +
             `<pre class="ddg-code" id="ddg-code"><span class="ddg-hint">Chargement…</span></pre>` +
@@ -893,6 +894,9 @@ function renderForm(rule) {
             () => showToast('Copie impossible', 'error'),
         );
     });
+
+    // DDG : ouvrir une fenêtre PowerShell 7 (pour coller/exécuter les scripts).
+    document.getElementById('ddg-pwsh-btn')?.addEventListener('click', openPwsh);
 
     // DDG : copie ligne-à-ligne (icône « copier » de la gouttière gauche).
     // Délégué sur le <pre> (recréé à chaque renderForm → pas d'accumulation d'écouteurs).
@@ -1697,8 +1701,19 @@ function attachDdgScripts(data, rule) {
     });
 }
 
+// Demande au backend d'ouvrir une fenêtre PowerShell 7 locale (pwsh.exe).
+function openPwsh() {
+    fetch('/api/open-pwsh', { method: 'POST' })
+        .then(r => r.json())
+        .then(d => {
+            if (d && d.ok) showToast('Fenêtre PowerShell 7 ouverte', 'success');
+            else showToast('PowerShell 7 : ' + ((d && d.error) || 'ouverture impossible'), 'error');
+        })
+        .catch(() => showToast('Impossible d\'ouvrir PowerShell 7', 'error'));
+}
+
 // Icône « copier » (contour) pour la copie ligne-à-ligne des commandes générées.
-const DDG_COPY_SVG = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
+const DDG_COPY_SVG ='<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
 
 // Gouttière gauche de chaque ligne : bouton « copier » pour une commande,
 // espace réservé (invisible) pour les commentaires / lignes vides — alignement constant.

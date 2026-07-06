@@ -807,6 +807,28 @@ function Start-AppServer {
             }
         }
 
+        # Ouvre une fenêtre PowerShell 7 (pwsh.exe) sur la machine locale — confort pour
+        # coller/exécuter manuellement les scripts DDG. AUCUNE commande n'est passée à pwsh
+        # (fenêtre interactive vierge) : pas d'injection, aucune action AD/Exchange.
+        Add-PodeRoute -Method Post -Path '/api/open-pwsh' -ScriptBlock {
+            try {
+                $exe = (Get-Command pwsh.exe -ErrorAction SilentlyContinue).Source
+                if (-not $exe) {
+                    foreach ($p in @(
+                        (Join-Path $env:ProgramFiles 'PowerShell\7\pwsh.exe'),
+                        (Join-Path ${env:ProgramFiles(x86)} 'PowerShell\7\pwsh.exe'),
+                        (Join-Path $env:LOCALAPPDATA 'Microsoft\PowerShell\7\pwsh.exe')
+                    )) { if ($p -and (Test-Path $p)) { $exe = $p; break } }
+                }
+                if (-not $exe -or -not (Test-Path $exe)) { throw 'PowerShell 7 (pwsh.exe) introuvable' }
+                Start-Process -FilePath $exe -WorkingDirectory $env:USERPROFILE
+                Send-Json -Body '{"ok":true}'
+            } catch {
+                $e = $_.Exception.Message -replace '"', "'"
+                Send-Json -Body "{`"ok`":false,`"error`":`"$e`"}" -StatusCode 500
+            }
+        }
+
         # ==================== API — Cache HTML des pages « GROUPES » ====================
         # Cache PAR PAGE : chaque règle produit <label>.html + <label>.sig (sa signature).
         # Une page est réutilisée tant que sa signature (version + cache AD + règle) n'a pas changé.

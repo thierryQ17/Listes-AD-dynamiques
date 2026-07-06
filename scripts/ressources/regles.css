@@ -2726,6 +2726,15 @@ body { overflow: hidden; }
     border: none; transition: filter .12s;
 }
 .ddg-copy-btn:hover { filter: brightness(1.08); }
+.ddg-pwsh-btn {
+    flex-shrink: 0; cursor: pointer;
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 32px; height: 30px; padding: 0;
+    border-radius: 6px; border: 1px solid var(--border, #d1d5db);
+    background: #fff; color: #4b5563;
+    transition: background .12s, color .12s, border-color .12s;
+}
+.ddg-pwsh-btn:hover { background: #f3f4f6; color: #1f2937; border-color: #9ca3af; }
 
 /* Filtres d'affichage des lignes (New- / Set- / Get- / Get-Recipient) */
 .ddg-filter { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
