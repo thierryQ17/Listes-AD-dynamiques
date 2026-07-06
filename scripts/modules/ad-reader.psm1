@@ -272,6 +272,138 @@ function Get-OUComponents {
     return @($out)
 }
 
+function Get-NormalizedLabel {
+    # Normalise un libellé pour comparaison ville/bureau :
+    # MAJUSCULES + suppression des accents/diacritiques + on ne garde que A-Z0-9.
+    #   "Artigues-pres-Bordeaux" -> "ARTIGUESPRESBORDEAUX"
+    #   "ARTIGUES PRES B"        -> "ARTIGUESPRESB"
+    param([string]$Value)
+    if ([string]::IsNullOrWhiteSpace($Value)) { return '' }
+    $upper = $Value.ToUpperInvariant()
+    $decomposed = $upper.Normalize([System.Text.NormalizationForm]::FormD)
+    $sb = [System.Text.StringBuilder]::new()
+    foreach ($ch in $decomposed.ToCharArray()) {
+        if ([System.Globalization.CharUnicodeInfo]::GetUnicodeCategory($ch) -ne [System.Globalization.UnicodeCategory]::NonSpacingMark) {
+            [void]$sb.Append($ch)
+        }
+    }
+    return ($sb.ToString() -replace '[^A-Z0-9]', '')
+}
+
+function Get-OfficeOuEcarts {
+    # LECTURE CACHE UNIQUEMENT — aucun appel AD.
+    # Parcourt _users_global.json et relève les écarts entre la Ville (déduite de l'OU
+    # du DN) et le Bureau (champ office). Regroupe en arbre : DO (région, comme le menu)
+    # -> Ville (OU) -> lignes { displayName | villeOU | office | status }.
+    #
+    # Règle de comparaison (labels normalisés, cf. Get-NormalizedLabel) :
+    #   - office vide                                   -> 'manquant'
+    #   - normOffice == normVille                       -> identique (ignoré)
+    #   - l'un préfixe de l'autre (troncature du champ) -> identique (ignoré)
+    #   - sinon                                         -> 'ecart'
+    $users = @(Get-AllUsersFromCache)
+    $rows  = [System.Collections.Generic.List[object]]::new()
+    $scanned = 0
+
+    foreach ($u in $users) {
+        if (Test-UserExcluded -User $u) { continue }
+        $dn = "$($u.dn)"
+        if (-not $dn) { $dn = "$($u.ouDn)" }   # tolérance si un cache porte ouDn au lieu de dn
+        $villeOU = Get-CentreFromDN -DN $dn
+        if ([string]::IsNullOrWhiteSpace($villeOU)) { continue }  # OU sans ville exploitable
+        $scanned++
+
+        $office = "$($u.office)"
+        $do     = Get-RegionFromDN -DN $dn
+        if ([string]::IsNullOrWhiteSpace($do)) { $do = '(hors région)' }
+
+        $normVille  = Get-NormalizedLabel $villeOU
+        $normOffice = Get-NormalizedLabel $office
+
+        $status = $null
+        if ($normOffice -eq '') {
+            $status = 'manquant'
+        } elseif ($normOffice -eq $normVille) {
+            continue
+        } elseif ($normVille.StartsWith($normOffice) -or $normOffice.StartsWith($normVille)) {
+            continue
+        } else {
+            $status = 'ecart'
+        }
+
+        # Objet « user » complet pour le panneau Détail (repris à l'identique de l'Explorateur).
+        # Fallbacks pour un cache global pas encore reconstruit (champs ajoutés récemment) :
+        #   - ouDn : dérivé du dn si absent
+        #   - proxyAddresses : synthétisé depuis primarySmtpAddress si absent
+        $ouDn = if ($u.ouDn) { "$($u.ouDn)" } else { ($dn -replace '^CN=[^,]+,', '') }
+        $proxies = @($u.proxyAddresses | Where-Object { $_ })
+        if ($proxies.Count -eq 0 -and $u.primarySmtpAddress) { $proxies = @("SMTP:$($u.primarySmtpAddress)") }
+        $detail = [ordered]@{
+            displayName         = "$($u.displayName)"
+            samAccountName      = "$($u.samAccountName)"
+            enabled             = if ($null -ne $u.enabled) { [bool]$u.enabled } else { $true }
+            ouDn                = $ouDn
+            office              = $office
+            title               = "$($u.title)"
+            department          = "$($u.department)"
+            company             = "$($u.company)"
+            employeeNumber      = "$($u.employeeNumber)"
+            manager             = "$($u.manager)"
+            userPrincipalName   = "$($u.userPrincipalName)"
+            type                = "$($u.type)"
+            extensionAttribute1 = "$($u.extensionAttribute1)"
+            mail                = "$($u.mail)"
+            postalCode          = "$($u.postalCode)"
+            streetAddress       = "$($u.streetAddress)"
+            description         = "$($u.description)"
+            proxyAddresses      = [string[]]$proxies
+        }
+
+        $rows.Add([PSCustomObject]@{
+            do          = $do
+            villeOU     = $villeOU
+            displayName = "$($u.displayName)"
+            office      = $office
+            status      = $status
+            user        = $detail
+        })
+    }
+
+    # Construction de l'arbre DO -> Ville -> lignes
+    $tree = [System.Collections.Generic.List[object]]::new()
+    foreach ($doGroup in ($rows | Group-Object do | Sort-Object Name)) {
+        $sites = [System.Collections.Generic.List[object]]::new()
+        foreach ($villeGroup in ($doGroup.Group | Group-Object villeOU | Sort-Object Name)) {
+            $sites.Add([ordered]@{
+                ville = $villeGroup.Name
+                count = $villeGroup.Count
+                rows  = @($villeGroup.Group | Sort-Object displayName | ForEach-Object {
+                    [ordered]@{
+                        displayName = $_.displayName
+                        villeOU     = $_.villeOU
+                        office      = $_.office
+                        status      = $_.status
+                        user        = $_.user
+                    }
+                })
+            })
+        }
+        $tree.Add([ordered]@{
+            do    = $doGroup.Name
+            count = $doGroup.Count
+            sites = @($sites)
+        })
+    }
+
+    return [ordered]@{
+        generatedAt = (Get-Date).ToString('yyyy-MM-dd HH:mm:ss')
+        scanned     = $scanned
+        ecartCount  = $rows.Count
+        manquantCount = @($rows | Where-Object { $_.status -eq 'manquant' }).Count
+        tree        = @($tree)
+    }
+}
+
 function Get-GlobalUsersCachePath {
     $scriptsDir = Split-Path ($global:path."r_settings" -replace '/', '\') -Parent
     $cacheDir   = Join-Path $scriptsDir "cache"
@@ -310,7 +442,9 @@ function Build-GlobalUsersCache {
         SearchBase  = $searchBase
         Credential  = $global:AD_credential
         Properties  = @('SamAccountName','Mail','DisplayName','Title','Department','Office',
-                        'extensionAttribute1','Description','ProxyAddresses')
+                        'extensionAttribute1','Description','ProxyAddresses',
+                        'Company','EmployeeNumber','Manager','UserPrincipalName','Type',
+                        'PostalCode','StreetAddress','Enabled')
         ErrorAction = 'Stop'
     }
     $users = @(Get-ADUser @adParams)
@@ -328,6 +462,7 @@ function Build-GlobalUsersCache {
         if ([string]::IsNullOrWhiteSpace($primary) -or [string]::IsNullOrWhiteSpace($sam)) { return }
         [ordered]@{
             dn                  = "$($u.DistinguishedName)"
+            ouDn                = ($u.DistinguishedName -replace '^CN=[^,]+,', '')
             displayName         = if ($u.DisplayName)           { "$($u.DisplayName)"           } else { $sam }
             samAccountName      = $sam
             primarySmtpAddress  = $primary
@@ -337,6 +472,15 @@ function Build-GlobalUsersCache {
             office              = if ($u.Office)                 { "$($u.Office)"                 } else { '' }
             extensionAttribute1 = if ($u.extensionAttribute1)   { "$($u.extensionAttribute1)"   } else { '' }
             description         = if ($u.Description)           { "$($u.Description)"           } else { '' }
+            company             = if ($u.Company)               { "$($u.Company)"               } else { '' }
+            employeeNumber      = if ($u.EmployeeNumber)         { "$($u.EmployeeNumber)"         } else { '' }
+            manager             = if ($u.Manager -match '^CN=([^,]+)') { $Matches[1] } elseif ($u.Manager) { "$($u.Manager)" } else { '' }
+            userPrincipalName   = if ($u.UserPrincipalName)     { "$($u.UserPrincipalName)"     } else { '' }
+            type                = if ($u.Type)                   { "$($u.Type)"                   } else { '' }
+            postalCode          = if ($u.PostalCode)             { "$($u.PostalCode)"             } else { '' }
+            streetAddress       = if ($u.StreetAddress)         { "$($u.StreetAddress)"         } else { '' }
+            enabled             = [bool]$u.Enabled
+            proxyAddresses      = [string[]]@($u.ProxyAddresses | Where-Object { $_ } | ForEach-Object { [string]$_ })
         }
     })
 
@@ -344,7 +488,7 @@ function Build-GlobalUsersCache {
     $withAnyProxy = @($users | Where-Object { @($_.ProxyAddresses).Count -gt 0 }).Count
     add-msg -msg "  [UsersCache] diag: $withAnyProxy/$($users.Count) ont des proxyAddresses ; $($records.Count) avec SMTP: primaire (+ samAccountName)." -foregroundColor DarkYellow -quelType writeHost
     add-msg -msg "  [UsersCache] $($records.Count) comptes avec BAL (primarySmtpAddress + samAccountName) conservés sur $($users.Count) actifs." -foregroundColor Cyan -quelType writeHost
-    $json = ConvertTo-Json -InputObject @($records) -Depth 3 -Compress
+    $json = ConvertTo-Json -InputObject @($records) -Depth 4 -Compress
     $cachePath = Get-GlobalUsersCachePath
     [System.IO.File]::WriteAllText($cachePath, $json, [System.Text.Encoding]::UTF8)
     add-msg -msg "  [UsersCache] Fichier JSON sauvegardé ($([Math]::Round($json.Length/1kb)) KB) → $cachePath" -foregroundColor Green -quelType writeHost
@@ -354,56 +498,54 @@ function Build-GlobalUsersCache {
 function Get-OUSiteUsers {
     param([Parameter(Mandatory)][string]$SiteDN)
 
-    try {
-        $usersOU = Get-ADOrganizationalUnit -Filter "Name -eq 'Utilisateurs'" `
-            -SearchBase $SiteDN -SearchScope OneLevel `
-            -Credential $global:AD_credential -ErrorAction SilentlyContinue
+    # Recherche TOUS les comptes utilisateurs sous le site en Subtree, sans dépendre
+    # d'une sous-OU nommée exactement « Utilisateurs » (fragile : nommage/imbrication).
+    # Get-ADUser ne renvoie que des objets user → les OU Desktops/Laptops (ordinateurs)
+    # sont naturellement exclues ; le filtre SMTP ci-dessous ne garde que les BAL.
+    #
+    # IMPÉRATIF (anti-régression Gennevilliers & co.) : sur erreur AD, on LAISSE REMONTER
+    # l'exception (-ErrorAction Stop, pas de catch avalant). Ne JAMAIS retourner un tableau
+    # vide en cas d'échec : un « 0 » silencieux se retrouvait mis en cache et masquait des
+    # utilisateurs pourtant bien présents dans l'AD. Un vrai 0 (site sans BAL) reste possible,
+    # mais UNIQUEMENT si la requête a réussi. Le warmup gère l'exception (log ERR, pas d'écriture).
+    $users = Get-ADUser -Filter * `
+        -SearchBase $SiteDN -SearchScope Subtree `
+        -Credential $global:AD_credential `
+        -Properties DisplayName, Mail, Department, Description, Title, Enabled, ProxyAddresses, `
+                    UserPrincipalName, Type, Company, EmployeeNumber, Manager, Office, `
+                    extensionAttribute1, PostalCode, StreetAddress `
+        -ErrorAction Stop
 
-        # Si pas de sous-OU "Utilisateurs", chercher directement dans le site
-        $searchBase = if ($usersOU) { $usersOU.DistinguishedName } else { $SiteDN }
-
-        $users = Get-ADUser -Filter * `
-            -SearchBase $searchBase -SearchScope OneLevel `
-            -Credential $global:AD_credential `
-            -Properties DisplayName, Mail, Department, Description, Title, Enabled, ProxyAddresses, `
-                        UserPrincipalName, Type, Company, EmployeeNumber, Manager, Office, `
-                        extensionAttribute1, PostalCode, StreetAddress `
-            -ErrorAction Stop
-
-        return @(
-            $users | ForEach-Object {
-                $u   = $_
-                $sam = "$($u.SamAccountName)"
-                # Ne garder QUE les comptes avec BAL : primarySmtpAddress (proxyAddress 'SMTP:'
-                # en majuscules) + samAccountName. Les autres n'ont pas d'intérêt dans le cache.
-                $primary = ''
-                foreach ($p in @($u.ProxyAddresses)) { if ("$p" -cmatch '^SMTP:(.+)$') { $primary = $Matches[1]; break } }
-                if ([string]::IsNullOrWhiteSpace($primary) -or [string]::IsNullOrWhiteSpace($sam)) { return }
-                [PSCustomObject]@{
-                    displayName       = if ($u.DisplayName) { $u.DisplayName } else { $u.SamAccountName }
-                    description       = $u.Description
-                    mail              = $u.Mail
-                    primarySmtpAddress = $primary
-                    title             = $u.Title
-                    department        = $u.Department
-                    samAccountName    = $sam
-                    enabled           = [bool]$u.Enabled
-                    proxyAddresses    = [string[]]@($u.ProxyAddresses | Where-Object { $_ } | ForEach-Object { [string]$_ })
-                    userPrincipalName = $u.UserPrincipalName
-                    type              = $u.Type
-                    company           = $u.Company
-                    employeeNumber    = $u.EmployeeNumber
-                    manager           = if ($u.Manager -match '^CN=([^,]+)') { $Matches[1] } else { $u.Manager }
-                    office            = $u.Office
-                    extensionAttribute1 = $u.extensionAttribute1
-                    postalCode        = $u.PostalCode
-                    streetAddress     = $u.StreetAddress
-                    ouDn              = ($u.DistinguishedName -replace '^CN=[^,]+,', '')
-                }
-            } | Sort-Object displayName
-        )
-    } catch {
-        add-msg -msg "Erreur lecture utilisateurs '$SiteDN' : $($_.Exception.Message)" -foregroundColor Yellow
-        return @()
-    }
+    return @(
+        $users | ForEach-Object {
+            $u   = $_
+            $sam = "$($u.SamAccountName)"
+            # Ne garder QUE les comptes avec BAL : primarySmtpAddress (proxyAddress 'SMTP:'
+            # en majuscules) + samAccountName. Les autres n'ont pas d'intérêt dans le cache.
+            $primary = ''
+            foreach ($p in @($u.ProxyAddresses)) { if ("$p" -cmatch '^SMTP:(.+)$') { $primary = $Matches[1]; break } }
+            if ([string]::IsNullOrWhiteSpace($primary) -or [string]::IsNullOrWhiteSpace($sam)) { return }
+            [PSCustomObject]@{
+                displayName       = if ($u.DisplayName) { $u.DisplayName } else { $u.SamAccountName }
+                description       = $u.Description
+                mail              = $u.Mail
+                primarySmtpAddress = $primary
+                title             = $u.Title
+                department        = $u.Department
+                samAccountName    = $sam
+                enabled           = [bool]$u.Enabled
+                proxyAddresses    = [string[]]@($u.ProxyAddresses | Where-Object { $_ } | ForEach-Object { [string]$_ })
+                userPrincipalName = $u.UserPrincipalName
+                type              = $u.Type
+                company           = $u.Company
+                employeeNumber    = $u.EmployeeNumber
+                manager           = if ($u.Manager -match '^CN=([^,]+)') { $Matches[1] } else { $u.Manager }
+                office            = $u.Office
+                extensionAttribute1 = $u.extensionAttribute1
+                postalCode        = $u.PostalCode
+                streetAddress     = $u.StreetAddress
+                ouDn              = ($u.DistinguishedName -replace '^CN=[^,]+,', '')
+            }
+        } | Sort-Object displayName
+    )
 }

@@ -11,8 +11,142 @@ const state = {
     groupBy:        'none',
     groupsExpanded: true,
     searchActive:   false,
-    selectedSite:   null
+    selectedSite:   null,
+    mode:           'ad',    // 'ad' (utilisateurs) | 'ecarts' (OU vs Bureau)
+    ecartBySam:     null,    // { samAccountName: 'ecart' | 'manquant' } — chargé à la demande
+    ecartUsers:     [],      // TOUS les comptes en écart (toutes OU) — objets utilisateur complets
+    ecartsAll:      false    // vrai = vue « toutes les OU » (aucun filtre de site) — défaut du mode Écarts
 };
+
+// ============================================================
+//  Mode d'affichage AD / Écarts
+//  Les écarts sont calculés UNE fois par le backend (/api/ecarts/office-ou,
+//  sur TOUTES les OU), même logique que la page complète. On indexe le statut
+//  par samAccountName ET on conserve la liste complète des comptes en écart.
+//  En mode Écarts, l'affichage par défaut = tous les écarts (aucun filtre) ;
+//  cliquer un site reste un filtre optionnel.
+// ============================================================
+async function ensureEcartsLoaded() {
+    if (state.ecartBySam) return;
+    const res  = await fetch('/api/ecarts/office-ou', { cache: 'no-store' });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    const map = {};
+    const all = [];
+    (data.tree || []).forEach(dg => (dg.sites || []).forEach(s => (s.rows || []).forEach(r => {
+        const u = r.user;
+        if (u && u.samAccountName) { map[u.samAccountName] = r.status; all.push(u); }   // 'ecart' | 'manquant'
+    })));
+    state.ecartBySam = map;
+    state.ecartUsers = all;
+}
+
+function ecartStatusOf(u) {
+    return (state.ecartBySam && state.ecartBySam[u.samAccountName]) || 'ok';
+}
+function isEcart(u) { return ecartStatusOf(u) !== 'ok'; }
+
+// En mode Écarts, ne conserver que les comptes en écart ; sinon liste inchangée.
+function modeList(list) {
+    return state.mode === 'ecarts' ? list.filter(isEcart) : list;
+}
+function unit() { return state.mode === 'ecarts' ? 'écart(s)' : 'utilisateur(s)'; }
+
+// Liste source du tableau selon la vue : tous les écarts (toutes OU) ou le site courant.
+function activeBaseUsers() {
+    return (state.mode === 'ecarts' && state.ecartsAll) ? state.ecartUsers : state.allUsers;
+}
+
+function setupModeToggle() {
+    document.getElementById('mode-ad').addEventListener('click',     () => setMode('ad'));
+    document.getElementById('mode-ecarts').addEventListener('click', () => setMode('ecarts'));
+}
+
+async function setMode(mode) {
+    // Re-clic sur l'onglet Écarts déjà actif → réinitialise la vue « toutes les OU ».
+    if (state.mode === mode) {
+        if (mode === 'ecarts' && !state.ecartsAll) showAllEcarts();
+        return;
+    }
+
+    if (mode === 'ecarts' && !state.ecartBySam) {
+        const btn = document.getElementById('mode-ecarts');
+        btn.disabled = true;
+        setTableLoading();
+        try {
+            await ensureEcartsLoaded();
+        } catch (e) {
+            showToast('Impossible de charger les écarts : ' + e.message, 'error');
+            btn.disabled = false;
+            return;
+        }
+        btn.disabled = false;
+    }
+
+    state.mode = mode;
+    document.getElementById('mode-ad').classList.toggle('active',     mode === 'ad');
+    document.getElementById('mode-ecarts').classList.toggle('active', mode === 'ecarts');
+    document.body.classList.toggle('mode-ecarts', mode === 'ecarts');
+    const table = document.querySelector('.users-table');
+    if (table) table.classList.toggle('mode-ecarts', mode === 'ecarts');
+
+    if (mode === 'ecarts') {
+        // Défaut : TOUS les écarts, toutes les OU, aucun filtre de site.
+        showAllEcarts();
+    } else {
+        // Retour AD : le tri « Statut » n'existe plus ; réafficher le site courant s'il y en a un.
+        state.ecartsAll = false;
+        if (state.sortCol === 'status') { state.sortCol = 'displayName'; state.sortDir = 'asc'; resetSortIcons(); }
+        updateTreeSelection();
+        reRenderCurrent();
+    }
+}
+
+// Vue « tous les écarts (toutes OU) » : aucun site sélectionné, source = state.ecartUsers.
+function showAllEcarts() {
+    state.ecartsAll = true;
+    updateTreeSelection();          // retire la surbrillance de site
+    clearDetailPanel();
+    const uf = document.getElementById('user-filter');
+    uf.disabled = false; uf.value = '';
+    document.getElementById('user-filter-clear').hidden = true;
+    document.getElementById('group-by').disabled = false;
+    state.sortCol = 'displayName'; state.sortDir = 'asc'; resetSortIcons();
+    reRenderCurrent();
+}
+
+// Reflète dans l'arbre la sélection réellement active (aucune en vue « toutes les OU »).
+function updateTreeSelection() {
+    document.querySelectorAll('.tree-site.selected').forEach(e => e.classList.remove('selected'));
+    const showSel = !(state.mode === 'ecarts' && state.ecartsAll);
+    if (showSel && state.selectedSite && state.selectedSite.el) {
+        state.selectedSite.el.classList.add('selected');
+    }
+}
+
+// Recompose l'affichage courant (toutes OU, site sélectionné ou recherche) dans le mode actif.
+function reRenderCurrent() {
+    const q = document.getElementById('tree-search').value.trim();
+    if (q) { renderCrossSiteResults(q); return; }
+
+    const allView = state.mode === 'ecarts' && state.ecartsAll;
+    if (!allView && !state.selectedSite) return;
+
+    const nameEl = document.getElementById('current-site-name');
+    if (allView)                 nameEl.textContent = 'Écarts — toutes les OU';
+    else if (state.selectedSite) nameEl.textContent = state.selectedSite.site.name;
+
+    const base   = activeBaseUsers();
+    const fq     = document.getElementById('user-filter').value.trim().toLowerCase();
+    const source = fq ? base.filter(u => matchesFilter(u, fq)) : base;
+    displayUsers(source);
+
+    const shownTotal    = modeList(base).length;
+    const shownFiltered = modeList(source).length;
+    document.getElementById('user-count').textContent = fq
+        ? `${shownFiltered} / ${shownTotal} ${unit()}`
+        : `${shownTotal} ${unit()}`;
+}
 
 const warmupDone    = new Set();
 const prefetchedDns = new Set();
@@ -250,6 +384,12 @@ document.addEventListener('DOMContentLoaded', () => {
     window.addEventListener('beforeunload', saveSnapshot);
 
     document.getElementById('refresh-all-btn').addEventListener('click', refreshAllCache);
+
+    // Ouvre la page complète « Écarts Ville (OU) / Bureau » (vue globale groupée) dans un onglet.
+    const ecartsBtn = document.getElementById('ecarts-btn');
+    if (ecartsBtn) ecartsBtn.addEventListener('click', () => window.open('/ecarts', '_blank'));
+
+    setupModeToggle();
 
     document.getElementById('toggle-tree-btn').addEventListener('click', () => {
         const anyCollapsed = document.querySelector('.tree-region:not(.expanded)');
@@ -586,6 +726,7 @@ async function refreshAllCache() {
         // Vider l'index client
         for (const dn of Object.keys(allSiteUsers)) delete allSiteUsers[dn];
         prefetchedDns.clear();
+        state.ecartBySam = null;   // les écarts seront recalculés à la demande
 
         // Réinitialiser les badges
         document.querySelectorAll('.site-count').forEach(b => { b.textContent = ''; });
@@ -613,6 +754,12 @@ async function refreshAllCache() {
         // Cache global utilisateurs (source de vérité + date du footer) : reconstruction SYNCHRONE.
         appOverlay.progress(allSites.length, allSites.length, 'Cache global des utilisateurs…');
         try { await fetch('/api/users/preload', { method: 'POST' }).then(r => r.json()); } catch { /* best-effort */ }
+
+        // Si l'on est en mode Écarts, recalculer et réafficher tout de suite.
+        if (state.mode === 'ecarts') {
+            try { await ensureEcartsLoaded(); } catch { /* réessai au prochain rendu */ }
+            reRenderCurrent();
+        }
 
         showToast(`Cache reconstruit (${data.deleted} fichier(s) vidés)`, 'success');
         window.parent.postMessage({ type: 'cache-rebuilt' }, '*');   // footer → date à jour (plus « absent »)
@@ -692,6 +839,7 @@ function updateToggleTreeBtn() {
 //  Sélection d'un site → chargement des utilisateurs
 // ============================================================
 async function selectSite(site, el, forceRefresh = false) {
+    state.ecartsAll = false;   // cliquer un site = filtrer sur ce site (quitte la vue « toutes les OU »)
     document.querySelectorAll('.tree-site.selected').forEach(e => e.classList.remove('selected'));
     el.classList.add('selected');
     state.selectedSite = { site, el };
@@ -715,7 +863,7 @@ async function selectSite(site, el, forceRefresh = false) {
         state.sortDir  = 'asc';
         resetSortIcons();
         renderUsers(state.allUsers);
-        updateSiteHeader(site, state.allUsers.length, fromCache);
+        updateSiteHeader(site, modeList(state.allUsers).length, fromCache);
         document.getElementById('user-filter').disabled = false;
         document.getElementById('group-by').disabled = false;
 
@@ -732,7 +880,7 @@ function updateSiteHeader(site, count, fromCache) {
     document.getElementById('current-site-name').textContent = site.name;
 
     const countEl = document.getElementById('user-count');
-    countEl.textContent = count !== null ? `${count} utilisateur(s)` : '';
+    countEl.textContent = count !== null ? `${count} ${unit()}` : '';
     document.title = count !== null
         ? `${site.name} (${count}) — Explorateur AD`
         : 'Explorateur AD — I2N';
@@ -744,8 +892,9 @@ function updateSiteHeader(site, count, fromCache) {
 function setupGroupBy() {
     document.getElementById('group-by').addEventListener('change', e => {
         state.groupBy = e.target.value;
+        const base = activeBaseUsers();
         const q = document.getElementById('user-filter').value.trim().toLowerCase();
-        const source = q ? state.allUsers.filter(u => matchesFilter(u, q)) : state.allUsers;
+        const source = q ? base.filter(u => matchesFilter(u, q)) : base;
         displayUsers(source);
     });
 
@@ -791,16 +940,23 @@ function setAllGroups(expand) {
     updateToggleBtn();
 }
 
+function badgeStatus(status) {
+    return status === 'manquant'
+        ? '<span class="badge-status manquant">Bureau manquant</span>'
+        : '<span class="badge-status ecart">Écart</span>';
+}
+
 function displayUsers(users) {
     state.searchActive = false;
+    const list = modeList(users);   // en mode Écarts : uniquement les comptes en écart
     if (state.groupBy === 'none') {
-        renderFlat(getSortedUsers(users));
+        renderFlat(getSortedUsers(list));
     } else if (state.groupBy === 'category') {
         state.groupsExpanded = true;
-        renderCategoryGrouped(users);
+        renderCategoryGrouped(list);
     } else {
         state.groupsExpanded = true;
-        renderGrouped(users, state.groupBy);
+        renderGrouped(list, state.groupBy);
     }
     updateToggleBtn();
 }
@@ -813,7 +969,7 @@ function renderFlat(users) {
     tbody.innerHTML = '';
 
     if (!users || users.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="7" class="td-hint">Aucun utilisateur dans ce site</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="8" class="td-hint">Aucun utilisateur dans ce site</td></tr>';
         return;
     }
 
@@ -832,7 +988,7 @@ function renderGrouped(users, groupBy) {
     tbody.innerHTML = '';
 
     if (!users || users.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="7" class="td-hint">Aucun utilisateur dans ce site</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="8" class="td-hint">Aucun utilisateur dans ce site</td></tr>';
         return;
     }
 
@@ -864,7 +1020,7 @@ function renderGrouped(users, groupBy) {
             + (isFormateur ? ' group-formateur' : '')
             + (isCategory  ? ' group-category'  : '');
         headerTr.innerHTML = `
-            <td colspan="7">
+            <td colspan="8">
                 <span class="group-toggle expanded">▼</span>
                 <span class="group-label">${esc(key)}</span>
                 <span class="group-count">${groupUsers.length}</span>
@@ -889,7 +1045,7 @@ function renderCategoryGrouped(users) {
     tbody.innerHTML = '';
 
     if (!users || users.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="7" class="td-hint">Aucun utilisateur dans ce site</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="8" class="td-hint">Aucun utilisateur dans ce site</td></tr>';
         return;
     }
 
@@ -907,7 +1063,7 @@ function renderCategoryGrouped(users) {
 
         const mainTr = document.createElement('tr');
         mainTr.className = 'group-header group-category' + (isFormateur ? ' group-formateur' : '');
-        mainTr.innerHTML = `<td colspan="7">
+        mainTr.innerHTML = `<td colspan="8">
             <span class="group-toggle expanded">▼</span>
             <span class="group-label">${esc(catKey)}</span>
             <span class="group-count">${catUsers.length}</span>
@@ -928,7 +1084,7 @@ function renderCategoryGrouped(users) {
 
             const subTr = document.createElement('tr');
             subTr.className = 'group-header group-sub' + (isFormateur ? ' group-formateur' : '');
-            subTr.innerHTML = `<td colspan="7">
+            subTr.innerHTML = `<td colspan="8">
                 <span class="group-toggle expanded">▼</span>
                 <span class="group-label">${esc(title)}</span>
                 <span class="group-count">${titleUsers.length}</span>
@@ -1039,6 +1195,7 @@ function setupColumnMenu() {
 function createUserRow(u, siteDn) {
     const tr = document.createElement('tr');
     const disabledTag = u.enabled === false ? '<span class="tag-disabled">désactivé</span>' : '';
+    const st = ecartStatusOf(u);   // 'ok' | 'ecart' | 'manquant' — la CSS ne l'exploite qu'en mode Écarts
     tr.innerHTML = `
         <td class="col-name">${esc(u.displayName || u.samAccountName)}${disabledTag}</td>
         <td class="col-desc">${esc(u.description || '')}</td>
@@ -1046,7 +1203,8 @@ function createUserRow(u, siteDn) {
         <td class="col-mail">${esc(u.mail || '')}</td>
         <td class="col-dept">${esc(u.department || '')}</td>
         <td class="col-ville">${esc(ouVille(u.ouDn))}</td>
-        <td class="col-office">${esc(u.office || '')}</td>`;
+        <td class="col-office${st !== 'ok' ? ' ' + st : ''}">${esc(u.office || '') || (st === 'manquant' ? '—' : '')}</td>
+        <td class="col-status">${st === 'ok' ? '' : badgeStatus(st)}</td>`;
     if (u.enabled === false) tr.classList.add('row-disabled');
     tr.addEventListener('click', () => {
         if (_selectedUserRow) _selectedUserRow.classList.remove('row-selected');
@@ -1148,12 +1306,12 @@ function renderUsers(users) { displayUsers(users); }
 
 function setTableLoading() {
     document.getElementById('users-tbody').innerHTML =
-        '<tr><td colspan="7" class="td-loading">Chargement…</td></tr>';
+        '<tr><td colspan="8" class="td-loading">Chargement…</td></tr>';
 }
 
 function setTableError(msg) {
     document.getElementById('users-tbody').innerHTML =
-        `<tr><td colspan="7" class="td-hint" style="color:#dc2626">Erreur : ${esc(msg)}</td></tr>`;
+        `<tr><td colspan="8" class="td-hint" style="color:#dc2626">Erreur : ${esc(msg)}</td></tr>`;
 }
 
 // ============================================================
@@ -1300,7 +1458,7 @@ function renderCrossSiteResults(q, preserveScroll) {
     for (const [dn, users] of Object.entries(allSiteUsers)) {
         const siteName    = dnNameMap[dn] || dn;
         const siteMatches = searchCriteria.site && siteName.toLowerCase().includes(lq);
-        const matchUsers  = siteMatches ? users : users.filter(u => matchesFilter(u, lq));
+        const matchUsers  = modeList(siteMatches ? users : users.filter(u => matchesFilter(u, lq)));
         if (siteMatches || matchUsers.length > 0) {
             results.push({ dn, siteName, users: matchUsers, uncached: false });
             seenDns.add(dn);
@@ -1359,7 +1517,7 @@ function renderCrossSiteResults(q, preserveScroll) {
     tbody.innerHTML = '';
 
     if (results.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="7" class="td-hint">Aucun résultat trouvé</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="8" class="td-hint">Aucun résultat trouvé</td></tr>';
         return;
     }
 
@@ -1369,7 +1527,7 @@ function renderCrossSiteResults(q, preserveScroll) {
         headerTr.className = 'group-header';
         headerTr.dataset.dn = dn;
         headerTr.innerHTML = `
-            <td colspan="7">
+            <td colspan="8">
                 <span class="group-toggle ${uncached ? '' : 'expanded'}">▼</span>
                 <span class="group-label">${hlText(siteName, lq)}</span>
                 <span class="group-count">${uncached ? '?' : users.length}</span>
@@ -1388,7 +1546,7 @@ function renderCrossSiteResults(q, preserveScroll) {
         if (uncached) {
             const tr = document.createElement('tr');
             tr.className = 'group-member';
-            tr.innerHTML = `<td colspan="7" class="td-hint search-uncached-hint">Cache non disponible · cliquer sur le nom du site ci-dessus pour charger</td>`;
+            tr.innerHTML = `<td colspan="8" class="td-hint search-uncached-hint">Cache non disponible · cliquer sur le nom du site ci-dessus pour charger</td>`;
             frag.appendChild(tr);
         } else {
             for (const u of users.sort((a, b) =>
@@ -1416,7 +1574,7 @@ function restoreMainPanel() {
         document.getElementById('user-filter').disabled = false;
         document.getElementById('group-by').disabled    = false;
         renderUsers(state.allUsers);
-        updateSiteHeader(site, state.allUsers.length, false);
+        updateSiteHeader(site, modeList(state.allUsers).length, false);
     } else {
         document.getElementById('current-site-name').textContent = 'Sélectionner un site';
         document.getElementById('user-count').textContent        = '';
@@ -1441,11 +1599,15 @@ function matchesFilter(u, lq) {
 }
 
 function filterUsers(q) {
-    const filtered = q ? state.allUsers.filter(u => matchesFilter(u, q.toLowerCase())) : state.allUsers;
+    const base = activeBaseUsers();
+    const filtered = q ? base.filter(u => matchesFilter(u, q.toLowerCase())) : base;
     displayUsers(filtered);
+    // Compteurs cohérents avec le mode courant (écarts filtrés).
+    const shownTotal    = modeList(base).length;
+    const shownFiltered = modeList(filtered).length;
     document.getElementById('user-count').textContent = q
-        ? `${filtered.length} / ${state.allUsers.length} utilisateur(s)`
-        : `${state.allUsers.length} utilisateur(s)`;
+        ? `${shownFiltered} / ${shownTotal} ${unit()}`
+        : `${shownTotal} ${unit()}`;
 }
 
 // ============================================================
@@ -1464,17 +1626,22 @@ function setupSort() {
             resetSortIcons();
             th.classList.add(`sort-${state.sortDir}`);
 
+            const base = activeBaseUsers();
             const q = document.getElementById('user-filter').value.trim().toLowerCase();
             const source = q
-                ? state.allUsers.filter(u => matchesFilter(u, q))
-                : state.allUsers;
+                ? base.filter(u => matchesFilter(u, q))
+                : base;
             displayUsers(getSortedUsers(source));
         });
     });
 }
 
 function getSortedUsers(users) {
-    const val = u => String(state.sortCol === 'ouVille' ? ouVille(u.ouDn) : (u[state.sortCol] || '')).toLowerCase();
+    const val = u => String(
+        state.sortCol === 'ouVille' ? ouVille(u.ouDn)
+      : state.sortCol === 'status'  ? ecartStatusOf(u)
+      : (u[state.sortCol] || '')
+    ).toLowerCase();
     return [...users].sort((a, b) => {
         const cmp = val(a).localeCompare(val(b), 'fr');
         return state.sortDir === 'asc' ? cmp : -cmp;

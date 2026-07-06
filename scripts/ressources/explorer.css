@@ -24,6 +24,38 @@ body {
     overflow: hidden;
 }
 
+/* Bascule d'affichage AD / Écarts (segmented control) */
+.mode-toggle {
+    display: flex;
+    gap: 4px;
+    padding: 8px 12px 0;
+    flex-shrink: 0;
+}
+.mode-btn {
+    flex: 1;
+    height: 28px;
+    border: 1px solid var(--border);
+    background: var(--bg);
+    color: var(--text-sub);
+    font-size: 12.5px;
+    font-weight: 600;
+    font-family: inherit;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: background .12s, color .12s, border-color .12s;
+}
+.mode-btn:hover { background: #eeeae4; color: var(--text); }
+.mode-btn.active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+}
+/* Onglet Écarts actif → teinte ambre (cohérent avec le thème « écart ») */
+.mode-btn[data-mode="ecarts"].active {
+    background: #b45309;
+    border-color: #b45309;
+}
+
 .tree-search-wrap {
     position: relative;
     padding: 10px 12px;
@@ -788,6 +820,11 @@ tr.row-selected td {
     color: #fff;
 }
 
+/* Boutons « effacer » : masqués tant qu'il n'y a rien à effacer.
+   (l'attribut [hidden] doit l'emporter sur le display:flex de la classe) */
+.tree-search-clear[hidden],
+.user-filter-clear[hidden] { display: none; }
+
 .users-header input:disabled {
     opacity: .4;
     cursor: not-allowed;
@@ -847,6 +884,33 @@ tr.row-selected td {
 .users-table.hide-dept   .col-dept,
 .users-table.hide-ville  .col-ville,
 .users-table.hide-office .col-office { display: none; }
+
+/* ---- Mode Écarts : colonnes Nom · Ville (OU) · Bureau · Statut ---- */
+/* La colonne Statut n'existe qu'en mode Écarts. */
+.col-status { display: none; }
+.users-table.mode-ecarts .col-status { display: table-cell; }
+/* Masquer les colonnes purement « AD » en mode Écarts. */
+.users-table.mode-ecarts .col-desc,
+.users-table.mode-ecarts .col-func,
+.users-table.mode-ecarts .col-mail,
+.users-table.mode-ecarts .col-dept { display: none; }
+/* Bureau mis en évidence selon l'écart. */
+.users-table.mode-ecarts td.col-office.ecart    { color: #b91c1c; font-weight: 600; }
+.users-table.mode-ecarts td.col-office.manquant { color: #b45309; font-style: italic; }
+/* Le menu « Colonnes » ne s'applique pas au jeu de colonnes figé du mode Écarts. */
+body.mode-ecarts .col-menu-wrap { display: none; }
+
+/* Badges de statut d'écart */
+.badge-status {
+    display: inline-block;
+    padding: 1px 8px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+.badge-status.ecart    { background: #fef2f2; color: #b91c1c; }
+.badge-status.manquant { background: #fffbeb; color: #b45309; }
 
 /* Menu déroulant « Colonnes » */
 .col-menu-wrap { position: relative; }

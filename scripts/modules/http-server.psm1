@@ -58,6 +58,9 @@ function Start-AppServer {
         Add-PodeRoute -Method Get -Path '/explorer.html' -ScriptBlock { Serve-File -Key 'f_explorer.html' -ContentType 'text/html' }
         Add-PodeRoute -Method Get -Path '/explorer.js'   -ScriptBlock { Serve-File -Key 'f_explorer.js'   -ContentType 'application/javascript' }
         Add-PodeRoute -Method Get -Path '/explorer.css'  -ScriptBlock { Serve-File -Key 'f_explorer.css'  -ContentType 'text/css' }
+        Add-PodeRoute -Method Get -Path '/ecarts'        -ScriptBlock { Serve-File -Key 'f_ecarts.html' -ContentType 'text/html' }
+        Add-PodeRoute -Method Get -Path '/ecarts.html'   -ScriptBlock { Serve-File -Key 'f_ecarts.html' -ContentType 'text/html' }
+        Add-PodeRoute -Method Get -Path '/ecarts.js'     -ScriptBlock { Serve-File -Key 'f_ecarts.js'   -ContentType 'application/javascript' }
         Add-PodeRoute -Method Get -Path '/regles'      -ScriptBlock { Serve-File -Key 'f_regles.html' -ContentType 'text/html' }
         Add-PodeRoute -Method Get -Path '/regles.html' -ScriptBlock { Serve-File -Key 'f_regles.html' -ContentType 'text/html' }
         Add-PodeRoute -Method Get -Path '/regles.js'   -ScriptBlock { Serve-File -Key 'f_regles.js'  -ContentType 'application/javascript' }
@@ -129,7 +132,21 @@ function Start-AppServer {
                 Add-PodeHeader -Name 'X-Cache' -Value 'HIT'
                 add-msg -msg "  → cache HIT : $dn" -foregroundColor DarkGray -quelType writeHost
             } else {
-                $userList = [System.Collections.ArrayList]@(Get-OUSiteUsers -SiteDN $dn)
+                try {
+                    $userList = [System.Collections.ArrayList]@(Get-OUSiteUsers -SiteDN $dn)
+                } catch {
+                    # Lecture AD échouée : ne JAMAIS écraser le cache avec « [] » (destructif).
+                    # On sert le cache existant s'il y en a un (STALE), sinon on renvoie une erreur.
+                    add-msg -msg "  → lecture AD échouée pour $dn (cache préservé) : $($_.Exception.Message)" -foregroundColor Yellow
+                    if (Test-Path $cachePath) {
+                        $stale = [System.IO.File]::ReadAllText($cachePath, [System.Text.Encoding]::UTF8)
+                        Add-PodeHeader -Name 'X-Cache' -Value 'STALE'
+                        Send-Json -Body $stale
+                        return
+                    }
+                    Send-Json -Body '{"error":"Lecture AD indisponible pour ce site — cache non modifié."}' -StatusCode 502
+                    return
+                }
                 $data     = ConvertTo-Json -InputObject $userList -Depth 5 -Compress
                 [System.IO.File]::WriteAllText($cachePath, $data, [System.Text.Encoding]::UTF8)
                 Update-CacheIndex -DN $dn -Count $userList.Count
@@ -780,6 +797,16 @@ function Start-AppServer {
             }
         }
 
+        Add-PodeRoute -Method Get -Path '/api/ecarts/office-ou' -ScriptBlock {
+            try {
+                $data = Get-OfficeOuEcarts
+                Send-Json -Body (ConvertTo-Json -InputObject $data -Depth 12 -Compress)
+            } catch {
+                $e = $_.Exception.Message -replace '"', "'"
+                Send-Json -Body "{`"error`":`"$e`",`"tree`":[]}" -StatusCode 500
+            }
+        }
+
         # ==================== API — Cache HTML des pages « GROUPES » ====================
         # Cache PAR PAGE : chaque règle produit <label>.html + <label>.sig (sa signature).
         # Une page est réutilisée tant que sa signature (version + cache AD + règle) n'a pas changé.
@@ -934,11 +961,19 @@ function Start-CacheWarmup {
         $done = 0
         foreach ($site in $sites) {
             $cp = Get-LocalCachePath -DN $site.dn
+            # On saute uniquement les caches DÉJÀ peuplés. Un fichier vide « [] » (site
+            # accidentellement vidé par une erreur AD passée) est RE-TENTÉ, jamais figé.
             if (Test-Path $cp) {
-                $done++
-                continue
+                $existing = ''
+                try { $existing = [System.IO.File]::ReadAllText($cp, [System.Text.Encoding]::UTF8).Trim() } catch {}
+                if ($existing -and $existing -ne '[]') {
+                    $done++
+                    continue
+                }
             }
             try {
+                # Get-OUSiteUsers LÈVE une exception sur erreur AD → on n'écrit PAS de « [] »
+                # trompeur : le site reste à retenter au prochain warmup (log ERR ci-dessous).
                 $list = [System.Collections.ArrayList]@(Get-OUSiteUsers -SiteDN $site.dn)
                 $json = ConvertTo-Json -InputObject $list -Depth 5 -Compress
                 [System.IO.File]::WriteAllText($cp, $json, [System.Text.Encoding]::UTF8)

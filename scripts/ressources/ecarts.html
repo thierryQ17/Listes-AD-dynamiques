@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Écarts Ville (OU) / Bureau — I2N</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23b45309'/%3E%3Ctext x='16' y='22' text-anchor='middle' font-family='system-ui,sans-serif' font-size='15' font-weight='700' fill='white'%3E%E2%9A%A0%3C/text%3E%3C/svg%3E">
+    <link rel="stylesheet" href="/style.css">
+    <link rel="stylesheet" href="/explorer.css?v=7">
+    <style>
+        /* ---- Spécifique Écarts : mise en évidence Bureau + badges de statut ---- */
+        .col-status { white-space: nowrap; }
+        td.col-office.ecart    { color: #b91c1c; font-weight: 600; }
+        td.col-office.manquant { color: #b45309; font-style: italic; }
+
+        .badge-status {
+            display: inline-block;
+            padding: 1px 8px;
+            border-radius: 999px;
+            font-size: 11px;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+        .badge-status.ecart    { background: #fef2f2; color: #b91c1c; }
+        .badge-status.manquant { background: #fffbeb; color: #b45309; }
+
+        /* En-tête central : titre à gauche (prioritaire), résumé qui occupe
+           le reste à droite et tronque en premier si la place manque. */
+        .users-header .users-title-row { flex: 0 1 auto; }
+        .users-header .users-controls  { flex: 0 0 auto; }
+        .ecarts-meta {
+            flex: 1 1 auto;
+            min-width: 0;
+            font-size: 11.5px;
+            color: var(--text-sub);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            text-align: right;
+        }
+        .ecarts-meta b { color: var(--text); }
+        .ecarts-meta .sep { margin: 0 6px; color: var(--border); }
+
+        /* Compteur d'écarts dans l'arbre : teinte ambre plutôt que bleue */
+        .tree-site .site-count.has-ecarts { background: #fffbeb; color: #b45309; }
+        .tree-site.selected .site-count.has-ecarts { background: #fde68a; color: #92400e; }
+        .region-count.has-ecarts { background: #fef3c7; color: #b45309; }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="header-left">
+            <nav class="header-nav">
+                <a href="/explorer"  class="nav-link">Explorateur AD</a>
+                <a href="/ecarts"    class="nav-link active">Écarts</a>
+                <a href="/regles"    class="nav-link" target="i2n-regles">Règles</a>
+                <a href="/index.html" class="nav-link" target="i2n-groupes">Groupes Dynamiques</a>
+            </nav>
+        </div>
+        <div class="header-right">
+            <span class="badge-readonly">Lecture seule</span>
+        </div>
+    </header>
+
+    <div class="explorer-layout">
+
+        <!-- Arbre DO → Ville (gauche) -->
+        <aside class="tree-sidebar">
+            <div class="tree-search-wrap">
+                <input type="text" id="tree-search" placeholder="Nom, ville, bureau…" autocomplete="off">
+                <button id="tree-search-clear" class="tree-search-clear" hidden title="Effacer la recherche">×</button>
+            </div>
+            <div class="tree-actions-bar">
+                <button id="toggle-tree-btn" class="btn-tree-toggle">Tout ouvrir</button>
+                <button id="regen-btn" class="btn-refresh-all" title="Réanalyser le cache et rafraîchir les écarts">↻ Régénérer</button>
+            </div>
+            <div class="tree-container" id="tree-container">
+                <p class="tree-hint">Analyse du cache en cours…</p>
+            </div>
+        </aside>
+
+        <!-- Écarts (centre) -->
+        <main class="users-panel">
+            <div class="users-header">
+                <div class="users-title-row">
+                    <h2 id="current-site-name">Écarts&nbsp;: Ville (OU) ↔ Bureau (office)</h2>
+                    <span id="user-count" class="user-count-badge"></span>
+                </div>
+                <div class="users-controls">
+                    <div class="user-filter-wrap">
+                        <input type="text" id="user-filter" placeholder="Filtrer…" autocomplete="off" disabled>
+                        <button id="user-filter-clear" class="user-filter-clear" hidden title="Vider le filtre">×</button>
+                    </div>
+                </div>
+                <span id="ecarts-meta" class="ecarts-meta"></span>
+            </div>
+
+            <div class="table-wrapper">
+                <table class="users-table ecarts-table">
+                    <thead>
+                        <tr>
+                            <th class="sortable col-name"   data-col="displayName">Nom <span class="sort-icon">↕</span></th>
+                            <th class="sortable col-ville"  data-col="villeOU">Ville (OU) <span class="sort-icon">↕</span></th>
+                            <th class="sortable col-office" data-col="office">Bureau (office) <span class="sort-icon">↕</span></th>
+                            <th class="sortable col-status" data-col="status">Statut <span class="sort-icon">↕</span></th>
+                        </tr>
+                    </thead>
+                    <tbody id="users-tbody">
+                        <tr>
+                            <td colspan="4" class="td-hint">Sélectionner une ville dans l'arbre</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </main>
+
+        <!-- Panneau droit (détail) -->
+        <aside class="explorer-right-panel" id="detail-panel">
+            <div class="panel-header">
+                <h2>Détail</h2>
+                <button id="btn-detail-toggle" class="btn-detail-toggle" title="Masquer le panneau Détail">
+                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M9 2L5 7L9 12" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </button>
+            </div>
+            <div class="explorer-right-body">
+                <p class="hint">Sélectionner un utilisateur</p>
+            </div>
+        </aside>
+
+    </div>
+
+    <div id="toast" class="toast" aria-live="polite"></div>
+
+    <script src="/ecarts.js?v=2"></script>
+</body>
+</html>

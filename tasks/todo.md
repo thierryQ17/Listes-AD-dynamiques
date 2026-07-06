@@ -1,5 +1,29 @@
 # TODO
 
+## Terminé — 2026-07-06
+
+### Mode AD / Écarts DANS l'Explorateur (bascule 2 boutons)
+- Conception finale (après pivot) : PAS d'onglet/page séparés — un sélecteur segmenté
+  **AD / Écarts** en haut de la sidebar de l'Explorateur bascule l'affichage.
+- **Défaut du mode Écarts = TOUTES les OU, aucun filtre** : à l'activation, on affiche
+  d'emblée les 640 écarts (source `state.ecartUsers`, `state.ecartsAll=true`, titre
+  « Écarts — toutes les OU »). Cliquer un site = filtre optionnel (`ecartsAll=false`) ;
+  re-cliquer l'onglet Écarts réinitialise à tout. `activeBaseUsers()` choisit la source.
+- Même arbre, même tableau, même Détail, mêmes fonctionnalités (tri, regroupement,
+  recherche, filtre). Seules les **colonnes** + les **données** changent :
+  - AD : Nom · Description · Fonction · Mail · Service · Ville · Bureau (7 col.)
+  - Écarts : Nom · Ville (OU) · Bureau (surbrillance) · Statut (badge) ; lignes filtrées
+    aux comptes en écart ; menu Colonnes masqué.
+- Source unique = backend : `ensureEcartsLoaded()` indexe `status` par `samAccountName`
+  depuis `/api/ecarts/office-ou` (aucune logique d'écart dupliquée en JS). Invalidé au
+  rebuild de cache. `modeList()` filtre, `ecartStatusOf()` lit le statut.
+- Colonne `col-status` (8e, `colspan` passés à 8) masquée hors mode Écarts via CSS.
+- Revert de l'essai précédent : onglet `Écarts` retiré du shell ; bouton « ⚠ Écarts
+  OU/Bureau » rouvre la page complète `/ecarts` (vue globale groupée, conservée).
+- Fix CSS partagé conservé : `.tree-search-clear[hidden]`/`.user-filter-clear[hidden]`.
+- Vérifié CDP + capture : AD (105 util., 7 col.) ↔ Écarts (2 écarts, 4 col., badges,
+  surbrillance Bureau, Détail, tri Statut) ↔ retour AD OK.
+
 ## En cours
 
 ### Modale « détail DDG » par centre (page Aperçu groupes)
