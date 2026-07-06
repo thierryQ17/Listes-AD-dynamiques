@@ -885,10 +885,7 @@ tr.row-selected td {
 .users-table.hide-ville  .col-ville,
 .users-table.hide-office .col-office { display: none; }
 
-/* ---- Mode Écarts : colonnes Nom · Ville (OU) · Bureau · Statut ---- */
-/* La colonne Statut n'existe qu'en mode Écarts. */
-.col-status { display: none; }
-.users-table.mode-ecarts .col-status { display: table-cell; }
+/* ---- Mode Écarts : colonnes Nom · Ville (OU) · Bureau ---- */
 /* Masquer les colonnes purement « AD » en mode Écarts. */
 .users-table.mode-ecarts .col-desc,
 .users-table.mode-ecarts .col-func,
@@ -907,18 +904,6 @@ body.mode-ecarts .tree-region.ecart-empty { display: none; }
 .site-count.is-ecart-count,
 .region-count.is-ecart-count { background: #fef3c7; color: #b45309; }
 .tree-site.selected .site-count.is-ecart-count { background: #fde68a; color: #92400e; }
-
-/* Badges de statut d'écart */
-.badge-status {
-    display: inline-block;
-    padding: 1px 8px;
-    border-radius: 999px;
-    font-size: 11px;
-    font-weight: 600;
-    white-space: nowrap;
-}
-.badge-status.ecart    { background: #fef2f2; color: #b91c1c; }
-.badge-status.manquant { background: #fffbeb; color: #b45309; }
 
 /* Menu déroulant « Colonnes » */
 .col-menu-wrap { position: relative; }

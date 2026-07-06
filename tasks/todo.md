@@ -12,8 +12,9 @@
 - Même arbre, même tableau, même Détail, mêmes fonctionnalités (tri, regroupement,
   recherche, filtre). Seules les **colonnes** + les **données** changent :
   - AD : Nom · Description · Fonction · Mail · Service · Ville · Bureau (7 col.)
-  - Écarts : Nom · Ville (OU) · Bureau (surbrillance) · Statut (badge) ; lignes filtrées
-    aux comptes en écart ; menu Colonnes masqué.
+  - Écarts : Nom · Ville (OU) · Bureau (surbrillance rouge/ambre) ; lignes filtrées
+    aux comptes en écart ; menu Colonnes masqué. (Colonne « Statut » retirée : la
+    surbrillance du Bureau suffit à signaler l'écart.)
 - Source unique = backend : `ensureEcartsLoaded()` indexe `status` par `samAccountName`
   depuis `/api/ecarts/office-ou` (aucune logique d'écart dupliquée en JS). Invalidé au
   rebuild de cache. `modeList()` filtre, `ecartStatusOf()` lit le statut.

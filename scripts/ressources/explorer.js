@@ -99,7 +99,6 @@ async function setMode(mode) {
         // Retour AD : restaurer l'arbre complet + compteurs utilisateurs.
         clearEcartTreeFilter();
         state.ecartsAll = false;
-        if (state.sortCol === 'status') { state.sortCol = 'displayName'; state.sortDir = 'asc'; resetSortIcons(); }
         updateTreeSelection();
         reRenderCurrent();
     }
@@ -988,12 +987,6 @@ function setAllGroups(expand) {
     updateToggleBtn();
 }
 
-function badgeStatus(status) {
-    return status === 'manquant'
-        ? '<span class="badge-status manquant">Bureau manquant</span>'
-        : '<span class="badge-status ecart">Écart</span>';
-}
-
 function displayUsers(users) {
     state.searchActive = false;
     const list = modeList(users);   // en mode Écarts : uniquement les comptes en écart
@@ -1017,7 +1010,7 @@ function renderFlat(users) {
     tbody.innerHTML = '';
 
     if (!users || users.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="8" class="td-hint">Aucun utilisateur dans ce site</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7" class="td-hint">Aucun utilisateur dans ce site</td></tr>';
         return;
     }
 
@@ -1036,7 +1029,7 @@ function renderGrouped(users, groupBy) {
     tbody.innerHTML = '';
 
     if (!users || users.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="8" class="td-hint">Aucun utilisateur dans ce site</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7" class="td-hint">Aucun utilisateur dans ce site</td></tr>';
         return;
     }
 
@@ -1068,7 +1061,7 @@ function renderGrouped(users, groupBy) {
             + (isFormateur ? ' group-formateur' : '')
             + (isCategory  ? ' group-category'  : '');
         headerTr.innerHTML = `
-            <td colspan="8">
+            <td colspan="7">
                 <span class="group-toggle expanded">▼</span>
                 <span class="group-label">${esc(key)}</span>
                 <span class="group-count">${groupUsers.length}</span>
@@ -1093,7 +1086,7 @@ function renderCategoryGrouped(users) {
     tbody.innerHTML = '';
 
     if (!users || users.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="8" class="td-hint">Aucun utilisateur dans ce site</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7" class="td-hint">Aucun utilisateur dans ce site</td></tr>';
         return;
     }
 
@@ -1111,7 +1104,7 @@ function renderCategoryGrouped(users) {
 
         const mainTr = document.createElement('tr');
         mainTr.className = 'group-header group-category' + (isFormateur ? ' group-formateur' : '');
-        mainTr.innerHTML = `<td colspan="8">
+        mainTr.innerHTML = `<td colspan="7">
             <span class="group-toggle expanded">▼</span>
             <span class="group-label">${esc(catKey)}</span>
             <span class="group-count">${catUsers.length}</span>
@@ -1132,7 +1125,7 @@ function renderCategoryGrouped(users) {
 
             const subTr = document.createElement('tr');
             subTr.className = 'group-header group-sub' + (isFormateur ? ' group-formateur' : '');
-            subTr.innerHTML = `<td colspan="8">
+            subTr.innerHTML = `<td colspan="7">
                 <span class="group-toggle expanded">▼</span>
                 <span class="group-label">${esc(title)}</span>
                 <span class="group-count">${titleUsers.length}</span>
@@ -1251,8 +1244,7 @@ function createUserRow(u, siteDn) {
         <td class="col-mail">${esc(u.mail || '')}</td>
         <td class="col-dept">${esc(u.department || '')}</td>
         <td class="col-ville">${esc(ouVille(u.ouDn))}</td>
-        <td class="col-office${st !== 'ok' ? ' ' + st : ''}">${esc(u.office || '') || (st === 'manquant' ? '—' : '')}</td>
-        <td class="col-status">${st === 'ok' ? '' : badgeStatus(st)}</td>`;
+        <td class="col-office${st !== 'ok' ? ' ' + st : ''}">${esc(u.office || '') || (st === 'manquant' ? '—' : '')}</td>`;
     if (u.enabled === false) tr.classList.add('row-disabled');
     tr.addEventListener('click', () => {
         if (_selectedUserRow) _selectedUserRow.classList.remove('row-selected');
@@ -1354,12 +1346,12 @@ function renderUsers(users) { displayUsers(users); }
 
 function setTableLoading() {
     document.getElementById('users-tbody').innerHTML =
-        '<tr><td colspan="8" class="td-loading">Chargement…</td></tr>';
+        '<tr><td colspan="7" class="td-loading">Chargement…</td></tr>';
 }
 
 function setTableError(msg) {
     document.getElementById('users-tbody').innerHTML =
-        `<tr><td colspan="8" class="td-hint" style="color:#dc2626">Erreur : ${esc(msg)}</td></tr>`;
+        `<tr><td colspan="7" class="td-hint" style="color:#dc2626">Erreur : ${esc(msg)}</td></tr>`;
 }
 
 // ============================================================
@@ -1571,7 +1563,7 @@ function renderCrossSiteResults(q, preserveScroll) {
     tbody.innerHTML = '';
 
     if (results.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="8" class="td-hint">Aucun résultat trouvé</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7" class="td-hint">Aucun résultat trouvé</td></tr>';
         return;
     }
 
@@ -1581,7 +1573,7 @@ function renderCrossSiteResults(q, preserveScroll) {
         headerTr.className = 'group-header';
         headerTr.dataset.dn = dn;
         headerTr.innerHTML = `
-            <td colspan="8">
+            <td colspan="7">
                 <span class="group-toggle ${uncached ? '' : 'expanded'}">▼</span>
                 <span class="group-label">${hlText(siteName, lq)}</span>
                 <span class="group-count">${uncached ? '?' : users.length}</span>
@@ -1600,7 +1592,7 @@ function renderCrossSiteResults(q, preserveScroll) {
         if (uncached) {
             const tr = document.createElement('tr');
             tr.className = 'group-member';
-            tr.innerHTML = `<td colspan="8" class="td-hint search-uncached-hint">Cache non disponible · cliquer sur le nom du site ci-dessus pour charger</td>`;
+            tr.innerHTML = `<td colspan="7" class="td-hint search-uncached-hint">Cache non disponible · cliquer sur le nom du site ci-dessus pour charger</td>`;
             frag.appendChild(tr);
         } else {
             for (const u of users.sort((a, b) =>
@@ -1693,7 +1685,6 @@ function setupSort() {
 function getSortedUsers(users) {
     const val = u => String(
         state.sortCol === 'ouVille' ? ouVille(u.ouDn)
-      : state.sortCol === 'status'  ? ecartStatusOf(u)
       : (u[state.sortCol] || '')
     ).toLowerCase();
     return [...users].sort((a, b) => {
