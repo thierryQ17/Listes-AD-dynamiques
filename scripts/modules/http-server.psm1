@@ -238,11 +238,13 @@ function Start-AppServer {
                 # puis purge les caches par site et relance le warmup (reconstruction en arrière-plan).
                 [void](Build-OUsCache)
                 $count = Build-GlobalUsersCache
+                # Option A : « ↻ Cache » reconstruit aussi le cache alternatif majAD (1 requête).
+                try { [void](Build-MajAdUsersCache) } catch { add-msg -msg "  [majAD] build ignoré : $($_.Exception.Message)" -foregroundColor Yellow }
                 $sd = Split-Path ($global:path."r_settings" -replace '/', '\') -Parent
                 $cd = Join-Path $sd "cache"
                 if (Test-Path $cd) {
                     Get-ChildItem $cd -Filter '*.json' -ErrorAction SilentlyContinue |
-                        Where-Object { $_.Name -notin @('_users_global.json', '_ous_global.json') } |
+                        Where-Object { $_.Name -notin @('_users_global.json', '_ous_global.json', '_users_majad.json') } |
                         Remove-Item -Force -ErrorAction SilentlyContinue
                 }
                 Start-CacheWarmup
@@ -804,6 +806,36 @@ function Start-AppServer {
             } catch {
                 $e = $_.Exception.Message -replace '"', "'"
                 Send-Json -Body "{`"error`":`"$e`",`"tree`":[]}" -StatusCode 500
+            }
+        }
+
+        # ==================== API — Cache alternatif « majAD » ====================
+        # Lecture du cache majAD (fichier). Construit le fichier à la 1re demande s'il est absent
+        # (UNE requête AD), puis TOUJOURS lu jusqu'à régénération. Renvoie la liste plate ;
+        # l'arbre Department→Office est construit côté client.
+        Add-PodeRoute -Method Get -Path '/api/majad/users' -ScriptBlock {
+            try {
+                $path = Get-MajAdUsersCachePath
+                if (-not (Test-Path $path)) {
+                    add-msg -msg "  [majAD] cache absent → construction initiale (1 requête)…" -foregroundColor Yellow
+                    [void](Build-MajAdUsersCache)
+                }
+                $data = if (Test-Path $path) { [System.IO.File]::ReadAllText($path, [System.Text.Encoding]::UTF8) } else { '[]' }
+                if (Test-Path $path) { Add-PodeHeader -Name 'X-Cache-Built' -Value ([System.IO.FileInfo]$path).LastWriteTime.ToString('yyyy-MM-dd HH:mm:ss') }
+                Send-Json -Body $data
+            } catch {
+                $e = $_.Exception.Message -replace '"', "'"
+                Send-Json -Body "{`"error`":`"$e`"}" -StatusCode 500
+            }
+        }
+        # Régénère explicitement le cache majAD (1 requête AD).
+        Add-PodeRoute -Method Post -Path '/api/majad/preload' -ScriptBlock {
+            try {
+                $count = Build-MajAdUsersCache
+                Send-Json -Body "{`"ok`":true,`"count`":$count}"
+            } catch {
+                $e = $_.Exception.Message -replace '"', "'"
+                Send-Json -Body "{`"ok`":false,`"error`":`"$e`"}" -StatusCode 500
             }
         }
 

@@ -15,8 +15,89 @@ const state = {
     mode:           'ad',    // 'ad' (utilisateurs) | 'ecarts' (OU vs Bureau)
     ecartBySam:     null,    // { samAccountName: 'ecart' | 'manquant' } — chargé à la demande
     ecartUsers:     [],      // TOUS les comptes en écart (toutes OU) — objets utilisateur complets
-    ecartsAll:      false    // vrai = vue « toutes les OU » (aucun filtre de site) — défaut du mode Écarts
+    ecartsAll:      false,   // vrai = vue « toutes les OU » (aucun filtre de site) — défaut du mode Écarts
+    source:         'ad',    // 'ad' (arbre OU→site) | 'majad' (arbre Department→Office, 1 requête)
+    majAdUsers:     null      // liste plate du cache majAD (chargée à la demande)
 };
+
+// ============================================================
+//  Source du cache : AD (arbre OU→site, existant) / majAD (arbre Department→Office)
+//  Le cache majAD provient d'UNE requête AD (fichier lu jusqu'à régénération) ;
+//  l'arbre Department→Office et la sélection se font EN MÉMOIRE côté client.
+// ============================================================
+function setupSourceSelect() {
+    const sel = document.getElementById('source-select');
+    if (sel) sel.addEventListener('change', () => setSource(sel.value));
+}
+
+async function setSource(src) {
+    if (state.source === src) return;
+    state.source = src;
+    document.body.classList.toggle('source-majad', src === 'majad');
+    // Le mode Écarts (basé sur les OU) n'a pas de sens en source majAD → repasser en AD.
+    if (src === 'majad' && state.mode === 'ecarts') { await setMode('ad'); }
+
+    state.selectedSite = null;
+    state.allUsers = [];
+    clearDetailPanel();
+    document.getElementById('current-site-name').textContent = 'Sélectionner un site';
+    document.getElementById('user-count').textContent = '';
+    document.getElementById('users-tbody').innerHTML = '';
+
+    if (src === 'majad') {
+        await loadMajAdTree();
+    } else {
+        loadTree();   // reconstruit l'arbre OU→site + prefetch
+    }
+}
+
+async function loadMajAdTree() {
+    const container = document.getElementById('tree-container');
+    container.innerHTML = '<p class="tree-hint">Chargement du cache majAD…</p>';
+    try {
+        const res  = await fetch('/api/majad/users', { cache: 'no-store' });
+        const data = await res.json();
+        if (data && data.error) {
+            container.innerHTML = `<p class="tree-hint" style="color:#dc2626">${esc(data.error)}</p>`;
+            return;
+        }
+        state.majAdUsers = Array.isArray(data) ? data : [];
+        state.treeData   = buildDeptOfficeTree(state.majAdUsers);
+        renderTree(state.treeData);
+        // Compteurs : badge Office = nb d'utilisateurs ; badge Department = nb d'Offices (auto).
+        state.treeData.forEach(region => (region.children || []).forEach(site => {
+            const b = document.getElementById('count-' + dnToId(site.dn));
+            if (b) b.textContent = (site._users ? site._users.length : 0);
+        }));
+        updateToggleTreeBtn();
+    } catch (e) {
+        container.innerHTML = `<p class="tree-hint" style="color:#dc2626">Erreur : ${esc(e.message)}</p>`;
+    }
+}
+
+// Arbre au format existant (région→site) : Department = région, Office = site.
+// La clé « dn » du site est synthétique (dept + séparateur + office) ; les utilisateurs
+// du bureau sont rattachés au nœud via `_users` (sélection en mémoire).
+function buildDeptOfficeTree(users) {
+    const byDept = new Map();
+    for (const u of users) {
+        const dept   = (u.department && u.department.trim()) ? u.department : '(sans département)';
+        const office = (u.office && u.office.trim())         ? u.office     : '(sans bureau)';
+        if (!byDept.has(dept)) byDept.set(dept, new Map());
+        const offices = byDept.get(dept);
+        if (!offices.has(office)) offices.set(office, []);
+        offices.get(office).push(u);
+    }
+    const regions = [];
+    for (const dept of [...byDept.keys()].sort((a, b) => a.localeCompare(b, 'fr'))) {
+        const offices  = byDept.get(dept);
+        const children = [...offices.keys()].sort((a, b) => a.localeCompare(b, 'fr')).map(office => ({
+            name: office, dn: dept + '::' + office, baseLabel: '', _users: offices.get(office),
+        }));
+        regions.push({ name: dept, type: 'region', multiBase: false, children });
+    }
+    return regions;
+}
 
 // ============================================================
 //  Mode d'affichage AD / Écarts
@@ -436,6 +517,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('refresh-all-btn').addEventListener('click', refreshAllCache);
 
     setupModeToggle();
+    setupSourceSelect();
 
     document.getElementById('toggle-tree-btn').addEventListener('click', () => {
         const anyCollapsed = document.querySelector('.tree-region:not(.expanded)');
@@ -752,6 +834,7 @@ async function refreshAllCache() {
             `<li><b>${allSites.length}</b> sites (utilisateurs par site)</li>` +
             `<li>les <b>OUs</b> (arborescence)</li>` +
             `<li>le cache <b>global des utilisateurs</b></li>` +
+            `<li>le cache <b>majAD</b> (Department → Office)</li>` +
         `</ul>` +
         `Cette opération peut prendre plusieurs minutes.`
     );
@@ -806,6 +889,13 @@ async function refreshAllCache() {
             try { await ensureEcartsLoaded(); } catch { /* réessai au prochain rendu */ }
             applyEcartTreeFilter();
             reRenderCurrent();
+        }
+
+        // Option A : le cache majAD a été reconstruit par /api/users/preload → recharger l'arbre.
+        state.majAdUsers = null;
+        if (state.source === 'majad') {
+            state.selectedSite = null;
+            await loadMajAdTree();
         }
 
         showToast(`Cache reconstruit (${data.deleted} fichier(s) vidés)`, 'success');
@@ -896,6 +986,21 @@ async function selectSite(site, el, forceRefresh = false) {
     document.getElementById('user-filter').value = '';
     updateSiteHeader(site, null, false);
     setTableLoading();
+
+    // Source majAD : les utilisateurs sont déjà en mémoire (rattachés au nœud Office),
+    // aucun appel AD — filtrage instantané.
+    if (state.source === 'majad') {
+        state.allUsers = site._users || [];
+        state.sortCol  = 'displayName';
+        state.sortDir  = 'asc';
+        resetSortIcons();
+        renderUsers(state.allUsers);
+        updateSiteHeader(site, modeList(state.allUsers).length, true);
+        document.getElementById('user-filter').disabled = false;
+        document.getElementById('group-by').disabled = false;
+        setBadgeCount(document.getElementById('count-' + dnToId(site.dn)), state.allUsers.length);
+        return;
+    }
 
     try {
         const url = `/api/ou/users?dn=${encodeURIComponent(site.dn)}${forceRefresh ? '&fresh=1' : ''}`;

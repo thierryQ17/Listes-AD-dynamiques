@@ -434,6 +434,87 @@ function Get-AllUsersFromCache {
     } catch { return @() }
 }
 
+# ============================================================
+#  Cache alternatif « majAD » — UNE seule requête AD (pas de warmup par site).
+#  Population fiabilisée par le job paie de 7h ; l'arbre Department→Office se
+#  construit ensuite EN MÉMOIRE côté client. Objet IDENTIQUE au cache global
+#  → réutilisation totale (Détail, colonnes, écarts). Lu jusqu'à régénération.
+# ============================================================
+function Get-MajAdUsersCachePath {
+    $scriptsDir = Split-Path ($global:path."r_settings" -replace '/', '\') -Parent
+    $cacheDir   = Join-Path $scriptsDir "cache"
+    if (-not (Test-Path $cacheDir)) { New-Item -ItemType Directory -Path $cacheDir -Force | Out-Null }
+    return Join-Path $cacheDir "_users_majad.json"
+}
+
+function Get-MajAdUsersFromCache {
+    $path = Get-MajAdUsersCachePath
+    if (-not (Test-Path $path)) { return @() }
+    try {
+        return @(ConvertFrom-Json ([System.IO.File]::ReadAllText($path, [System.Text.Encoding]::UTF8)))
+    } catch { return @() }
+}
+
+function Build-MajAdUsersCache {
+    # Filtre PARAMÉTRABLE (parametres.json → ad.majAdFilter). Aujourd'hui : 'Enabled -eq $true'
+    # (le tag n'existe pas encore) ; demain : 'Enabled -eq $true -and extensionAttribute15 -eq "majAD"'.
+    $searchBase = $global:parametresJson.ad.searchBase
+    $filter     = "$($global:parametresJson.ad.majAdFilter)"
+    if ([string]::IsNullOrWhiteSpace($filter)) { $filter = 'Enabled -eq $true' }
+    add-msg -msg "  [majAD] UNE requête AD (filtre: $filter ; searchBase: $searchBase)…" -foregroundColor Cyan -quelType writeHost
+    $adParams = @{
+        Filter      = $filter
+        SearchBase  = $searchBase
+        Credential  = $global:AD_credential
+        Properties  = @('SamAccountName','Mail','DisplayName','Title','Department','Office',
+                        'extensionAttribute1','extensionAttribute15','Description','ProxyAddresses',
+                        'Company','EmployeeNumber','Manager','UserPrincipalName','Type',
+                        'PostalCode','StreetAddress','Enabled')
+        ErrorAction = 'Stop'
+    }
+    # DC pivot (au plus près de la source, sans latence de réplication) si défini en config.
+    $adServer = "$($global:parametresJson.ad.server)"
+    if (-not [string]::IsNullOrWhiteSpace($adServer)) { $adParams.Server = $adServer; add-msg -msg "  [majAD] Serveur AD ciblé : $adServer" -foregroundColor DarkCyan -quelType writeHost }
+    $users = @(Get-ADUser @adParams)
+    add-msg -msg "  [majAD] $($users.Count) comptes ramenés." -foregroundColor Cyan -quelType writeHost
+
+    # Projection IDENTIQUE à Build-GlobalUsersCache (même forme d'objet → réutilisation front).
+    $records = @($users | ForEach-Object {
+        $u   = $_
+        $sam = "$($u.SamAccountName)"
+        $primary = ''
+        foreach ($p in @($u.ProxyAddresses)) { if ("$p" -cmatch '^SMTP:(.+)$') { $primary = $Matches[1]; break } }
+        if ([string]::IsNullOrWhiteSpace($primary) -or [string]::IsNullOrWhiteSpace($sam)) { return }
+        [ordered]@{
+            dn                  = "$($u.DistinguishedName)"
+            ouDn                = ($u.DistinguishedName -replace '^CN=[^,]+,', '')
+            displayName         = if ($u.DisplayName)         { "$($u.DisplayName)"         } else { $sam }
+            samAccountName      = $sam
+            primarySmtpAddress  = $primary
+            mail                = if ($u.Mail)                { "$($u.Mail)"                } else { '' }
+            title               = if ($u.Title)               { "$($u.Title)"               } else { '' }
+            department          = if ($u.Department)          { "$($u.Department)"          } else { '' }
+            office              = if ($u.Office)              { "$($u.Office)"              } else { '' }
+            extensionAttribute1 = if ($u.extensionAttribute1) { "$($u.extensionAttribute1)" } else { '' }
+            description         = if ($u.Description)         { "$($u.Description)"         } else { '' }
+            company             = if ($u.Company)             { "$($u.Company)"             } else { '' }
+            employeeNumber      = if ($u.EmployeeNumber)       { "$($u.EmployeeNumber)"       } else { '' }
+            manager             = if ($u.Manager -match '^CN=([^,]+)') { $Matches[1] } elseif ($u.Manager) { "$($u.Manager)" } else { '' }
+            userPrincipalName   = if ($u.UserPrincipalName)   { "$($u.UserPrincipalName)"   } else { '' }
+            type                = if ($u.Type)                 { "$($u.Type)"                 } else { '' }
+            postalCode          = if ($u.PostalCode)           { "$($u.PostalCode)"           } else { '' }
+            streetAddress       = if ($u.StreetAddress)       { "$($u.StreetAddress)"       } else { '' }
+            enabled             = [bool]$u.Enabled
+            proxyAddresses      = [string[]]@($u.ProxyAddresses | Where-Object { $_ } | ForEach-Object { [string]$_ })
+        }
+    })
+    $json = ConvertTo-Json -InputObject @($records) -Depth 4 -Compress
+    $cachePath = Get-MajAdUsersCachePath
+    [System.IO.File]::WriteAllText($cachePath, $json, [System.Text.Encoding]::UTF8)
+    add-msg -msg "  [majAD] $($records.Count) comptes conservés (BAL+sam) → $cachePath" -foregroundColor Green -quelType writeHost
+    return $records.Count
+}
+
 function Build-GlobalUsersCache {
     $searchBase = $global:parametresJson.ad.searchBase
     add-msg -msg "  [UsersCache] Chargement de tous les utilisateurs AD (searchBase: $searchBase)…" -foregroundColor Cyan -quelType writeHost

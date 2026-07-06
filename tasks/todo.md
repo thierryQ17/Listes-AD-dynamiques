@@ -1,5 +1,26 @@
 # TODO
 
+## Terminé — 2026-07-06 (cache alternatif majAD)
+
+### 2ᵉ cache « majAD » — 1 requête AD, arbre Department → Office
+- **Backend** `ad-reader.psm1` : `Build-MajAdUsersCache` (UNE requête `Get-ADUser`,
+  filtre config `ad.majAdFilter`, DC pivot `ad.server` = A31000A00S002 via `-Server`,
+  projection IDENTIQUE au cache global) + `Get-MajAdUsersFromCache` + `_users_majad.json`.
+- **Routes** `http-server.psm1` : `GET /api/majad/users` (lit le fichier, le construit si
+  absent = 1 requête, puis lu jusqu'à régénération) + `POST /api/majad/preload`.
+  Option A : `/api/users/preload` (↻ Cache) reconstruit AUSSI majAD ; `_users_majad.json`
+  exclu du purge des caches par site.
+- **Config** `parametres.json` : `ad.server="A31000A00S002"`, `ad.majAdFilter="Enabled -eq $true"`
+  (→ DEMAIN : `"Enabled -eq $true -and extensionAttribute15 -eq 'majAD'"` — 1 ligne).
+- **Frontend** `explorer.*` : sélecteur `Cache : AD / majAD` (`#source-select`), arbre
+  Department→Office construit EN MÉMOIRE (`buildDeptOfficeTree`), sélection d'un Office =
+  filtrage mémoire (0 appel AD, `selectSite` branché sur `state.source`). En source majAD :
+  refresh par site/région masqués + mode Écarts masqué (spécifiques OU). Réutilise
+  Détail/colonnes/tri. Validé sur le CSV : 3562 users → 5 dépts / 207 bureaux, 0 perte.
+- **⚠ nécessite un REDÉMARRAGE serveur** (routes Pode + module + config chargés au démarrage).
+- Limite connue : la recherche d'arbre (champ du haut) n'est pas encore branchée en source
+  majAD (dépend du prefetch AD par site) ; le filtre par bureau fonctionne.
+
 ## Terminé — 2026-07-06 (suite)
 
 ### DDG : Office dans Get-Recipient + copie ligne-à-ligne

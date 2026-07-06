@@ -1,7 +1,8 @@
 {
   "ad": {
-    "server":     "",
+    "server":     "A31000A00S002",
     "searchBase": "DC=aft-iftim,DC=france",
+    "majAdFilter": "Enabled -eq $true",
     "groupsOU":   "%%_OU_GROUPES_I2N_%%",
     "mailDomain": "aftral.com",
     "excludeDisplayNamePatterns": ["ricoh"],
