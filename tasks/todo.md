@@ -1,5 +1,24 @@
 # TODO
 
+## Terminé — 2026-07-06 (majAD = cache UNIQUE de l'Explorateur)
+
+### Bascule complète sur le cache majAD + activation du filtre production
+- **Explorateur = majAD uniquement** : sélecteur de source retiré, `state.source='majad'`
+  par défaut, `loadMajAdTree()` au chargement (plus de `loadTree`/snapshot OU). Mode Écarts
+  et refresh site/région masqués (déjà via `body.source-majad`).
+- **Filtre production** : `parametres.json → ad.majAdFilter =
+  "Enabled -eq $true -and extensionAttribute15 -eq 'majAD'"`. ⚠ Tag posé par le job paie de
+  7h → **arbre VIDE tant que le tag n'existe pas** (message dédié dans l'arbre).
+- **Diag 408 résolu** : la requête pivot (`-Server A31000A00S002`, DC 10.254.4.2) ramène
+  4416 users en **18 s** (mesuré) — pas trop lent ; c'était le **timeout de requête Pode**
+  (30 s défaut) dépassé par build+sérialisation. Fix : `Start-PodeServer -RequestTimeout 600`.
+- **Ancien cache retiré** : plus de warmup par site dans `/api/users/preload` (l'Explorateur
+  n'utilise plus les caches par OU/site). ↻ Cache = 1 requête majAD + 1 requête globale
+  (global conservé car lu par Écarts/Règles/Groupes). `refreshMajAdCache()` côté front.
+- ⚠ **REDÉMARRAGE serveur requis** (config majAdFilter + RequestTimeout + preload chargés
+  au démarrage). Pour tester l'UI avec des DONNÉES aujourd'hui : remettre temporairement
+  `majAdFilter="Enabled -eq $true"` + restart.
+
 ## Terminé — 2026-07-06 (cache alternatif majAD)
 
 ### 2ᵉ cache « majAD » — 1 requête AD, arbre Department → Office

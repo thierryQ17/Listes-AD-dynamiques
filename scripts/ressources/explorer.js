@@ -16,7 +16,7 @@ const state = {
     ecartBySam:     null,    // { samAccountName: 'ecart' | 'manquant' } — chargé à la demande
     ecartUsers:     [],      // TOUS les comptes en écart (toutes OU) — objets utilisateur complets
     ecartsAll:      false,   // vrai = vue « toutes les OU » (aucun filtre de site) — défaut du mode Écarts
-    source:         'ad',    // 'ad' (arbre OU→site) | 'majad' (arbre Department→Office, 1 requête)
+    source:         'majad', // cache unique : majAD (arbre Department→Office, 1 requête AD)
     majAdUsers:     null      // liste plate du cache majAD (chargée à la demande)
 };
 
@@ -62,6 +62,12 @@ async function loadMajAdTree() {
             return;
         }
         state.majAdUsers = Array.isArray(data) ? data : [];
+        if (state.majAdUsers.length === 0) {
+            container.innerHTML = '<p class="tree-hint">Cache majAD vide.<br>Aucun compte avec le tag <b>extensionAttribute15 = majAD</b> ' +
+                '(posé par le traitement paie de 7h). Cliquez <b>↻ Cache</b> après le traitement.</p>';
+            state.treeData = [];
+            return;
+        }
         state.treeData   = buildDeptOfficeTree(state.majAdUsers);
         renderTree(state.treeData);
         // Compteurs : badge Office = nb d'utilisateurs ; badge Department = nb d'Offices (auto).
@@ -395,6 +401,7 @@ const SNAPSHOT_KEY = 'explorer_snapshot';
 const SNAPSHOT_TTL = 30 * 60 * 1000;  // 30 min
 
 function saveSnapshot() {
+    if (state.source === 'majad') return;   // arbre majAD reconstruit à la volée — pas de snapshot
     if (!state.treeData.length) return;
     try {
         const expandedNames = [...document.querySelectorAll('.tree-region.expanded')]
@@ -507,9 +514,9 @@ document.addEventListener('DOMContentLoaded', () => {
     setupSort();
     setupGroupBy();
 
-    if (!tryRestoreSnapshot()) {
-        loadTree();
-    }
+    // Cache unique : majAD (arbre Department → Office, 1 requête AD).
+    document.body.classList.add('source-majad');
+    loadMajAdTree();
 
     setupFunctionModal();
     window.addEventListener('beforeunload', saveSnapshot);
@@ -824,6 +831,8 @@ function showConfirmModal(title, htmlMsg) {
 }
 
 async function refreshAllCache() {
+    if (state.source === 'majad') { return refreshMajAdCache(); }
+
     const allSites = state.treeData.flatMap(r => r.children || []);
     if (!allSites.length) return;
 
@@ -904,6 +913,46 @@ async function refreshAllCache() {
         showToast('Erreur : ' + e.message, 'error');
     } finally {
         appOverlay.off();   // débloque UNIQUEMENT ici : le cache est réellement reconstruit et à jour
+        btn.disabled = false;
+        btn.classList.remove('spinning');
+    }
+}
+
+// ↻ Cache en source majAD : régénère le cache majAD (1 requête AD) + le cache global,
+// sans warmup par site, puis recharge l'arbre Department → Office.
+async function refreshMajAdCache() {
+    const ok = await showConfirmModal(
+        'Régénérer le cache majAD ?',
+        `Une requête AD unique (filtre <b>majAD</b>) reconstruit le cache <b>majAD</b> ` +
+        `et le cache <b>global</b> (utilisé par Écarts / Règles / Groupes).<br>` +
+        `Cela peut prendre quelques dizaines de secondes.`
+    );
+    if (!ok) return;
+
+    const btn = document.getElementById('refresh-all-btn');
+    btn.disabled = true;
+    btn.classList.add('spinning');
+    appOverlay.on('Reconstruction du cache majAD…');
+    document.getElementById('tree-container').innerHTML = '<p class="tree-hint">Régénération du cache majAD…</p>';
+
+    try {
+        const res  = await fetch('/api/users/preload', { method: 'POST' });
+        const data = await res.json().catch(() => ({}));
+        if (data && data.ok === false) throw new Error(data.error || 'échec de la reconstruction');
+
+        state.majAdUsers   = null;
+        state.selectedSite = null;
+        clearDetailPanel();
+        await loadMajAdTree();
+
+        showToast('Cache majAD régénéré', 'success');
+        window.parent.postMessage({ type: 'cache-rebuilt' }, '*');
+    } catch (e) {
+        showToast('Erreur : ' + e.message, 'error');
+        document.getElementById('tree-container').innerHTML =
+            `<p class="tree-hint" style="color:#dc2626">Erreur : ${esc(e.message)}</p>`;
+    } finally {
+        appOverlay.off();
         btn.disabled = false;
         btn.classList.remove('spinning');
     }

@@ -23,7 +23,9 @@ function Start-AppServer {
 
     # -Browse : Pode ouvre lui-même le navigateur UNE FOIS le serveur à l'écoute
     # (évite le "connexion échouée" quand le navigateur était ouvert trop tôt).
-    Start-PodeServer -Threads 3 -Browse {
+    # RequestTimeout élevé : certaines reconstructions de cache (requête AD complète +
+    # projection + sérialisation de milliers d'utilisateurs) dépassent les 30 s par défaut.
+    Start-PodeServer -Threads 3 -RequestTimeout 600 -Browse {
         Add-PodeEndpoint -Address localhost -Port $global:__AppPort -Protocol Http
 
         # --- Snapshot des globals du thread principal vers l'état Pode ---
@@ -247,7 +249,8 @@ function Start-AppServer {
                         Where-Object { $_.Name -notin @('_users_global.json', '_ous_global.json', '_users_majad.json') } |
                         Remove-Item -Force -ErrorAction SilentlyContinue
                 }
-                Start-CacheWarmup
+                # Plus de warmup par site : l'Explorateur utilise le cache majAD (1 requête),
+                # écarts/règles/groupes lisent le cache global. Les caches par site sont obsolètes.
                 Send-Json -Body "{`"ok`":true,`"count`":$count}"
             } catch {
                 $errMsg = $_.Exception.Message -replace '"', "'"

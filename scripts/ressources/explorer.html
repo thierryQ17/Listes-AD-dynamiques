@@ -48,14 +48,7 @@
             </div>
             <div class="tree-actions-bar">
                 <button id="toggle-tree-btn" class="btn-tree-toggle">Tout ouvrir</button>
-                <button id="refresh-all-btn" class="btn-refresh-all" title="Vider et reconstruire tout le cache AD">↻ Cache</button>
-            </div>
-            <div class="source-bar" title="Source du cache utilisé par l'arbre">
-                <label class="source-label" for="source-select">Cache&nbsp;:</label>
-                <select id="source-select" class="source-select">
-                    <option value="ad">AD (OU → site)</option>
-                    <option value="majad">majAD (Department → Office)</option>
-                </select>
+                <button id="refresh-all-btn" class="btn-refresh-all" title="Régénérer le cache majAD (1 requête AD) + le cache global">↻ Cache</button>
             </div>
             <div class="tree-container" id="tree-container">
                 <p class="tree-hint">Chargement de l'arbre AD…</p>
@@ -190,6 +183,6 @@
         </div>
     </div>
 
-    <script src="/explorer.js?v=14"></script>
+    <script src="/explorer.js?v=15"></script>
 </body>
 </html>
