@@ -468,6 +468,14 @@ function Build-GlobalUsersCache {
     $users = @(Get-ADUser @adParams)
     add-msg -msg "  [UsersCache] $($users.Count) utilisateurs actifs chargés." -foregroundColor Cyan -quelType writeHost
 
+    # Exclusion des comptes génériques (office = valeur configurée, ex. 'compte_generique').
+    $excludeOffices = @($global:parametresJson.ad.excludeOfficeValues | Where-Object { $_ })
+    if ($excludeOffices.Count) {
+        $before = $users.Count
+        $users  = @($users | Where-Object { "$($_.Office)" -notin $excludeOffices })
+        add-msg -msg "  [UsersCache] comptes génériques exclus (office) : $($before - $users.Count)." -foregroundColor DarkGray -quelType writeHost
+    }
+
     $records = @($users | ForEach-Object {
         $u   = $_
         $sam = "$($u.SamAccountName)"
@@ -544,6 +552,12 @@ function Get-OUSiteUsers {
                     UserPrincipalName, Type, Company, EmployeeNumber, Manager, Office, `
                     extensionAttribute1, extensionAttribute15, PostalCode, StreetAddress `
         -ErrorAction Stop
+
+    # Exclusion des comptes génériques (office = valeur configurée, ex. 'compte_generique').
+    $excludeOffices = @($global:parametresJson.ad.excludeOfficeValues | Where-Object { $_ })
+    if ($excludeOffices.Count) {
+        $users = @($users | Where-Object { "$($_.Office)" -notin $excludeOffices })
+    }
 
     return @(
         $users | ForEach-Object {

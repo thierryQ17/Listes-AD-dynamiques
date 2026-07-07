@@ -6,6 +6,7 @@
     "groupsOU":   "%%_OU_GROUPES_I2N_%%",
     "mailDomain": "aftral.com",
     "excludeDisplayNamePatterns": ["ricoh"],
+    "excludeOfficeValues": ["compte_generique"],
     "excludeOUs": ["Comptes generiques"],
     "regions": [
       {
