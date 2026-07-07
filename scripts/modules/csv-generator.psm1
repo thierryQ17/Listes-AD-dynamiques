@@ -42,7 +42,7 @@ function Invoke-RuleGeneration {
     $gpGroups   = [System.Collections.Generic.List[hashtable]]::new()
 
     if ($Rule.niveau -eq 3) {
-        $byDO = $filtered | Group-Object { Get-RegionFromDN $_.dn } | Where-Object { $_.Name -and $_.Name -ne 'MONCHY' }
+        $byDO = $filtered | Group-Object { Get-RegionFromDN $_.dn } | Where-Object { $_.Name -and (Test-DoIncluded $_.Name $Rule) }
         foreach ($doGrp in $byDO) {
             $doName  = if ($doGrp.Name) { $doGrp.Name } else { 'SANS-DO' }
             $doClean = Clean-ForFileName $doName
@@ -57,7 +57,7 @@ function Invoke-RuleGeneration {
         $glId = Resolve-GroupIdentity -Naming $naming -DefaultBase $lbl -MailDomain $mailDomain -Prefix $lbl -DoName '' -Centre '' -Level 'global'
         $gpGroups.Add(@{ name = $glId.name; mail = $glId.mail; type = 'global'; count = $filtered.Count })
     } elseif ($Rule.niveau -eq 2) {
-        $byDO = $filtered | Group-Object { Get-RegionFromDN $_.dn } | Where-Object { $_.Name -and $_.Name -ne 'MONCHY' }
+        $byDO = $filtered | Group-Object { Get-RegionFromDN $_.dn } | Where-Object { $_.Name -and (Test-DoIncluded $_.Name $Rule) }
         foreach ($doGrp in $byDO) {
             $doName  = if ($doGrp.Name) { $doGrp.Name } else { 'SANS-DO' }
             $doId    = Resolve-GroupIdentity -Naming $naming -DefaultBase "$lbl-$(Clean-ForFileName $doName)" -MailDomain $mailDomain -Prefix $lbl -DoName $doName -Centre '' -Level 'do'
@@ -398,7 +398,7 @@ function Write-RuleCsvSet {
 
     if ($niveau -ge 3) {
         $doChildRows = [System.Collections.Generic.List[string]]::new()
-        $byDO = $filtered | Group-Object { Get-RegionFromDN $_.dn } | Where-Object { $_.Name -and $_.Name -ne 'MONCHY' }
+        $byDO = $filtered | Group-Object { Get-RegionFromDN $_.dn } | Where-Object { $_.Name -and (Test-DoIncluded $_.Name $Rule) }
         foreach ($doGrp in $byDO) {
             $doClean = Clean-ForFileName $doGrp.Name
             $doId    = Resolve-GroupIdentity -Naming $naming -DefaultBase "$lbl-$doClean" -MailDomain $mailDomain -Prefix $lbl -DoName $doGrp.Name -Centre '' -Level 'do'
@@ -415,7 +415,7 @@ function Write-RuleCsvSet {
         & $writeCsv (& $mailBase $glId) $doChildRows
     } elseif ($niveau -eq 2) {
         $doChildRows = [System.Collections.Generic.List[string]]::new()
-        $byDO = $filtered | Group-Object { Get-RegionFromDN $_.dn } | Where-Object { $_.Name -and $_.Name -ne 'MONCHY' }
+        $byDO = $filtered | Group-Object { Get-RegionFromDN $_.dn } | Where-Object { $_.Name -and (Test-DoIncluded $_.Name $Rule) }
         foreach ($doGrp in $byDO) {
             $doClean = Clean-ForFileName $doGrp.Name
             $doId    = Resolve-GroupIdentity -Naming $naming -DefaultBase "$lbl-$doClean" -MailDomain $mailDomain -Prefix $lbl -DoName $doGrp.Name -Centre '' -Level 'do'
@@ -499,14 +499,14 @@ function Get-RuleGroupCount {
     $filtered = @($filtered | Where-Object { -not (Test-UserExcluded $_) })
 
     if ($Rule.niveau -eq 3) {
-        $byDO = @($filtered | Group-Object { Get-RegionFromDN $_.dn } | Where-Object { $_.Name -and $_.Name -ne 'MONCHY' })
+        $byDO = @($filtered | Group-Object { Get-RegionFromDN $_.dn } | Where-Object { $_.Name -and (Test-DoIncluded $_.Name $Rule) })
         $centres = 0
         foreach ($doGrp in $byDO) {
             $centres += @($doGrp.Group | Group-Object { Get-CentreFromDN $_.dn }).Count
         }
         return 1 + $byDO.Count + $centres
     } elseif ($Rule.niveau -eq 2) {
-        $byDO = @($filtered | Group-Object { Get-RegionFromDN $_.dn } | Where-Object { $_.Name -and $_.Name -ne 'MONCHY' })
+        $byDO = @($filtered | Group-Object { Get-RegionFromDN $_.dn } | Where-Object { $_.Name -and (Test-DoIncluded $_.Name $Rule) })
         return 1 + $byDO.Count
     }
     return 1

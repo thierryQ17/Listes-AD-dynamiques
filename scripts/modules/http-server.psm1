@@ -156,6 +156,13 @@ function Start-AppServer {
             $count = if (Test-Path $gPath) { @(Get-AllUsersFromCache).Count } else { 0 }
             Send-Json -Body "{`"count`":$count}"
         }
+        # Libellés des régions/DO (depuis la config) — pour le sélecteur multi-DO des Règles.
+        Add-PodeRoute -Method Get -Path '/api/regions' -ScriptBlock {
+            $regs = @($global:parametresJson.ad.regions | Where-Object { $_.label } | ForEach-Object {
+                [ordered]@{ label = "$($_.label)"; defaultOff = ($_.defaultOff -eq $true) }
+            })
+            Send-Json -Body (ConvertTo-Json -InputObject @($regs) -Compress)
+        }
         Add-PodeRoute -Method Post -Path '/api/cache/refresh-all' -ScriptBlock {
             $scriptsDir = Split-Path $global:path."r_settings" -Parent
             $cacheDir   = Join-Path $scriptsDir "cache"
@@ -647,7 +654,7 @@ function Start-AppServer {
                     $ddgProj = { param($set) @($set | Sort-Object displayName | ForEach-Object { [ordered]@{ name = if ($_.displayName) { "$($_.displayName)" } else { "$($_.samAccountName)" }; title = if ($_.title) { "$($_.title)" } else { '' }; sam = "$($_.samAccountName)"; office = "$($_.office)"; centre = (Get-CentreFromDN $_.dn) } }) }
                     # Regroupement DDG par DO/centre avec les MÊMES clés que le mécanisme (appariement carte à carte).
                     $ddgCentreMembers = @{}; $ddgDoMembers = @{}
-                    foreach ($dGrp in ($ddgAll | Group-Object { Get-RegionFromDN $_.dn } | Where-Object { $_.Name -and $_.Name -ne 'MONCHY' })) {
+                    foreach ($dGrp in ($ddgAll | Group-Object { Get-RegionFromDN $_.dn } | Where-Object { $_.Name -and (Test-DoIncluded $_.Name $Rule) })) {
                         $dCl = Clean-ForFileName $dGrp.Name
                         $ddgDoMembers["$lbl-$dCl"] = & $ddgProj $dGrp.Group
                         foreach ($cGrp in ($dGrp.Group | Group-Object { Get-CentreFromDN $_.dn })) {
@@ -687,7 +694,7 @@ function Start-AppServer {
                     if ($rule.niveau -eq 3) {
                         # Hiérarchie complète pour la prévisualisation (monoNiveau n'affecte que la génération CSV)
                         $glId = Resolve-GroupIdentity -Naming $naming -DefaultBase $lbl -MailDomain $mailDomain -Prefix $lbl -DoName '' -Centre '' -Level 'global'
-                        $byDO = $filtered | Group-Object { Get-RegionFromDN $_.dn } | Where-Object { $_.Name -and $_.Name -ne 'MONCHY' }
+                        $byDO = $filtered | Group-Object { Get-RegionFromDN $_.dn } | Where-Object { $_.Name -and (Test-DoIncluded $_.Name $Rule) }
                         foreach ($doGrp in $byDO) {
                             $doName      = if ($doGrp.Name) { $doGrp.Name } else { 'SANS-DO' }
                             $doClean     = Clean-ForFileName $doName
@@ -745,7 +752,7 @@ function Start-AppServer {
                         $groups.Add(@{ key = $lbl; name = $glId.name; mail = $glId.mail; type = 'global'; count = $filtered.Count; containerDN = $adminOU })
                     } elseif ($rule.niveau -eq 2) {
                         $glId = Resolve-GroupIdentity -Naming $naming -DefaultBase $lbl -MailDomain $mailDomain -Prefix $lbl -DoName '' -Centre '' -Level 'global'
-                        $byDO = $filtered | Group-Object { Get-RegionFromDN $_.dn } | Where-Object { $_.Name -and $_.Name -ne 'MONCHY' }
+                        $byDO = $filtered | Group-Object { Get-RegionFromDN $_.dn } | Where-Object { $_.Name -and (Test-DoIncluded $_.Name $Rule) }
                         foreach ($doGrp in $byDO) {
                             $doName      = if ($doGrp.Name) { $doGrp.Name } else { 'SANS-DO' }
                             $doClean     = Clean-ForFileName $doName

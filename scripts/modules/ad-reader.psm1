@@ -265,6 +265,19 @@ function Get-RegionFromDN {
     return ''
 }
 
+function Test-DoIncluded {
+    # $true si la DO doit être générée pour cette règle :
+    #   - rule.dos renseigné  → la DO doit y figurer (sélection explicite de l'UI) ;
+    #   - rule.dos absent     → défaut : incluse SAUF si la région est marquée defaultOff
+    #                           (ex. MONCHY, Paris Villiers, Paris Editions Celse).
+    param([string]$DoName, $Rule)
+    if ([string]::IsNullOrWhiteSpace($DoName)) { return $false }
+    $dos = @($Rule.dos | Where-Object { $_ })
+    if ($dos.Count -gt 0) { return [bool]($dos -contains $DoName) }
+    $reg = $global:parametresJson.ad.regions | Where-Object { "$($_.label)" -eq $DoName } | Select-Object -First 1
+    return -not ($reg -and $reg.defaultOff -eq $true)
+}
+
 function Test-UserExcluded {
     # Retourne $true si l'utilisateur doit être exclu de toutes les listes :
     #   - son DN traverse une OU listée dans ad.excludeOUs (ex. comptes génériques)
@@ -546,6 +559,14 @@ function Build-GlobalUsersCache {
     # Règles/Groupes/Écarts.)
     if ($users.Count -gt 0 -and $withAnyProxy -eq 0) {
         throw "Réponse AD dégradée : $($users.Count) comptes ramenés mais 0 avec proxyAddresses. Cache global inchangé — réessayez (↻ Cache)."
+    }
+
+    # Exclusion par OU / motif de nom (ad.excludeOUs incl. REBUT, ad.excludeDisplayNamePatterns) :
+    # retire les comptes sous une OU exclue (OU=REBUT, OU=Comptes generiques…) ou 'ricoh'.
+    $beforeExcl = $records.Count
+    $records = @($records | Where-Object { -not (Test-UserExcluded -User $_) })
+    if ($records.Count -ne $beforeExcl) {
+        add-msg -msg "  [UsersCache] exclus (OU/motif, ex. REBUT) : $($beforeExcl - $records.Count)." -foregroundColor DarkGray -quelType writeHost
     }
 
     $json = ConvertTo-Json -InputObject @($records) -Depth 4 -Compress

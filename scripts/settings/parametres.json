@@ -7,7 +7,7 @@
     "mailDomain": "aftral.com",
     "excludeDisplayNamePatterns": ["ricoh"],
     "excludeOfficeValues": ["compte_generique"],
-    "excludeOUs": ["Comptes generiques"],
+    "excludeOUs": ["Comptes generiques", "REBUT"],
     "regions": [
       {
         "label": "DO I2N",
@@ -42,6 +42,7 @@
       {
         "label": "MONCHY",
         "aliases": ["MONCHY", "DO MONCHY"],
+        "defaultOff": true,
         "bases": [
           "OU=MONCHY,OU=administratif,DC=aft-iftim,DC=france"
         ]
@@ -49,6 +50,7 @@
       {
         "label": "Paris Villiers",
         "aliases": ["A29000", "PARIS VILLIERS", "Paris Villiers", "Villiers"],
+        "defaultOff": true,
         "bases": [],
         "extraSites": [
           { "dn": "OU=A29000 - Paris Villiers,OU=administratif,DC=aft-iftim,DC=france", "baseLabel": "" }
@@ -57,6 +59,7 @@
       {
         "label": "Paris Editions Celse",
         "aliases": ["A30000", "PARIS EDITIONS CELSE", "Paris Editions Celse", "Editions Celse", "Celse"],
+        "defaultOff": true,
         "bases": [],
         "extraSites": [
           { "dn": "OU=A30000 - Paris Editions Celse,OU=administratif,DC=aft-iftim,DC=france", "baseLabel": "" }
