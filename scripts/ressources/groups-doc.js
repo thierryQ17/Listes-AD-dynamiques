@@ -40,6 +40,9 @@ function esc(s) {
 
 function buildGroupsHtmlDoc(data, rule) {
     const groups   = data.groups || [];
+    // Mode « DDG seul » (case cochée par défaut) : on affiche uniquement la population
+    // générée par le DDG, sans la colonne Actuel ni la comparaison. Fond des cartes = blanc.
+    const ddgOnly  = !(rule && rule.ddgOnly === false);
     // Cle d'identite UNIQUE (base hierarchique du backend) ; repli sur le nom pour compat.
     // La liaison DO<->centre et l'indexation des modales se font par cle, jamais par nom
     // (des DO homonymes — gabarit sans {{region}} — dupliqueraient sinon les centres).
@@ -86,6 +89,16 @@ function buildGroupsHtmlDoc(data, rule) {
         const mine = g.members || [];
         let ddg = g.ddgMembers;
         ddg = Array.isArray(ddg) ? ddg : (ddg ? [ddg] : []);
+        // DDG seul : population du DDG uniquement, en liste simple (pas de comparaison).
+        if (ddgOnly) {
+            if (!ddg.length) return '';
+            const liD = m =>
+                '<li class="mem" data-s="' + esc((m.name + ' ' + (m.title || '')).toLowerCase()) + '">' +
+                    '<span class="m-name">' + esc(m.name) + '</span>' +
+                    (m.title ? '<span class="m-title">' + esc(m.title) + '</span>' : '') +
+                '</li>';
+            return '<ul class="members">' + ddg.map(liD).join('') + '</ul>';
+        }
         if (!mine.length && !ddg.length) return '';
         const key      = m => m.sam || m.name;
         const ddgKeys  = new Set(ddg.map(key));
@@ -253,6 +266,8 @@ function buildGroupsHtmlDoc(data, rule) {
         .fs-btn:hover{background:rgba(255,255,255,.28);}
         .doc-eyebrow{font-size:.68rem;text-transform:uppercase;letter-spacing:.09em;opacity:.82;margin-bottom:2px;}
         .doc-hd-actions{display:flex;align-items:center;gap:8px;flex:none;}
+        .doc-hd-note{flex:1;min-width:0;margin:0 6px;font-size:12px;line-height:1.4;color:rgba(255,255,255,.93);max-width:600px;}
+        .doc-hd-note code{background:rgba(255,255,255,.18);border-radius:4px;padding:1px 5px;font-family:'Cascadia Code',Consolas,monospace;font-size:.9em;}
         .info-btn{display:inline-flex;align-items:center;justify-content:center;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.3);color:#fff;width:34px;height:34px;border-radius:8px;cursor:pointer;padding:0;}
         .info-btn:hover{background:rgba(255,255,255,.28);}
         .info-modal{position:fixed;inset:0;z-index:1000;background:rgba(15,23,42,.45);display:flex;align-items:center;justify-content:center;padding:20px;}
@@ -314,6 +329,22 @@ function buildGroupsHtmlDoc(data, rule) {
         .memr-t{color:#6b7280;font-size:.72rem;text-transform:uppercase;}
         .mails-modal{position:fixed;inset:0;z-index:1000;background:rgba(15,23,42,.45);display:flex;align-items:center;justify-content:center;padding:20px;}
         .mails-modal[hidden]{display:none;}
+        /* Nom de carte niveau 2 cliquable → modale « tous les groupes de la DO » */
+        .do-head-cell .grp-name{cursor:pointer;text-decoration:underline;text-decoration-color:rgba(37,99,235,.35);text-underline-offset:3px;}
+        .do-head-cell .grp-name:hover{text-decoration-color:#2563eb;}
+        .do-modal{position:fixed;inset:0;z-index:1003;background:rgba(15,23,42,.5);display:flex;align-items:center;justify-content:center;padding:18px;}
+        .do-modal[hidden]{display:none;}
+        .do-modal-box{background:#f7f9fc;border-radius:14px;width:96vw;height:92vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.35);overflow:hidden;}
+        .do-modal-head{display:flex;align-items:center;justify-content:space-between;padding:12px 20px;border-bottom:1px solid #dbe3ee;background:#fff;flex:none;}
+        .do-modal-title{font-size:16px;font-weight:700;color:#1e3a5f;}
+        .do-modal-close{border:none;background:transparent;font-size:26px;line-height:1;color:#64748b;cursor:pointer;padding:0 6px;}
+        .do-modal-close:hover{color:#ef4444;}
+        .do-modal-body{flex:1;overflow-y:auto;overflow-x:hidden;padding:16px;zoom:.8;display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:14px;align-content:start;}
+        .do-modal-body .grp{margin:0;}
+        /* Mode DDG seul dans la modale : cartes identiques, sans </>, sans marqueur d'écart */
+        .do-modal.ddg-only .grp{background:#fff !important;border-left-color:#7c8ba1 !important;}
+        .do-modal.ddg-only .grp-name::after{content:none !important;}
+        .do-modal.ddg-only .grp-ddg-btn{display:none !important;}
         .mails-box{background:#fff;color:#1f2430;border-radius:12px;border-top:4px solid #2563eb;box-shadow:0 16px 50px rgba(0,0,0,.3);width:min(1680px,97vw);max-height:90vh;overflow:auto;padding:0 26px 20px;position:relative;}
         .mails-head{position:sticky;top:0;background:#fff;z-index:5;padding:18px 0 8px;border-bottom:1px solid #e2e5ea;}
         .mails-actions{position:absolute;top:16px;right:0;display:flex;align-items:center;gap:6px;z-index:6;}
@@ -441,6 +472,10 @@ function buildGroupsHtmlDoc(data, rule) {
         /* Carte de centre avec ecart : accent ambre pour la reperer dans la grille */
         .grp.grp-has-diff{border-left-color:#f59e0b !important;background:#fffdf5;}
         .grp.grp-has-diff .grp-name::after{content:' ⚠';color:#d97706;font-size:.8em;}
+        /* Mode « DDG seul » : pas de comparaison → fond blanc, aucun marqueur d'écart */
+        #tree.ddg-only .grp{background:#fff !important;border-left-color:#7c8ba1 !important;}
+        #tree.ddg-only .grp-name::after{content:none !important;}
+        #tree.ddg-only .grp-ddg-btn{display:none !important;}
         .cmp-empty{color:#9ca3af;font-size:.72rem;font-style:italic;padding:2px 0;}
         .cmp-delta{display:flex;gap:12px;flex-wrap:wrap;margin-top:6px;font-size:.7rem;font-weight:700;}
         .cd-eq{color:#374151;} .cd-drop{color:#b91c1c;} .cd-add{color:#b45309;}
@@ -596,7 +631,7 @@ function buildGroupsHtmlDoc(data, rule) {
     for(var i=0;i<chs.length;i++)chs[i].style.top=(hh-1)+'px';
   }
   function closeMails(){ if(mailsModal)mailsModal.hidden=true; }
-  [].slice.call(document.querySelectorAll('.grp-mail-link')).forEach(function(el){ el.addEventListener('click',function(){ openMails(el.getAttribute('data-key')); }); });
+  document.addEventListener('click',function(e){ var el=e.target.closest&&e.target.closest('.grp-mail-link'); if(el)openMails(el.getAttribute('data-key')); });
   var mailsClose=document.getElementById('mailsClose'); if(mailsClose)mailsClose.addEventListener('click',closeMails);
   if(mailsModal)mailsModal.addEventListener('click',function(e){ if(e.target===mailsModal)closeMails(); });
   document.addEventListener('keydown',function(e){ if(e.key==='Escape'&&(!memModal||memModal.hidden))closeMails(); });
@@ -713,7 +748,7 @@ function buildGroupsHtmlDoc(data, rule) {
     document.getElementById('ddgExplain').innerHTML=h;
     ddgModal.removeAttribute('hidden');
   }
-  [].slice.call(document.querySelectorAll('.grp-ddg-btn')).forEach(function(b){ b.addEventListener('click',function(e){ e.stopPropagation(); openDdg(b.getAttribute('data-ddgkey')); }); });
+  document.addEventListener('click',function(e){ var b=e.target.closest&&e.target.closest('.grp-ddg-btn'); if(b){ e.stopPropagation(); openDdg(b.getAttribute('data-ddgkey')); } });
   // Copie ligne-à-ligne : clic sur l'icône « copier » de la gouttière gauche.
   var ddgModalCodeEl=document.getElementById('ddgModalCode');
   if(ddgModalCodeEl)ddgModalCodeEl.addEventListener('click',function(e){
@@ -733,6 +768,36 @@ function buildGroupsHtmlDoc(data, rule) {
   var ddgCloseBtn=document.getElementById('ddgClose'); if(ddgCloseBtn)ddgCloseBtn.addEventListener('click',closeDdg);
   if(ddgModal)ddgModal.addEventListener('click',function(e){ if(e.target===ddgModal)closeDdg(); });
   document.addEventListener('keydown',function(e){ if(e.key==='Escape')closeDdg(); });
+  // Modale « tous les groupes d'une DO » : clic sur le NOM d'une carte niveau 2 → clone
+  // les cartes centre de cette DO en multi-colonnes (zoom 80%). Les clones gardent leurs
+  // fonctions (membres inline, </> DDG, lien mail) grace a la delegation document ci-dessus.
+  var doModal=document.getElementById('doModal');
+  var doModalBody=document.getElementById('doModalBody');
+  function closeDoModal(){ if(doModal)doModal.setAttribute('hidden',''); if(doModalBody)doModalBody.innerHTML=''; }
+  function openDoCentres(dokey,name){
+    if(!doModal||!doModalBody)return;
+    var sel='[data-dokey="'+String(dokey).replace(/"/g,'\\"')+'"]';
+    var src=document.querySelector('.do-centres'+sel);
+    var cards;
+    if(src){ cards=[].slice.call(src.children); }
+    else { var br=document.querySelector('.branch'+sel); cards=br?[].slice.call(br.querySelectorAll('.do-children > .grp')):[]; }
+    doModalBody.innerHTML='';
+    cards.forEach(function(c){ doModalBody.appendChild(c.cloneNode(true)); });
+    // Refléter le mode DDG-only de la page sur la modale (cartes hors #tree).
+    doModal.classList.toggle('ddg-only', !!(treeEl&&treeEl.classList.contains('ddg-only')));
+    var t=document.getElementById('doModalTitle');
+    if(t)t.textContent=name+'  —  '+cards.length+' groupe'+(cards.length>1?'s':'');
+    doModal.removeAttribute('hidden');
+  }
+  document.addEventListener('click',function(e){
+    var nm=e.target.closest&&e.target.closest('.do-head-cell .grp-name');
+    if(!nm)return;
+    var host=nm.closest('[data-dokey]'); if(!host)return;
+    openDoCentres(host.getAttribute('data-dokey'), nm.textContent.trim());
+  });
+  var doModalClose=document.getElementById('doModalClose'); if(doModalClose)doModalClose.addEventListener('click',closeDoModal);
+  if(doModal)doModal.addEventListener('click',function(e){ if(e.target===doModal)closeDoModal(); });
+  document.addEventListener('keydown',function(e){ if(e.key==='Escape')closeDoModal(); });
 })();`;
 
     return '<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8">' +
@@ -742,6 +807,9 @@ function buildGroupsHtmlDoc(data, rule) {
                 '<div class="doc-hd-txt"><div class="doc-eyebrow">Prévisualisation des groupes AD</div><h1>' + esc((rule && rule.label) || 'Groupe') +
                     '<span class="doc-hd-count" title="Nombre total de groupes AD (global + DO + centres)">' + groups.length + ' groupe' + (groups.length > 1 ? 's' : '') + '</span>' +
                 '</h1></div>' +
+                (isN3 ? '<div class="doc-hd-note">' + (data.ddgSource === 'exo'
+                    ? 'Groupes issus <b>directement d\'Exchange Online</b> — <code>Get-Recipient</code> (lecture seule), scopé par Office : population <b>réelle</b> du DDG.'
+                    : 'Population <b>estimée localement</b> — simulation du filtre OPATH sur le cache AD, <b>sans appel Exchange</b>. Activer le mode « live » sur la règle pour la vérité terrain <code>Get-Recipient</code>.') + '</div>' : '') +
                 '<div class="doc-hd-actions">' +
                     '<button id="recalcBtn" class="info-btn" type="button" title="Recalculer la page">' +
                         '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>' +
@@ -759,7 +827,7 @@ function buildGroupsHtmlDoc(data, rule) {
             '</div>' +
             stickyGroups +
         '</div>' +
-        '<div class="wrap"><main id="tree">' + mainBody + '</main></div>' +
+        '<div class="wrap"><main id="tree"' + (ddgOnly ? ' class="ddg-only"' : '') + '>' + mainBody + '</main></div>' +
         '<div class="info-modal" id="infoModal" hidden><div class="info-box">' +
             '<button class="info-close" id="infoClose" type="button" aria-label="Fermer">×</button>' +
             '<div class="info-meta">' + meta + '</div>' +
@@ -792,6 +860,13 @@ function buildGroupsHtmlDoc(data, rule) {
             '<pre class="ddg-modal-code" id="ddgModalCode"></pre>' +
             '<div class="ddg-section-hd" id="ddgExplainHd">Écarts — pourquoi&nbsp;?</div>' +
             '<div class="ddg-explain" id="ddgExplain"></div>' +
+        '</div></div>' +
+        '<div class="do-modal" id="doModal" hidden><div class="do-modal-box">' +
+            '<div class="do-modal-head">' +
+                '<div class="do-modal-title" id="doModalTitle"></div>' +
+                '<button class="do-modal-close" id="doModalClose" type="button" aria-label="Fermer">×</button>' +
+            '</div>' +
+            '<div class="do-modal-body" id="doModalBody"></div>' +
         '</div></div>' +
         '<script>window.MAILTREE=' + JSON.stringify(mailTree).replace(/</g, '\\u003c') + ';window.GROUPMEMBERS=' + JSON.stringify(groupMembers).replace(/</g, '\\u003c') + ';window.RULE=' + JSON.stringify(rule || {}).replace(/</g, '\\u003c') + ';window.DDGDATA=' + JSON.stringify(ddgData).replace(/</g, '\\u003c') + ';</script>' +
         '<script>' + pageScript + '</script>' +

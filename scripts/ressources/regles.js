@@ -141,7 +141,9 @@ function buildLdapHtml() {
             //  - négatifs (ne / notlike / empty / notempty) → contraintes ET
             //  - exclusions                → chacune niée, en ET
             const POS       = new Set(['eq', 'like']);
-            const positives = inc.filter(c => POS.has(c.op));
+            const AND_FIELDS = new Set(['extensionAttribute15']);   // filtre : ET même en eq/like (majAD)
+            const positives = inc.filter(c => POS.has(c.op) && !AND_FIELDS.has(c.field));
+            const mustAnd   = inc.filter(c => POS.has(c.op) && AND_FIELDS.has(c.field));
             const negatives = inc.filter(c => !POS.has(c.op));
             const posHtml = positives.length
                 ? (positives.length === 1
@@ -150,6 +152,7 @@ function buildLdapHtml() {
                 : null;
             const andParts = [
                 posHtml,
+                ...mustAnd.map(condToLdapHtml),
                 ...negatives.map(condToLdapHtml),
                 ...exc.map(c => p('(') + op('!') + condToLdapHtml(c) + p(')')),
             ].filter(Boolean);
@@ -645,22 +648,40 @@ function renderForm(rule) {
             `<div class="form-title">${isNew ? 'Nouvelle règle' : 'Modifier — ' + esc(rule.label || '')}</div>` +
 
             `<div class="form-row-top">` +
-                `<div class="form-row-top-col">` +
-                    `<label class="form-label" for="f-label">Nom de la règle</label>` +
-                    `<input id="f-label" class="form-input" type="text" placeholder="ex. Administratif" value="${esc(rule?.label || '')}">` +
+                `<div class="form-head-left">` +
+                    `<div class="form-row-top-col">` +
+                        `<label class="form-label" for="f-label">Nom de la règle</label>` +
+                        `<input id="f-label" class="form-input" type="text" placeholder="ex. Administratif" value="${esc(rule?.label || '')}">` +
+                    `</div>` +
+                    `<div class="form-group form-group-inline">` +
+                        `<label class="form-label" for="f-desc">Description</label>` +
+                        `<input id="f-desc" class="form-input form-input-auto" type="text" value="${esc(metaLabel(rule || {}))}" readonly>` +
+                    `</div>` +
                 `</div>` +
                 `<div class="form-row-top-toggle">` +
-                    `<label class="toggle-switch">` +
-                        `<input type="checkbox" id="f-active"${activeChecked}>` +
-                        `<span class="toggle-track"></span>` +
-                    `</label>` +
-                    `<span class="toggle-label">Règle active</span>` +
+                    `<div class="toggle-line">` +
+                        `<label class="toggle-switch">` +
+                            `<input type="checkbox" id="f-active"${activeChecked}>` +
+                            `<span class="toggle-track"></span>` +
+                        `</label>` +
+                        `<span class="toggle-label">Règle active</span>` +
+                    `</div>` +
+                    `<div class="toggle-line" title="N'afficher que les groupes ayant un DDG (comparaison Exchange)">` +
+                        `<label class="toggle-switch">` +
+                            `<input type="checkbox" id="f-ddg-only"${rule?.ddgOnly !== false ? ' checked' : ''}>` +
+                            `<span class="toggle-track"></span>` +
+                        `</label>` +
+                        `<span class="toggle-label">Afficher uniquement groupes DDG</span>` +
+                    `</div>` +
+                    `<div class="toggle-line">` +
+                        `<label class="toggle-switch">` +
+                            `<input type="checkbox" id="f-exo-live"${rule?.exoLive ? ' checked' : ''}>` +
+                            `<span class="toggle-track"></span>` +
+                        `</label>` +
+                        `<span class="toggle-label">Interroger Exchange (live)</span>` +
+                        `<button type="button" class="field-help-btn" data-help="exoLive" title="En savoir plus" aria-label="Aide">?</button>` +
+                    `</div>` +
                 `</div>` +
-            `</div>` +
-
-            `<div class="form-group form-group-inline">` +
-                `<label class="form-label" for="f-desc">Description</label>` +
-                `<input id="f-desc" class="form-input form-input-auto" type="text" value="${esc(metaLabel(rule || {}))}" readonly>` +
             `</div>` +
 
             `<div class="form-group naming-group">` +
@@ -744,7 +765,10 @@ function renderForm(rule) {
                                 `<span class="cond-section-lbl include">Inclure</span>` +
                                 `<span class="cond-section-hint">utilisateurs répondant à ces critères</span>` +
                             `</div>` +
-                            `<label class="cond-majad-chk" title="Ajoute / retire la condition « extensionAttribute15 = majAD » (en tête des critères)"><input type="checkbox" id="chk-majad"> majAD</label>` +
+                            `<div class="cond-majad-row">` +
+                                `<label class="cond-majad-chk"><input type="checkbox" id="chk-majad"> majAD</label>` +
+                                `<button type="button" class="field-help-btn" data-help="majad" title="En savoir plus" aria-label="Aide">?</button>` +
+                            `</div>` +
                             `<div class="cond-list" id="cond-include"></div>` +
                             `<button class="btn-add-cond" id="btn-add-include">+ Ajouter une condition</button>` +
                         `</div>` +
@@ -1111,6 +1135,8 @@ function readForm() {
         ...(existing?.locked ? { locked: true } : {}),
         conditions: { include, exclude },
         dos:        readSelectedDos(),
+        ddgOnly:    !!document.getElementById('f-ddg-only')?.checked,
+        exoLive:    !!document.getElementById('f-exo-live')?.checked,
         active:     activeChk ? activeChk.checked : (existing?.active !== false),
         ...(naming ? { naming } : {}),
         createdAt:  existing?.createdAt || now(),
@@ -1537,6 +1563,8 @@ async function loadApercuGroupes() {
         id: editingId, label: rule.label, prefix: rule.prefix,
         niveau: rule.niveau, monoNiveau: rule.monoNiveau,
         invertOf: rule.invertOf, conditions: rule.conditions,
+        // Ces flags changent le rendu / la source → doivent invalider le cache d'aperçu.
+        dos: rule.dos, ddgOnly: rule.ddgOnly, exoLive: rule.exoLive,
     });
     if (apercuCache[sig]) { frame.srcdoc = apercuCache[sig]; return; }
 
@@ -1609,13 +1637,15 @@ function buildOpathFilter(rule) {
         const inc = (rule.conditions?.include || []).filter(c => c.value || NO_VALUE_OPS.has(c.op));
         const exc = (rule.conditions?.exclude || []).filter(c => c.value || NO_VALUE_OPS.has(c.op));
         const POS = new Set(['eq', 'like']);
-        const positives = inc.filter(c => POS.has(c.op)).map(map).filter(Boolean);
+        const AND_FIELDS = new Set(['extensionAttribute15']);   // filtre : ET même en eq/like (majAD)
+        const positives = inc.filter(c => POS.has(c.op) && !AND_FIELDS.has(c.field)).map(map).filter(Boolean);
+        const mustAnd   = inc.filter(c => POS.has(c.op) && AND_FIELDS.has(c.field)).map(map).filter(Boolean);
         const negatives = inc.filter(c => !POS.has(c.op)).map(map).filter(Boolean);
         const excl      = exc.map(c => { const cl = map(c); return cl ? `-not ${cl}` : null; }).filter(Boolean);
         const posPart = positives.length
             ? (positives.length === 1 ? positives[0] : '(' + positives.join(' -or ') + ')')
             : null;
-        const andParts = [posPart, ...negatives, ...excl].filter(Boolean);
+        const andParts = [posPart, ...mustAnd, ...negatives, ...excl].filter(Boolean);
         core = andParts.length ? (andParts.length === 1 ? andParts[0] : andParts.join(' -and ')) : null;
     }
     const base = "(RecipientTypeDetails -eq 'UserMailbox')";
@@ -2805,6 +2835,48 @@ function setupJsonModal() {
     });
 }
 
+// ── Aide contextuelle (boutons « ? » sur certains champs) ──────────────
+const FIELD_HELP = {
+    exoLive: {
+        title: 'Interroger Exchange (live)',
+        html:
+            '<p><b>Décoché (par défaut)</b> — la population « DDG » est <b>estimée localement</b> à partir du cache AD (<code>_users_global.json</code>) : on applique le sous-ensemble des conditions traduisibles en filtre <b>OPATH</b>, on ne garde que les comptes avec BAL, et on partitionne par Bureau (Office). <b>Aucun appel Exchange.</b></p>' +
+            '<p><b>Coché</b> — appel <b>réel</b> <code>Get-Recipient</code> sur Exchange Online (lecture seule) : la <b>population exacte</b> que le DDG capterait, scopée par Office. Plus lent (requête réseau).</p>' +
+            '<p class="fh-note">À utiliser pour vérifier la vérité terrain avant de créer le DDG.</p>'
+    },
+    majad: {
+        title: 'Filtre « majAD »',
+        html:
+            '<p>La case ajoute la condition <code>extensionAttribute15 = majAD</code>, combinée en <b>ET</b> (intersection) avec les autres critères — <b>pas</b> en OU.</p>' +
+            '<p>Ne sont donc retenus que les utilisateurs <b>tagués « majAD »</b> dans l\'Active Directory. Cet attribut on-premise est répliqué vers Exchange Online sous le nom <code>CustomAttribute15</code>.</p>' +
+            '<p class="fh-note">Sert à cibler les comptes marqués « à jour / validés » par le processus majAD.</p>'
+    }
+};
+function openFieldHelp(key) {
+    const h = FIELD_HELP[key]; if (!h) return;
+    let modal = document.getElementById('field-help-modal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'field-help-modal';
+        modal.className = 'field-help-modal';
+        modal.hidden = true;
+        modal.innerHTML =
+            '<div class="field-help-box">' +
+                '<div class="field-help-head"><h3 id="field-help-title"></h3>' +
+                '<button type="button" class="field-help-close" aria-label="Fermer">×</button></div>' +
+                '<div class="field-help-body" id="field-help-body"></div>' +
+            '</div>';
+        document.body.appendChild(modal);
+        const close = () => { modal.hidden = true; };
+        modal.querySelector('.field-help-close').addEventListener('click', close);
+        modal.addEventListener('click', e => { if (e.target === modal) close(); });
+        document.addEventListener('keydown', e => { if (e.key === 'Escape' && !modal.hidden) close(); });
+    }
+    modal.querySelector('#field-help-title').textContent = h.title;
+    modal.querySelector('#field-help-body').innerHTML = h.html;
+    modal.hidden = false;
+}
+
 // ── Modal Aide ────────────────────────────────────────────────────────
 function setupHelpModal() {
     const modal = document.getElementById('help-modal');
@@ -2813,6 +2885,11 @@ function setupHelpModal() {
     modal.addEventListener('click', e => { if (e.target === modal) modal.hidden = true; });
     document.addEventListener('keydown', e => {
         if (e.key === 'Escape' && !modal.hidden) modal.hidden = true;
+    });
+    // Boutons « ? » contextuels (délégation — le formulaire est re-rendu).
+    document.addEventListener('click', e => {
+        const b = e.target.closest('.field-help-btn');
+        if (b) { e.preventDefault(); openFieldHelp(b.dataset.help); }
     });
 }
 
