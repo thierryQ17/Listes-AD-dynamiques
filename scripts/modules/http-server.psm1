@@ -107,7 +107,12 @@ function Start-AppServer {
             $cacheDir   = Join-Path $scriptsDir "cache"
             $deleted    = 0
             if (Test-Path $cacheDir) {
-                $files = Get-ChildItem -Path $cacheDir -Filter "*.json" -ErrorAction SilentlyContinue
+                # On NE purge PAS les caches fondamentaux (_ous_global / _users_global) :
+                # ils sont réécrits par leurs builds GUARDÉS (qui refusent d'écrire un arbre
+                # partiel / un cache vide). Les purger d'abord créait une fenêtre où l'arbre
+                # pouvait être reconstruit partiel puis persisté (régions vides).
+                $files = Get-ChildItem -Path $cacheDir -Filter "*.json" -ErrorAction SilentlyContinue |
+                    Where-Object { $_.Name -notin @('_ous_global.json', '_users_global.json') }
                 foreach ($f in $files) { Remove-Item $f.FullName -Force; $deleted++ }
             }
             $idxPath = Get-CacheIndexPath

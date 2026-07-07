@@ -156,6 +156,7 @@ function Build-OUsCache {
     # Construit l'arborescence régions/sites et l'enregistre dans le cache JSON.
     $regions = $global:parametresJson.ad.regions
     $result  = [System.Collections.Generic.List[object]]::new()
+    $hadError = $false   # une requête de base a échoué → arbre PARTIEL, à ne pas persister
 
     if ($regions) {
         foreach ($region in $regions) {
@@ -179,6 +180,7 @@ function Build-OUsCache {
                         })
                     }
                 } catch {
+                    $hadError = $true
                     add-msg -msg "Erreur lecture OU '$base' : $($_.Exception.Message)" -foregroundColor Red
                 }
             }
@@ -192,10 +194,19 @@ function Build-OUsCache {
         }
     }
 
+    $siteCount = @($result | ForEach-Object { $_.children } | Where-Object { $_ }).Count
+
+    # GARDE-FOU : ne JAMAIS persister un arbre PARTIEL/DÉGÉNÉRÉ. Sous la charge AD
+    # concurrente d'un ↻ Cache, les requêtes OU peuvent échouer → 0 site (ou une base
+    # manquante). L'écrire écraserait un bon cache par un arbre cassé (régions vides).
+    # → on lève une erreur ; le cache OUs existant reste INTACT et sera réessayé.
+    if ($hadError -or $siteCount -eq 0) {
+        throw "Réponse AD incomplète pour les OUs ($siteCount site(s)$(if($hadError){' ; erreur de lecture'})). Cache OUs inchangé — réessayez."
+    }
+
     $json = ConvertTo-Json -InputObject @($result) -Depth 6 -Compress
     $path = Get-OUsCachePath
     [System.IO.File]::WriteAllText($path, $json, [System.Text.Encoding]::UTF8)
-    $siteCount = @($result | ForEach-Object { $_.children } | Where-Object { $_ }).Count
     add-msg -msg "  [OUsCache] $siteCount site(s) mis en cache -> $path" -foregroundColor Green -quelType writeHost
     return $siteCount
 }
@@ -207,8 +218,15 @@ function Get-OUTree {
     $tree      = Get-OUsFromCache
     $siteCount = @($tree | ForEach-Object { $_.children } | Where-Object { $_ }).Count
     if (-not $tree -or @($tree).Count -eq 0 -or $siteCount -eq 0) {
-        [void](Build-OUsCache)
-        $tree = Get-OUsFromCache
+        # Rebuild guardé : s'il échoue (réponse AD incomplète), on NE crashe PAS /api/tree,
+        # on renvoie l'arbre courant (au pire dégénéré) ; il se réparera au prochain appel
+        # quand l'AD répondra complètement.
+        try {
+            [void](Build-OUsCache)
+            $tree = Get-OUsFromCache
+        } catch {
+            add-msg -msg "  [OUsCache] reconstruction refusée (arbre incomplet) : $($_.Exception.Message)" -foregroundColor Yellow -quelType writeHost
+        }
     }
     return @($tree)
 }
