@@ -277,6 +277,50 @@ nouveau serveur via l'en-tête **`Server: Pode`**.
 
 ---
 
+## Évolutions récentes — Règles / DDG / cache + outillage (7 juillet 2026)
+
+### Cache
+- **`extensionAttribute15` (majAD)** extrait dans les caches (global + par site).
+- **Exclusions** : comptes génériques par `office` (`ad.excludeOfficeValues`) ; par **OU** via
+  `ad.excludeOUs` (incl. **REBUT**) appliqué dans `Build-GlobalUsersCache` (`Test-UserExcluded`).
+- **Sites autonomes** A29000 (Paris Villiers) / A30000 (Paris Editions Celse) : régions à part
+  entière via **`extraSites`** (site feuille, hors conteneur `bases`). `Get-RegionFromDN`,
+  `Build-OUsCache`, `Get-OUTree` gèrent les `extraSites`.
+- **Garde-fous anti-cache-vide** : `throw` si réponse AD dégradée (0 proxyAddresses) ou arbre
+  d'OUs à 0 site — le cache existant reste intact.
+
+### Règles — condition majAD, sélecteur de DO, options DDG
+- **`extensionAttribute15` = champ-filtre TOUJOURS en ET** (intersection), **pas** en OU :
+  `majAD` restreint les autres critères au lieu de s'y ajouter. Appliqué dans
+  `Test-UserMatchesRule`, `Build-OpathBaseFilter` (exo.psm1), `buildLdapHtml`, `buildOpathFilter`.
+- **Sélecteur multi-DO « Groupes à générer »** (`rule.dos`) : helper **`Test-DoIncluded`**
+  remplace les exclusions `MONCHY` codées en dur (aperçu + CSV + DDG). Défaut config-driven :
+  régions `defaultOff` (MONCHY, Paris Villiers, Paris Editions Celse) décochées.
+  Endpoint **`GET /api/regions`** → `{label, defaultOff}`.
+- **Toggle « Afficher uniquement groupes DDG »** (`rule.ddgOnly`, coché par défaut) : l'aperçu
+  n'affiche que la population DDG (pas de comparaison), cartes fond blanc, `</>` et ⚠ masqués.
+- **Toggle « Interroger Exchange (live) »** (`rule.exoLive`) : bascule la source DDG (voir ci-dessous).
+- **Aides `?`** contextuelles (modale) sur `majAD` et `exoLive`.
+
+### Aperçu groupes — source DDG (local vs Exchange)
+- Par défaut : **simulation LOCALE** sur le cache (`ddgSource='local'`, `Get-AllUsersFromCache`
+  filtré par le sous-ensemble OPATH + partition Office). **`Get-Recipient` (Exchange réel)**
+  uniquement si `rule.exoLive = true` (`ddgSource='exo'`). Note d'en-tête **conditionnelle**.
+- **Modale « tous les groupes d'une DO »** : clic sur un nom de carte niveau 2 → grille
+  scroll vertical, zoom 80 %, membres 1 colonne (max ~10 lignes) ; handlers en **délégation**.
+
+### Outillage session — `/fin-session` + reprise après `/clear`
+- Skill **`/fin-session`** (`~/.claude/skills/`, hors dépôt) : écrit `docs/RECAP-<horodatage>.md`
+  + met à jour **ce fichier** + commit/push + invite `/clear`.
+- Hook **`SessionStart(clear)`** (`.claude/settings.json` + `.claude/hooks/resume-context.ps1`) :
+  réinjecte **`CONTEXTE-SESSION.md`** après `/clear` → reprise automatique du contexte.
+
+> ⚠️ Les blocs de code ci-dessous (`Get-RegionFromDN` sans `extraSites`, usage
+> `-ne 'MONCHY'`, config régions) datent d'avant cette section : la **synthèse ci-dessus fait
+> foi**. Vérifier le code réel avant d'agir.
+
+---
+
 ## Cache global utilisateurs (`_users_global.json`)
 
 **Source de vérité pour le module Règles.** Contient tous les utilisateurs AD actifs avec les champs :
