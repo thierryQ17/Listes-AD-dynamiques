@@ -140,13 +140,16 @@ function Build-OpathBaseFilter {
         $parts = @($inc | ForEach-Object { ConvertTo-OpathCondition $_ } | Where-Object { $_ })
         if ($parts.Count) { $core = '-not (' + (($parts -join ' -or ')) + ')' }
     } else {
+        # Champs FILTRE (contrainte ET même en eq/like) : extensionAttribute15 (majAD).
+        $andFields = @('extensionAttribute15')
         $inc = @(@($Rule.conditions.include) | Where-Object { $_.value -or ($_.op -in $noVal) })
         $exc = @(@($Rule.conditions.exclude) | Where-Object { $_.value -or ($_.op -in $noVal) })
-        $pos = @($inc | Where-Object { $_.op -in @('eq','like') } | ForEach-Object { ConvertTo-OpathCondition $_ } | Where-Object { $_ })
+        $pos = @($inc | Where-Object { $_.op -in @('eq','like') -and $_.field -notin $andFields } | ForEach-Object { ConvertTo-OpathCondition $_ } | Where-Object { $_ })
+        $mustAnd = @($inc | Where-Object { $_.op -in @('eq','like') -and $_.field -in $andFields } | ForEach-Object { ConvertTo-OpathCondition $_ } | Where-Object { $_ })
         $neg = @($inc | Where-Object { $_.op -notin @('eq','like') } | ForEach-Object { ConvertTo-OpathCondition $_ } | Where-Object { $_ })
         $ex  = @($exc | ForEach-Object { $c = ConvertTo-OpathCondition $_; if ($c) { "-not $c" } } | Where-Object { $_ })
         $posPart = if ($pos.Count -eq 0) { $null } elseif ($pos.Count -eq 1) { $pos[0] } else { '(' + ($pos -join ' -or ') + ')' }
-        $andParts = @(@($posPart) + $neg + $ex | Where-Object { $_ })
+        $andParts = @(@($posPart) + $mustAnd + $neg + $ex | Where-Object { $_ })
         if ($andParts.Count) { $core = if ($andParts.Count -eq 1) { $andParts[0] } else { $andParts -join ' -and ' } }
     }
     $base = "(RecipientTypeDetails -eq 'UserMailbox')"

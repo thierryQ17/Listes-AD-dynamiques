@@ -85,15 +85,23 @@ function Invoke-RuleGeneration {
 function Test-UserMatchesRule {
     param($User, $Conditions)
 
+    # Champs FILTRE (contrainte ET même en eq/like) : ex. extensionAttribute15 (majAD).
+    # Sans ça, « majAD eq X » (positif) serait combiné en OU avec les autres positifs et
+    # sélectionnerait TOUS les majAD + les formateurs, au lieu de l'INTERSECTION.
+    $andFields = @('extensionAttribute15')
+
     $inc = @($Conditions.include)
     if ($inc.Count -gt 0) {
-        $positive = @($inc | Where-Object { $_.op -in @('eq','like') })
+        $positive = @($inc | Where-Object { $_.op -in @('eq','like') -and $_.field -notin $andFields })
+        $mustAnd  = @($inc | Where-Object { $_.op -in @('eq','like') -and $_.field -in    $andFields })
         $negative = @($inc | Where-Object { $_.op -in @('ne','notlike','empty','notempty') })
         # Conditions positives : OR (au moins une doit correspondre)
         $matchPos = ($positive.Count -eq 0) -or ($null -ne ($positive | Where-Object { Test-Condition -User $User -Cond $_ } | Select-Object -First 1))
+        # Champs filtre positifs : AND (chacun doit correspondre)
+        $matchAnd = ($mustAnd.Count  -eq 0) -or ($null -eq ($mustAnd  | Where-Object { -not (Test-Condition -User $User -Cond $_) } | Select-Object -First 1))
         # Conditions négatives : AND (toutes doivent correspondre)
         $matchNeg = ($negative.Count -eq 0) -or ($null -eq ($negative | Where-Object { -not (Test-Condition -User $User -Cond $_) } | Select-Object -First 1))
-        if (-not ($matchPos -and $matchNeg)) { return $false }
+        if (-not ($matchPos -and $matchAnd -and $matchNeg)) { return $false }
     }
 
     $exc = @($Conditions.exclude)
