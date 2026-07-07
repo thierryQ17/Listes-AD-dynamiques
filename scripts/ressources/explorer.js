@@ -1370,7 +1370,8 @@ function showUserDetail(u) {
     // csv = true → champ issu de l'ancien onglet « MAJ AD » (données de mise à jour AD par CSV) : tag « CSV ».
     const detailField = (label, value, wide, csv) => {
         const empty = value == null || String(value).trim() === '';
-        const tag = csv ? ' <span class="detail-majad-dot" title="Champ pris en charge par la mise à jour AD (MAJ AD)"></span>' : '';
+        // Pastille violette uniquement pour les comptes tagués majAD (extensionAttribute15).
+        const tag = (csv && isMajAd(u)) ? ' <span class="detail-majad-dot" title="Champ pris en charge par la mise à jour AD (MAJ AD)"></span>' : '';
         return `<div class="detail-field${wide ? ' detail-field-wide' : ''}">
                     <span class="detail-label">${esc(label)}${tag}</span>
                     <span class="detail-value${empty ? ' detail-value-empty' : ''}">${empty ? '—' : esc(String(value))}</span>

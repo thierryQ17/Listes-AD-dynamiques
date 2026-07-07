@@ -795,13 +795,6 @@ function renderForm(rule) {
                             ` Prévisualiser les groupes` +
                           `</button>`
                         : '') +
-                    (editingId
-                        ? `<button class="btn-html-page" id="btn-html-page" type="button" title="Ouvrir une page HTML récapitulative de tous les groupes">` +
-                            `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>` +
-                            ` Afficher page HTML` +
-                          `</button>`
-                        : '') +
-                    (hasPeer && !locked ? `<button class="btn-generate-form" id="btn-generate-form">Générer les CSVs FORMATEURS et ADMINISTRATIF</button>` : '') +
                     (locked
                         ? `<span class="lock-badge" title="Règle verrouillée">🔒 Verrouillée</span>`
                         : (editingId ? `<button class="btn-lock" id="btn-lock" type="button" title="Verrouiller la règle (bloque toute modification et suppression)">🔒 Verrouiller</button>` : '') +
