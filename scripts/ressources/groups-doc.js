@@ -11,6 +11,7 @@ const FIELDS = [
     ['department',         'Service (department)'],
     ['office',             'Bureau (office)'],
     ['extensionAttribute1','Attribut ext. 1'],
+    ['extensionAttribute15','Attribut ext. 15 (majAD)'],
     ['description',        'Description'],
     ['ou',                 "Unité d'organisation (OU)"],
 ];

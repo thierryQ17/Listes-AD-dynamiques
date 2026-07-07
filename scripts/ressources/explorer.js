@@ -291,10 +291,34 @@ function drainPrefetchQueue() {
                 if (!Array.isArray(users)) return;
                 allSiteUsers[dn] = users;
                 setBadgeCount(document.getElementById('count-' + dnToId(dn)), users.length);
+                scheduleCacheStats();
             })
             .catch(() => {})
             .finally(() => { onDone?.(); prefetchRunning--; drainPrefetchQueue(); });
     }
+}
+
+// ── Compteurs de cache (footer sidebar) : total utilisateurs + tagués majAD ──
+// Calcule sur allSiteUsers (caches par site). Debounce car le prefetch alimente
+// ~172 sites en rafale.
+let _cacheStatsTimer = null;
+function scheduleCacheStats() {
+    if (_cacheStatsTimer) return;
+    _cacheStatsTimer = setTimeout(() => { _cacheStatsTimer = null; updateCacheStats(); }, 300);
+}
+function updateCacheStats() {
+    let total = 0, majad = 0;
+    for (const users of Object.values(allSiteUsers)) {
+        if (!Array.isArray(users)) continue;
+        total += users.length;
+        for (const u of users) if (isMajAd(u)) majad++;
+    }
+    const el = document.getElementById('tree-cache-stats');
+    if (!el) return;
+    // Texte enveloppé dans un <span> : le footer est en flex, sinon <b> et texte
+    // deviennent des flex-items séparés et les espaces disparaissent.
+    el.innerHTML = `<span><b>${total.toLocaleString('fr-FR')}</b> en cache&nbsp;·&nbsp;` +
+                   `<b class="stat-majad">${majad.toLocaleString('fr-FR')}</b> majAD</span>`;
 }
 
 // ── Helpers compteurs ─────────────────────────────────────────────────
@@ -466,6 +490,7 @@ document.addEventListener('DOMContentLoaded', () => {
     setupSort();
     setupGroupBy();
     setupMajAdFilter();
+    updateCacheStats();   // footer compteurs visible dès le départ (0, puis live au prefetch)
 
     if (!tryRestoreSnapshot()) {
         loadTree();
@@ -711,6 +736,7 @@ async function refreshSiteCache(site, btn) {
         const users = await res.json();
         if (Array.isArray(users)) {
             allSiteUsers[site.dn] = users;
+            scheduleCacheStats();
             setBadgeCount(document.getElementById('count-' + dnToId(site.dn)), users.length);
             if (state.selectedSite?.site.dn === site.dn) {
                 state.allUsers = users;
@@ -835,6 +861,7 @@ async function refreshAllCache() {
         // Vider l'index client
         for (const dn of Object.keys(allSiteUsers)) delete allSiteUsers[dn];
         prefetchedDns.clear();
+        updateCacheStats();   // reset à 0 pendant la reconstruction
         state.ecartBySam = null;   // les écarts seront recalculés à la demande
 
         // Réinitialiser les badges

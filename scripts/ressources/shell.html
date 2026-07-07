@@ -71,6 +71,47 @@
             font: 600 16px "Segoe UI", system-ui, sans-serif; color: #4b5563; letter-spacing: .01em; text-align: center;
         }
         #app-overlay .ov-status b { color: #1d4ed8; }
+
+        /* Badge « Cache » cliquable → modale des requêtes */
+        .cache-date-badge { cursor: pointer; }
+        .cache-date-badge:hover { text-decoration: underline; }
+
+        /* Modale : requêtes de génération du cache */
+        .cqm-overlay {
+            position: fixed; inset: 0; z-index: 3000;
+            background: rgba(15, 23, 42, .45);
+            display: flex; align-items: center; justify-content: center;
+            padding: 24px;
+        }
+        .cqm-overlay[hidden] { display: none; }
+        .cqm-box {
+            background: #fff; border-radius: 12px; width: min(860px, 96vw);
+            max-height: 88vh; display: flex; flex-direction: column;
+            box-shadow: 0 20px 60px rgba(0,0,0,.35); overflow: hidden;
+        }
+        .cqm-head {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 14px 18px; border-bottom: 1px solid #e5e7eb;
+        }
+        .cqm-title { font: 700 15px "Segoe UI", system-ui, sans-serif; color: #1f2937; }
+        .cqm-close {
+            border: none; background: transparent; font-size: 22px; line-height: 1;
+            color: #6b7280; cursor: pointer; padding: 0 4px; border-radius: 4px;
+        }
+        .cqm-close:hover { background: #f3f4f6; color: #111827; }
+        .cqm-body { padding: 16px 18px; overflow-y: auto; }
+        .cqm-sec { margin-bottom: 18px; }
+        .cqm-sec-title { font: 700 13px "Segoe UI", system-ui, sans-serif; color: #1d4ed8; margin: 0 0 6px; }
+        .cqm-code {
+            margin: 0; background: #0f172a; color: #e2e8f0; border-radius: 8px;
+            padding: 12px 14px; font: 12.5px/1.55 "Cascadia Code", Consolas, monospace;
+            white-space: pre; overflow-x: auto;
+        }
+        .cqm-notes { margin: 8px 0 0; padding-left: 18px; }
+        .cqm-notes li { font-size: 12.5px; color: #374151; margin: 3px 0; }
+        .cqm-foot { font-size: 12px; color: #6b7280; margin: 4px 0 0; }
+        .cqm-foot code { background: #f3f4f6; padding: 1px 5px; border-radius: 4px; color: #6d28d9; }
+        .cqm-loading { font-size: 13px; color: #6b7280; }
     </style>
 </head>
 <body>
@@ -99,6 +140,16 @@
             <div class="ov-text">En attente de<br>génération des groupes…</div>
             <div class="ov-bar-track"><div class="ov-bar-fill" id="ov-bar"></div></div>
             <div class="ov-status" id="ov-status">Préparation…</div>
+        </div>
+    </div>
+
+    <div id="cache-query-modal" class="cqm-overlay" hidden>
+        <div class="cqm-box">
+            <div class="cqm-head">
+                <span class="cqm-title">Requêtes AD de génération du cache</span>
+                <button class="cqm-close" id="cqm-close" type="button" title="Fermer">×</button>
+            </div>
+            <div class="cqm-body" id="cqm-body"></div>
         </div>
     </div>
 
@@ -167,6 +218,38 @@
 
         refreshCacheDate();
         setInterval(refreshCacheDate, 60000);
+
+        // ── Modale : détail des requêtes AD de génération du cache ──
+        const cqmEsc = s => String(s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+        async function openCacheQueryModal() {
+            const modal = document.getElementById('cache-query-modal');
+            const body  = document.getElementById('cqm-body');
+            body.innerHTML = '<p class="cqm-loading">Chargement…</p>';
+            modal.hidden = false;
+            try {
+                const d = await (await fetch('/api/cache/query-info')).json();
+                body.innerHTML = (d.sections || []).map(s =>
+                    `<section class="cqm-sec">` +
+                        `<h3 class="cqm-sec-title">${cqmEsc(s.title)}</h3>` +
+                        `<pre class="cqm-code">${(s.query || []).map(cqmEsc).join('\n')}</pre>` +
+                        `<ul class="cqm-notes">${(s.notes || []).map(n => `<li>${cqmEsc(n)}</li>`).join('')}</ul>` +
+                    `</section>`
+                ).join('') +
+                `<p class="cqm-foot">Tag majAD : <code>extensionAttribute15 = ${cqmEsc(d.tag || 'majAD')}</code>` +
+                ` · searchBase : <code>${cqmEsc(d.searchBase || '')}</code></p>`;
+            } catch (e) {
+                body.innerHTML = `<p class="cqm-loading" style="color:#dc2626">Erreur : ${cqmEsc(e.message)}</p>`;
+            }
+        }
+        function closeCacheQueryModal() { document.getElementById('cache-query-modal').hidden = true; }
+        document.getElementById('cache-date').addEventListener('click', openCacheQueryModal);
+        document.getElementById('cqm-close').addEventListener('click', closeCacheQueryModal);
+        document.getElementById('cache-query-modal').addEventListener('click', e => {
+            if (e.target.id === 'cache-query-modal') closeCacheQueryModal();
+        });
+        document.addEventListener('keydown', e => {
+            if (e.key === 'Escape' && !document.getElementById('cache-query-modal').hidden) closeCacheQueryModal();
+        });
 
         // Pastille « nombre total de règles » sur l'onglet Règles
         function setRulesCount(n) {

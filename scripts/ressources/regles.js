@@ -69,6 +69,7 @@ const LDAP_FIELD_MAP = {
     department:          'department',
     office:              'physicalDeliveryOfficeName',
     extensionAttribute1: 'extensionAttribute1',
+    extensionAttribute15:'extensionAttribute15',
     description:         'description',
     ou:                  'ou',
 };
@@ -682,27 +683,29 @@ function renderForm(rule) {
                 `</div>` +
             `</div>` +
 
-            `<div class="form-group">` +
+            `<div class="form-group form-group-inline">` +
                 `<label class="form-label" for="f-desc">Description</label>` +
                 `<input id="f-desc" class="form-input form-input-auto" type="text" value="${esc(metaLabel(rule || {}))}" readonly>` +
             `</div>` +
 
             `<div class="form-group">` +
                 `<label class="form-label">Niveau de groupement</label>` +
-                `<div class="niveau-options${rule?.invertOf ? ' niveau-locked' : ''}" id="niveau-options">` +
-                    [1, 2, 3].map(n =>
-                        `<label class="niveau-option${niveau === n ? ' selected' : ''}" data-n="${n}">` +
-                            `<input type="radio" name="f-niveau" value="${n}"${niveau === n ? ' checked' : ''}${rule?.invertOf ? ' disabled' : ''}>` +
-                            `<div class="niveau-opt-num">${n}</div>` +
-                            `<div class="niveau-opt-lbl">${NIV_LABELS[n]}</div>` +
-                            `<div class="niveau-opt-desc">${NIV_CSV[n]}</div>` +
-                        `</label>`
-                    ).join('') +
+                `<div class="niveau-row">` +
+                    `<div class="niveau-options${rule?.invertOf ? ' niveau-locked' : ''}" id="niveau-options">` +
+                        [1, 2, 3].map(n =>
+                            `<label class="niveau-option${niveau === n ? ' selected' : ''}" data-n="${n}">` +
+                                `<input type="radio" name="f-niveau" value="${n}"${niveau === n ? ' checked' : ''}${rule?.invertOf ? ' disabled' : ''}>` +
+                                `<div class="niveau-opt-num">${n}</div>` +
+                                `<div class="niveau-opt-lbl">${NIV_LABELS[n]}</div>` +
+                                `<div class="niveau-opt-desc">${NIV_CSV[n]}</div>` +
+                            `</label>`
+                        ).join('') +
+                    `</div>` +
+                    `<div class="niveau-desc" id="niveau-desc"></div>` +
                 `</div>` +
                 (rule?.invertOf
                     ? `<div class="niveau-locked-note"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>Hérité de « ${esc(rules.find(r => r.id === rule.invertOf)?.label || rule.invertOf)} » — non modifiable</div>`
                     : '') +
-                `<div class="niveau-desc" id="niveau-desc"></div>` +
             `</div>` +
 
             (() => {
@@ -729,6 +732,7 @@ function renderForm(rule) {
                             `<div class="cond-section-hdr">` +
                                 `<span class="cond-section-lbl include">Inclure</span>` +
                                 `<span class="cond-section-hint">utilisateurs répondant à ces critères</span>` +
+                                `<label class="cond-majad-chk" title="Ajoute / retire la condition « extensionAttribute15 = majAD »"><input type="checkbox" id="chk-majad"> majAD</label>` +
                             `</div>` +
                             `<div class="cond-list" id="cond-include"></div>` +
                             `<button class="btn-add-cond" id="btn-add-include">+ Ajouter une condition</button>` +
@@ -826,6 +830,23 @@ function renderForm(rule) {
 
     document.getElementById('btn-add-include')?.addEventListener('click', () => { addCondRow('cond-include'); autoUpdateDesc(); });
     document.getElementById('btn-add-exclude')?.addEventListener('click', () => { addCondRow('cond-exclude'); autoUpdateDesc(); });
+
+    // Case « majAD » : ajoute / retire la condition INCLURE extensionAttribute15 = majAD.
+    (() => {
+        const chk = document.getElementById('chk-majad');
+        if (!chk) return;
+        const M = { field: 'extensionAttribute15', op: 'eq', value: 'majAD' };
+        const findRow = () => [...document.querySelectorAll('#cond-include .cond-row')].find(r =>
+            r.querySelector('.cond-field').value === M.field &&
+            r.querySelector('.cond-op').value === M.op &&
+            r.querySelector('.cond-val').value.trim().toLowerCase() === M.value.toLowerCase());
+        chk.checked = !!findRow();
+        chk.addEventListener('change', () => {
+            if (chk.checked) { if (!findRow()) addCondRow('cond-include', M); }
+            else { const row = findRow(); if (row) row.remove(); }
+            autoUpdateDesc();
+        });
+    })();
     document.getElementById('btn-save')?.addEventListener('click', saveRule);
     document.getElementById('btn-cancel')?.addEventListener('click', closeForm);
     document.getElementById('btn-preview-groups')?.addEventListener('click', previewGroups);
@@ -1498,6 +1519,7 @@ const OPATH_FIELD_MAP = {
     department:          'Department',
     office:              'Office',
     extensionAttribute1: 'CustomAttribute1',
+    extensionAttribute15:'CustomAttribute15',
     description:         null,
     ou:                  null,
 };
