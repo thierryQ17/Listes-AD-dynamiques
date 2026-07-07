@@ -2,6 +2,7 @@
   "ad": {
     "server":     "",
     "searchBase": "DC=aft-iftim,DC=france",
+    "majAdTag":   "majAD",
     "groupsOU":   "%%_OU_GROUPES_I2N_%%",
     "mailDomain": "aftral.com",
     "excludeDisplayNamePatterns": ["ricoh"],

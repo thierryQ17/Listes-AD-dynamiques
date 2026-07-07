@@ -442,7 +442,7 @@ function Build-GlobalUsersCache {
         SearchBase  = $searchBase
         Credential  = $global:AD_credential
         Properties  = @('SamAccountName','Mail','DisplayName','Title','Department','Office',
-                        'extensionAttribute1','Description','ProxyAddresses',
+                        'extensionAttribute1','extensionAttribute15','Description','ProxyAddresses',
                         'Company','EmployeeNumber','Manager','UserPrincipalName','Type',
                         'PostalCode','StreetAddress','Enabled')
         ErrorAction = 'Stop'
@@ -471,6 +471,7 @@ function Build-GlobalUsersCache {
             department          = if ($u.Department)             { "$($u.Department)"             } else { '' }
             office              = if ($u.Office)                 { "$($u.Office)"                 } else { '' }
             extensionAttribute1 = if ($u.extensionAttribute1)   { "$($u.extensionAttribute1)"   } else { '' }
+            extensionAttribute15 = if ($u.extensionAttribute15) { "$($u.extensionAttribute15)"  } else { '' }
             description         = if ($u.Description)           { "$($u.Description)"           } else { '' }
             company             = if ($u.Company)               { "$($u.Company)"               } else { '' }
             employeeNumber      = if ($u.EmployeeNumber)         { "$($u.EmployeeNumber)"         } else { '' }
@@ -523,7 +524,7 @@ function Get-OUSiteUsers {
         -Credential $global:AD_credential `
         -Properties DisplayName, Mail, Department, Description, Title, Enabled, ProxyAddresses, `
                     UserPrincipalName, Type, Company, EmployeeNumber, Manager, Office, `
-                    extensionAttribute1, PostalCode, StreetAddress `
+                    extensionAttribute1, extensionAttribute15, PostalCode, StreetAddress `
         -ErrorAction Stop
 
     return @(
@@ -552,6 +553,7 @@ function Get-OUSiteUsers {
                 manager           = if ($u.Manager -match '^CN=([^,]+)') { $Matches[1] } else { $u.Manager }
                 office            = $u.Office
                 extensionAttribute1 = $u.extensionAttribute1
+                extensionAttribute15 = $u.extensionAttribute15
                 postalCode        = $u.PostalCode
                 streetAddress     = $u.StreetAddress
                 ouDn              = ($u.DistinguishedName -replace '^CN=[^,]+,', '')
