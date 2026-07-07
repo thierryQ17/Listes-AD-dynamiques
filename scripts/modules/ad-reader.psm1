@@ -185,10 +185,28 @@ function Build-OUsCache {
                 }
             }
 
+            # Sites INDIVIDUELS (extraSites) : OU sites A##### hors conteneur de région
+            # (ex. directement sous OU=administratif). Ajoutés tels quels (pas de scan AD :
+            # le DN est la feuille elle-même). Sert aux entités autonomes mono-site.
+            foreach ($extra in @($region.extraSites)) {
+                if (-not $extra) { continue }
+                $exDn = if ($extra -is [string]) { $extra } else { "$($extra.dn)" }
+                if ([string]::IsNullOrWhiteSpace($exDn)) { continue }
+                $exLbl  = if ($extra -is [string]) { '' } else { "$($extra.baseLabel)" }
+                $exName = if ($exDn -match '^OU=([^,]+)') { $Matches[1] } else { $exDn }
+                if ($exName -notmatch '^A\d{5}') { continue }
+                $allSites.Add([PSCustomObject]@{
+                    name      = $exName
+                    dn        = $exDn
+                    type      = 'site'
+                    baseLabel = $exLbl
+                })
+            }
+
             $result.Add([PSCustomObject]@{
                 name      = $region.label
                 type      = 'region'
-                multiBase = ($region.bases.Count -gt 1)
+                multiBase = (@($region.bases).Count -gt 1)
                 children  = @($allSites | Sort-Object baseLabel, name)
             })
         }
@@ -237,6 +255,11 @@ function Get-RegionFromDN {
     foreach ($region in $global:parametresJson.ad.regions) {
         foreach ($base in $region.bases) {
             if ($DN -like "*,$base") { return $region.label }
+        }
+        # Entités autonomes : le compte est sous un site individuel (extraSites).
+        foreach ($extra in @($region.extraSites)) {
+            $exDn = if ($extra -is [string]) { $extra } else { "$($extra.dn)" }
+            if ($exDn -and ($DN -like "*,$exDn" -or $DN -eq $exDn)) { return $region.label }
         }
     }
     return ''
@@ -545,7 +568,9 @@ function Get-OUSiteUsers {
     # vide en cas d'échec : un « 0 » silencieux se retrouvait mis en cache et masquait des
     # utilisateurs pourtant bien présents dans l'AD. Un vrai 0 (site sans BAL) reste possible,
     # mais UNIQUEMENT si la requête a réussi. Le warmup gère l'exception (log ERR, pas d'écriture).
-    $users = Get-ADUser -Filter * `
+    # Comptes ACTIVÉS uniquement (aligné sur Build-GlobalUsersCache) : les comptes
+    # désactivés ne doivent pas figurer dans le cache.
+    $users = Get-ADUser -Filter 'Enabled -eq $true' `
         -SearchBase $SiteDN -SearchScope Subtree `
         -Credential $global:AD_credential `
         -Properties DisplayName, Mail, Department, Description, Title, Enabled, ProxyAddresses, `

@@ -864,6 +864,18 @@ async function refreshAllCache() {
         appOverlay.progress(allSites.length, allSites.length, 'Cache global des utilisateurs…');
         try { await fetch('/api/users/preload', { method: 'POST' }).then(r => r.json()); } catch { /* best-effort */ }
 
+        // Recharger l'arbre depuis le serveur : le rebuild a pu AJOUTER/retirer des sites
+        // (ex. entités autonomes A29000/A30000). On resynchronise la sidebar + state.treeData.
+        try {
+            const fresh = await fetchJSON('/api/tree');
+            if (Array.isArray(fresh) && fresh.length) {
+                state.treeData = fresh;
+                renderTree(fresh);
+                fresh.flatMap(r => r.children || []).forEach(s => { dnNameMap[s.dn] = s.name; });
+                await fetchAndApplyCounts();
+            }
+        } catch { /* on garde l'arbre courant */ }
+
         // Si l'on est en mode Écarts, recalculer et réafficher tout de suite.
         if (state.mode === 'ecarts') {
             try { await ensureEcartsLoaded(); } catch { /* réessai au prochain rendu */ }

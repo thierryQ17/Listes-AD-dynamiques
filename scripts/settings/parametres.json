@@ -45,6 +45,22 @@
         "bases": [
           "OU=MONCHY,OU=administratif,DC=aft-iftim,DC=france"
         ]
+      },
+      {
+        "label": "Paris Villiers",
+        "aliases": ["A29000", "PARIS VILLIERS", "Paris Villiers", "Villiers"],
+        "bases": [],
+        "extraSites": [
+          { "dn": "OU=A29000 - Paris Villiers,OU=administratif,DC=aft-iftim,DC=france", "baseLabel": "" }
+        ]
+      },
+      {
+        "label": "Paris Editions Celse",
+        "aliases": ["A30000", "PARIS EDITIONS CELSE", "Paris Editions Celse", "Editions Celse", "Celse"],
+        "bases": [],
+        "extraSites": [
+          { "dn": "OU=A30000 - Paris Editions Celse,OU=administratif,DC=aft-iftim,DC=france", "baseLabel": "" }
+        ]
       }
     ]
   },
