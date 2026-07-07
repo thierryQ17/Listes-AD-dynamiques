@@ -113,7 +113,7 @@ function Invoke-ExoRecipientPreview {
 function ConvertTo-OpathCondition {
     # Une condition de regle -> clause OPATH (ou $null si champ non mappable : description/ou).
     param($Cond)
-    $map = @{ title = 'Title'; department = 'Department'; office = 'Office'; extensionAttribute1 = 'CustomAttribute1' }
+    $map = @{ title = 'Title'; department = 'Department'; office = 'Office'; extensionAttribute1 = 'CustomAttribute1'; extensionAttribute15 = 'CustomAttribute15' }
     $prop = $map["$($Cond.field)"]
     if (-not $prop) { return $null }
     $v = "$($Cond.value)".Replace("'", "''")

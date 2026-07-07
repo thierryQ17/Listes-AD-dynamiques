@@ -123,12 +123,13 @@ function Test-Condition {
     }
 
     $raw = switch ($Cond.field) {
-        'title'               { $User.Title }
-        'department'          { $User.Department }
-        'office'              { $User.Office }
-        'extensionAttribute1' { $User.extensionAttribute1 }
-        'description'         { $User.Description }
-        default               { '' }
+        'title'                { $User.Title }
+        'department'           { $User.Department }
+        'office'               { $User.Office }
+        'extensionAttribute1'  { $User.extensionAttribute1 }
+        'extensionAttribute15' { $User.extensionAttribute15 }
+        'description'          { $User.Description }
+        default                { '' }
     }
     $val = if ($null -ne $raw) { [string]$raw } else { '' }
     switch ($Cond.op) {

@@ -96,6 +96,60 @@ function Start-AppServer {
             Send-Json -Body $body
         }
 
+        # Détail des requêtes AD de génération du cache (pour la modale « Cache » du shell).
+        # Construit depuis la config → reflète les vraies requêtes (lecture seule).
+        Add-PodeRoute -Method Get -Path '/api/cache/query-info' -ScriptBlock {
+            $ad      = $global:parametresJson.ad
+            $sb      = "$($ad.searchBase)"
+            $tag     = "$($ad.majAdTag)"
+            $offices = @($ad.excludeOfficeValues        | Where-Object { $_ })
+            $names   = @($ad.excludeDisplayNamePatterns | Where-Object { $_ })
+            $ous     = @($ad.excludeOUs                 | Where-Object { $_ })
+            $extra   = @($ad.regions | ForEach-Object { $_.extraSites } | Where-Object { $_ })
+            $props   = 'SamAccountName, Mail, DisplayName, Title, Department, Office, extensionAttribute1, extensionAttribute15, Description, ProxyAddresses, Company, EmployeeNumber, Manager, UserPrincipalName, Type, PostalCode, StreetAddress, Enabled'
+            $keep    = 'Conservés : comptes ACTIVÉS avec une adresse SMTP primaire (proxyAddresses « SMTP: ») ET un samAccountName.'
+            $exclOff = if ($offices.Count) { "Exclus — Bureau (office) ∈ [ '$($offices -join "', '")' ]." } else { $null }
+            $exclNm  = if ($names.Count)   { "Exclus — nom d'affichage contenant : [ '$($names -join "', '")' ]." } else { $null }
+
+            $obj = [ordered]@{
+                tag        = $tag
+                searchBase = $sb
+                sections   = @(
+                    [ordered]@{
+                        title = 'Cache par SITE — Explorateur AD (une requête par site)'
+                        query = @(
+                            "Get-ADUser -Filter 'Enabled -eq `$true'",
+                            "  -SearchBase '<OU du site, ex. OU=A28000 - Rungis,OU=IDF,OU=administratif,$sb>'",
+                            "  -SearchScope Subtree",
+                            "  -Properties $props"
+                        )
+                        notes = @('Une requête par site (≈ 174 sites).', $keep, $exclOff) | Where-Object { $_ }
+                    },
+                    [ordered]@{
+                        title = 'Cache GLOBAL — Règles / Groupes (une seule requête)'
+                        query = @(
+                            "Get-ADUser -Filter { Enabled -eq `$true }",
+                            "  -SearchBase '$sb'",
+                            "  -Properties $props"
+                        )
+                        notes = @('Une requête sur tout le domaine.', $keep, $exclOff, $exclNm) | Where-Object { $_ }
+                    },
+                    [ordered]@{
+                        title = 'Arbre des OUs (sites)'
+                        query = @(
+                            '# Pour chaque base de région (IDF, NORD, OUEST, EST, SUD, SUD-EST, MONCHY) :',
+                            "Get-ADOrganizationalUnit -Filter * -SearchBase '<base>' -SearchScope OneLevel"
+                        )
+                        notes = @(
+                            'Sites retenus : nom au format A##### (regex ^A\d{5}).',
+                            $(if ($extra.Count) { "Sites autonomes ajoutés hors conteneur (extraSites) : $($extra.Count)." } else { $null })
+                        ) | Where-Object { $_ }
+                    }
+                )
+            }
+            Send-Json -Body (ConvertTo-Json -InputObject $obj -Depth 6 -Compress)
+        }
+
         # Cache utilisateurs prêt ? (nb d'utilisateurs) — garde-fou appelé AVANT une génération de CSV
         Add-PodeRoute -Method Get -Path '/api/cache/ready' -ScriptBlock {
             $gPath = Get-GlobalUsersCachePath
@@ -573,7 +627,7 @@ function Start-AppServer {
                     # office/extensionAttribute1 ; description & OU non exprimables en OPATH → ignorées),
                     # + contrainte BAL (primarySmtpAddress/mail renseigné), SANS l'exclusion Ricoh
                     # (le filtre OPATH n'en a pas). ESTIMATION — la vérité terrain reste Get-Recipient.
-                    $ddgMap = @('title','department','office','extensionAttribute1')
+                    $ddgMap = @('title','department','office','extensionAttribute1','extensionAttribute15')
                     if ($rule.invertOf) {
                         $srcMapInc = @(@($srcRule.conditions.include) | Where-Object { $_.field -in $ddgMap })
                         if ($srcMapInc.Count -eq 0) {
