@@ -488,6 +488,16 @@ function Build-GlobalUsersCache {
     $withAnyProxy = @($users | Where-Object { @($_.ProxyAddresses).Count -gt 0 }).Count
     add-msg -msg "  [UsersCache] diag: $withAnyProxy/$($users.Count) ont des proxyAddresses ; $($records.Count) avec SMTP: primaire (+ samAccountName)." -foregroundColor DarkYellow -quelType writeHost
     add-msg -msg "  [UsersCache] $($records.Count) comptes avec BAL (primarySmtpAddress + samAccountName) conservés sur $($users.Count) actifs." -foregroundColor Cyan -quelType writeHost
+
+    # GARDE-FOU (B) : réponse AD DÉGRADÉE intermittente observée sur ce tenant — l'AD ramène
+    # des comptes mais AUCUN avec proxyAddresses (réponse rapide, incomplète) → 0 conservé.
+    # Ne JAMAIS écraser le cache par du vide : on lève une erreur, le cache existant reste
+    # intact, et le warmup/↻ Cache réessaiera. (Le cache global est la source de vérité
+    # Règles/Groupes/Écarts.)
+    if ($users.Count -gt 0 -and $withAnyProxy -eq 0) {
+        throw "Réponse AD dégradée : $($users.Count) comptes ramenés mais 0 avec proxyAddresses. Cache global inchangé — réessayez (↻ Cache)."
+    }
+
     $json = ConvertTo-Json -InputObject @($records) -Depth 4 -Compress
     $cachePath = Get-GlobalUsersCachePath
     [System.IO.File]::WriteAllText($cachePath, $json, [System.Text.Encoding]::UTF8)

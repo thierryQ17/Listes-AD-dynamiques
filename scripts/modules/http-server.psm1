@@ -537,7 +537,7 @@ function Start-AppServer {
                 $rule = ConvertFrom-Json $WebEvent.Request.Body
                 $allUsers = @(Get-AllUsersFromCache)
                 if ($allUsers.Count -eq 0) {
-                    Send-Json -Body '{"error":"Cache JSON vide — ouvrez l'"'"'Explorateur AD et cliquez sur ↻ Cache."}'
+                    Send-Json -Body '{"error":"Cache JSON vide — ouvrez l''Explorateur AD et cliquez sur ↻ Cache."}'
                 } else {
                     $lbl        = if ($rule.prefix) { Clean-ForFileName $rule.prefix } else { Clean-ForFileName $rule.label }
                     $mailDomain = $global:parametresJson.ad.mailDomain
@@ -1010,8 +1010,17 @@ function Start-CacheWarmup {
         [Console]::WriteLine("")
 
         # Construction du cache global utilisateurs (source de vérité pour Règles)
+        # (A) On reconstruit si le fichier est ABSENT **ou VIDE/dégénéré** ('[]' ou fichier
+        #     vide) : un cache présent mais vide (ex. écrit par une réponse AD dégradée
+        #     passée) ne doit PAS être considéré « présent » → sinon il reste figé à vide.
         $globalCachePath = Join-Path $cacheDir "_users_global.json"
-        if (-not (Test-Path $globalCachePath)) {
+        $globalNeedsBuild = $true
+        if (Test-Path $globalCachePath) {
+            $gc = ''
+            try { $gc = [System.IO.File]::ReadAllText($globalCachePath, [System.Text.Encoding]::UTF8).Trim() } catch {}
+            if ($gc -and $gc -ne '[]') { $globalNeedsBuild = $false }
+        }
+        if ($globalNeedsBuild) {
             try {
                 Import-Module $gPath."f_ad-reader.psm1" -Force -ErrorAction SilentlyContinue
                 $count = Build-GlobalUsersCache
