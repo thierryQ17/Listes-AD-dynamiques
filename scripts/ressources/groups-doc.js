@@ -345,6 +345,9 @@ function buildGroupsHtmlDoc(data, rule) {
         .do-modal.ddg-only .grp{background:#fff !important;border-left-color:#7c8ba1 !important;}
         .do-modal.ddg-only .grp-name::after{content:none !important;}
         .do-modal.ddg-only .grp-ddg-btn{display:none !important;}
+        /* Listes de membres dans la modale : 1 colonne (sinon chevauchement), max ~10 lignes puis scroll vertical */
+        .do-modal-body .members,.do-modal-body .ddg-list{columns:1 !important;max-height:178px;overflow-y:auto;overflow-x:hidden;}
+        .do-modal-body .members li,.do-modal-body .ddg-list li{grid-template-columns:minmax(0,1fr) auto;column-gap:6px;}
         .mails-box{background:#fff;color:#1f2430;border-radius:12px;border-top:4px solid #2563eb;box-shadow:0 16px 50px rgba(0,0,0,.3);width:min(1680px,97vw);max-height:90vh;overflow:auto;padding:0 26px 20px;position:relative;}
         .mails-head{position:sticky;top:0;background:#fff;z-index:5;padding:18px 0 8px;border-bottom:1px solid #e2e5ea;}
         .mails-actions{position:absolute;top:16px;right:0;display:flex;align-items:center;gap:6px;z-index:6;}
