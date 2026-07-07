@@ -658,7 +658,13 @@ function renderForm(rule) {
                 `</div>` +
             `</div>` +
 
+            `<div class="form-group form-group-inline">` +
+                `<label class="form-label" for="f-desc">Description</label>` +
+                `<input id="f-desc" class="form-input form-input-auto" type="text" value="${esc(metaLabel(rule || {}))}" readonly>` +
+            `</div>` +
+
             `<div class="form-group naming-group">` +
+                `<div class="naming-layout">` +
                 `<div class="naming-grid" id="naming-fields">` +
                     `<div class="naming-grid-hd">` +
                         `<span></span>` +
@@ -681,11 +687,16 @@ function renderForm(rule) {
                         `<div class="pattern-input-wrap"><input id="f-mail-pattern" class="form-input" type="text" placeholder="ex. {{nomCentre}}" title="Mail des groupes Centre" value="${esc(rule?.naming?.mailPattern || '')}"><button type="button" class="pattern-edit-btn" id="btn-mail-pattern" title="Éditer le gabarit du mail (Centre)">${SVG_PATTERN_EDIT}</button></div>` +
                     `</div>` +
                 `</div>` +
-            `</div>` +
-
-            `<div class="form-group form-group-inline">` +
-                `<label class="form-label" for="f-desc">Description</label>` +
-                `<input id="f-desc" class="form-input form-input-auto" type="text" value="${esc(metaLabel(rule || {}))}" readonly>` +
+                `<div class="naming-do-col">` +
+                    `<div class="naming-do-hd">` +
+                        `<span>Groupes à générer</span>` +
+                        `<button type="button" class="naming-do-toggle" id="naming-do-toggle" title="Tout cocher / décocher">` +
+                            `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>` +
+                        `</button>` +
+                    `</div>` +
+                    `<div class="naming-do-list" id="naming-do-list"><span class="naming-do-loading">…</span></div>` +
+                `</div>` +
+                `</div>` +
             `</div>` +
 
             `<div class="form-group">` +
@@ -732,8 +743,8 @@ function renderForm(rule) {
                             `<div class="cond-section-hdr">` +
                                 `<span class="cond-section-lbl include">Inclure</span>` +
                                 `<span class="cond-section-hint">utilisateurs répondant à ces critères</span>` +
-                                `<label class="cond-majad-chk" title="Ajoute / retire la condition « extensionAttribute15 = majAD »"><input type="checkbox" id="chk-majad"> majAD</label>` +
                             `</div>` +
+                            `<label class="cond-majad-chk" title="Ajoute / retire la condition « extensionAttribute15 = majAD » (en tête des critères)"><input type="checkbox" id="chk-majad"> majAD</label>` +
                             `<div class="cond-list" id="cond-include"></div>` +
                             `<button class="btn-add-cond" id="btn-add-include">+ Ajouter une condition</button>` +
                         `</div>` +
@@ -808,7 +819,10 @@ function renderForm(rule) {
         `</div>`;
 
     if (!rule?.invertOf) {
-        for (const c of inc) addCondRow('cond-include', c);
+        // La condition majAD (extensionAttribute15 = majAD) est affichée EN PREMIER.
+        const isMajAdCond = c => c.field === 'extensionAttribute15' && String(c.value).toLowerCase() === 'majad';
+        const incOrdered = [...inc].sort((a, b) => (isMajAdCond(a) ? 0 : 1) - (isMajAdCond(b) ? 0 : 1));
+        for (const c of incOrdered) addCondRow('cond-include', c);
         for (const c of exc) addCondRow('cond-exclude', c);
     }
 
@@ -842,11 +856,16 @@ function renderForm(rule) {
             r.querySelector('.cond-val').value.trim().toLowerCase() === M.value.toLowerCase());
         chk.checked = !!findRow();
         chk.addEventListener('change', () => {
-            if (chk.checked) { if (!findRow()) addCondRow('cond-include', M); }
-            else { const row = findRow(); if (row) row.remove(); }
+            if (chk.checked) {
+                if (!findRow()) {
+                    const list = document.getElementById('cond-include');
+                    list.insertBefore(createCondRow(M), list.firstChild);   // en tête
+                }
+            } else { const row = findRow(); if (row) row.remove(); }
             autoUpdateDesc();
         });
     })();
+    setupDoSelector(rule);   // colonne DO à droite de la grille de nommage
     document.getElementById('btn-save')?.addEventListener('click', saveRule);
     document.getElementById('btn-cancel')?.addEventListener('click', closeForm);
     document.getElementById('btn-preview-groups')?.addEventListener('click', previewGroups);
@@ -1003,6 +1022,38 @@ function readCondList(listId) {
     })).filter(c => c.value !== '' || NO_VALUE_OPS.has(c.op));
 }
 
+// ── Sélecteur multi-DO (colonne à droite de la grille de nommage) ──
+function readSelectedDos() {
+    return [...document.querySelectorAll('#naming-do-list input[type="checkbox"]:checked')].map(c => c.value);
+}
+async function setupDoSelector(rule) {
+    const list = document.getElementById('naming-do-list');
+    if (!list) return;
+    let regions = [];
+    try { regions = await (await fetch('/api/regions')).json(); } catch { /* liste vide */ }
+    // L'endpoint renvoie des objets { label, defaultOff } (rétro-compat : strings acceptés).
+    regions = (Array.isArray(regions) ? regions : []).map(r => typeof r === 'string' ? { label: r, defaultOff: false } : r);
+    if (!regions.length) {
+        list.innerHTML = '<span class="naming-do-loading">Aucune DO</span>';
+        return;
+    }
+    // rule.dos présent → on coche exactement cette liste. Absent → défaut : coché SAUF
+    // les DO marquées defaultOff (MONCHY, Paris Villiers, Paris Editions Celse).
+    const selected = Array.isArray(rule?.dos) ? rule.dos : null;
+    const isChecked = r => selected ? selected.includes(r.label) : !r.defaultOff;
+    list.innerHTML = regions.map(r =>
+        `<label class="naming-do-item"><input type="checkbox" value="${esc(r.label)}"` +
+        `${isChecked(r) ? ' checked' : ''}> <span title="${esc(r.label)}">${esc(r.label)}</span></label>`
+    ).join('');
+
+    // Icône « tout cocher / décocher » : bascule selon l'état courant.
+    document.getElementById('naming-do-toggle')?.addEventListener('click', () => {
+        const boxes = [...list.querySelectorAll('input[type="checkbox"]')];
+        const allChecked = boxes.length > 0 && boxes.every(b => b.checked);
+        boxes.forEach(b => { b.checked = !allChecked; });
+    });
+}
+
 function cleanForFileName(name) {
     if (!name) return '';
     const normalized = name.normalize('NFD').replace(/[̀-ͯ]/g, '');
@@ -1059,6 +1110,7 @@ function readForm() {
         ...(existing?.invertOf ? { invertOf: existing.invertOf } : {}),
         ...(existing?.locked ? { locked: true } : {}),
         conditions: { include, exclude },
+        dos:        readSelectedDos(),
         active:     activeChk ? activeChk.checked : (existing?.active !== false),
         ...(naming ? { naming } : {}),
         createdAt:  existing?.createdAt || now(),

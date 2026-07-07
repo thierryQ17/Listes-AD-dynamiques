@@ -406,6 +406,7 @@ body { overflow: hidden; }
     margin: 0;
     flex-shrink: 0;
     white-space: nowrap;
+    width: 130px;
 }
 .form-group-inline .form-input { flex: 1; }
 
@@ -459,8 +460,8 @@ body { overflow: hidden; }
 .niveau-row .niveau-desc {
     margin-top: 0;
     flex: 1;
-    display: flex;
-    align-items: center;
+    align-self: center;   /* bloc à la hauteur de son contenu, centré (le <br> refait sa ligne) */
+    line-height: 1.55;
 }
 
 .niveau-option {
@@ -515,9 +516,8 @@ body { overflow: hidden; }
     margin-bottom: 8px;
 }
 
-/* Case « majAD » dans l'en-tête INCLURE → ajoute extensionAttribute15 = majAD */
+/* Case « majAD » sous l'en-tête INCLURE → ajoute extensionAttribute15 = majAD (en tête) */
 .cond-majad-chk {
-    margin-left: auto;
     display: inline-flex;
     align-items: center;
     gap: 5px;
@@ -526,7 +526,7 @@ body { overflow: hidden; }
     color: #6d28d9;
     cursor: pointer;
     white-space: nowrap;
-    align-self: center;
+    margin: 0 0 8px;
 }
 .cond-majad-chk input { cursor: pointer; margin: 0; }
 
@@ -1292,20 +1292,25 @@ body { overflow: hidden; }
 /* ── Ligne nom + préfixe + toggle ── */
 .form-row-top {
     display: flex;
-    align-items: flex-start;
+    align-items: center;
     gap: 16px;
     margin-bottom: 20px;
 }
 .form-row-top-col {
     flex: 1;
     min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 12px;
 }
+.form-row-top-col .form-label { margin: 0; white-space: nowrap; width: 130px; flex-shrink: 0; }
+.form-row-top-col .form-input { flex: 1; }
 .form-row-top-toggle {
     display: flex;
     align-items: center;
     gap: 8px;
     flex-shrink: 0;
-    padding-top: 22px;
+    padding-top: 0;
 }
 
 /* ── Nommage personnalisé (gabarits) ── */
@@ -1324,6 +1329,69 @@ body { overflow: hidden; }
     flex-direction: column;
     gap: 8px;
 }
+
+/* Grille de nommage (rétrécie) + colonne « DO à générer » (scroll vertical, multi-select) */
+.naming-layout {
+    display: flex;
+    gap: 16px;
+    align-items: stretch;
+}
+.naming-layout .naming-grid { flex: 1; min-width: 0; }
+.naming-do-col {
+    width: 250px;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+}
+.naming-do-hd {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .07em;
+    color: var(--text-sub);
+    margin-bottom: 7px;
+}
+.naming-do-toggle {
+    border: none;
+    background: transparent;
+    color: var(--accent, #2563eb);
+    cursor: pointer;
+    padding: 2px;
+    border-radius: 4px;
+    display: inline-flex;
+    line-height: 0;
+}
+.naming-do-toggle:hover { background: var(--accent-lt, #eff6ff); }
+.naming-do-list {
+    box-sizing: border-box;
+    max-height: 110px;   /* ≈ 4 lignes visibles (24px/ligne) + padding ; le reste défile */
+    overflow-y: auto;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 6px 8px;
+    background: var(--surface);
+    display: grid;
+    grid-template-columns: 1fr 1fr;   /* 2 colonnes */
+    gap: 0 10px;
+    align-content: start;
+}
+.naming-do-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    height: 24px;
+    padding: 0 2px;
+    font-size: 12.5px;
+    cursor: pointer;
+    min-width: 0;
+}
+.naming-do-item input { margin: 0; cursor: pointer; flex-shrink: 0; }
+.naming-do-item span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.naming-do-loading { font-size: 12px; color: var(--text-sub); font-style: italic; grid-column: 1 / -1; }
 .naming-grid-hd,
 .naming-grid-row {
     display: grid;
@@ -2712,9 +2780,8 @@ body { overflow: hidden; }
     font-family: 'Cascadia Code', 'Fira Mono', 'Consolas', monospace;
     font-size: 12px;
     line-height: 1.55;
-    white-space: pre-wrap;
-    overflow-wrap: anywhere;
-    word-break: normal;
+    white-space: pre;
+    overflow-x: auto;
     background: #1e1e2e;
     color: #cdd6f4;
     min-height: 52px;

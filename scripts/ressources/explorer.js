@@ -308,6 +308,7 @@ function scheduleCacheStats() {
 }
 function updateCacheStats() {
     let total = 0, majad = 0;
+    const sites = Object.keys(allSiteUsers).length;
     for (const users of Object.values(allSiteUsers)) {
         if (!Array.isArray(users)) continue;
         total += users.length;
@@ -319,6 +320,10 @@ function updateCacheStats() {
     // deviennent des flex-items séparés et les espaces disparaissent.
     el.innerHTML = `<span><b>${total.toLocaleString('fr-FR')}</b> en cache&nbsp;·&nbsp;` +
                    `<b class="stat-majad">${majad.toLocaleString('fr-FR')}</b> majAD</span>`;
+    // Clarifie le périmètre : SOMME des caches par site (les sites de l'arbre), pas le
+    // cache global (qui, lui, couvre tout le domaine et peut être un peu plus élevé).
+    el.title = `Somme des caches par site — ${sites} site(s) de l'arbre. ` +
+               `Différent du cache global (tout le domaine, comptes hors DO inclus).`;
 }
 
 // ── Helpers compteurs ─────────────────────────────────────────────────
