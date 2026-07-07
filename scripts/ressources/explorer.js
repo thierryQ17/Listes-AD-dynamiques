@@ -15,8 +15,47 @@ const state = {
     mode:           'ad',    // 'ad' (utilisateurs) | 'ecarts' (OU vs Bureau)
     ecartBySam:     null,    // { samAccountName: 'ecart' | 'manquant' } — chargé à la demande
     ecartUsers:     [],      // TOUS les comptes en écart (toutes OU) — objets utilisateur complets
-    ecartsAll:      false    // vrai = vue « toutes les OU » (aucun filtre de site) — défaut du mode Écarts
+    ecartsAll:      false,   // vrai = vue « toutes les OU » (aucun filtre de site) — défaut du mode Écarts
+    majAdFilter:    'all'    // 'all' | 'majad' (tagués) | 'nonmajad' (sans le tag) — filtre 3 états
 };
+
+// ============================================================
+//  Tag « majAD » (extensionAttribute15) — expose + filtre + surlignage
+// ============================================================
+const MAJAD_TAG = 'majAD';
+function isMajAd(u) {
+    return !!u && ('' + (u.extensionAttribute15 || '')).trim() === MAJAD_TAG;
+}
+// Filtre 3 états appliqué à la liste courante (avant recherche/regroupement).
+function applyMajAdFilter(list) {
+    if (state.majAdFilter === 'majad')    return list.filter(isMajAd);
+    if (state.majAdFilter === 'nonmajad') return list.filter(u => !isMajAd(u));
+    return list;
+}
+function updateMajAdFilterBtn() {
+    const b = document.getElementById('majad-filter-btn');
+    if (!b) return;
+    const map = {
+        all:      { txt: 'majAD : tous', cls: '' },
+        majad:    { txt: 'majAD : oui',  cls: 'majad-on' },
+        nonmajad: { txt: 'majAD : non',  cls: 'majad-off' },
+    };
+    const m = map[state.majAdFilter] || map.all;
+    b.textContent = m.txt;
+    b.classList.remove('majad-on', 'majad-off');
+    if (m.cls) b.classList.add(m.cls);
+}
+function setupMajAdFilter() {
+    const b = document.getElementById('majad-filter-btn');
+    if (!b) return;
+    b.addEventListener('click', () => {
+        state.majAdFilter = state.majAdFilter === 'all' ? 'majad'
+                          : state.majAdFilter === 'majad' ? 'nonmajad' : 'all';
+        updateMajAdFilterBtn();
+        reRenderCurrent();
+    });
+    updateMajAdFilterBtn();
+}
 
 // ============================================================
 //  Mode d'affichage AD / Écarts
@@ -138,7 +177,7 @@ function reRenderCurrent() {
     if (allView)                 nameEl.textContent = 'Écarts — toutes les OU';
     else if (state.selectedSite) nameEl.textContent = state.selectedSite.site.name;
 
-    const base   = activeBaseUsers();
+    const base   = applyMajAdFilter(activeBaseUsers());
     const fq     = document.getElementById('user-filter').value.trim().toLowerCase();
     const source = fq ? base.filter(u => matchesFilter(u, fq)) : base;
     displayUsers(source);
@@ -210,6 +249,7 @@ const SEARCH_CRITERIA = [
     { key: 'samAccountName', label: 'Login (SAM)',     user: true  },
     { key: 'mail',           label: 'Mail',            user: true  },
     { key: 'department',     label: 'Service',         user: true  },
+    { key: 'company',        label: 'Société',         user: true  },
     { key: 'title',          label: 'Fonction',        user: true  },
     { key: 'description',    label: 'Description',      user: true  },
     { key: 'office',         label: 'Bureau',          user: true  },
@@ -425,6 +465,7 @@ document.addEventListener('DOMContentLoaded', () => {
     setupSearch();
     setupSort();
     setupGroupBy();
+    setupMajAdFilter();
 
     if (!tryRestoreSnapshot()) {
         loadTree();
@@ -581,9 +622,18 @@ function createRegionNode(region) {
     const nbChildren = (region.children || []).length;
     regionBadge.textContent = nbChildren > 0 ? nbChildren : '';
 
+    // Bouton « sans majAD » : liste les comptes SANS extensionAttribute15=majAD de la
+    // région, groupés par centre, tout ouvert (dans la zone centrale).
+    const noMajAdBtn = document.createElement('button');
+    noMajAdBtn.className = 'region-nomajad-btn';
+    noMajAdBtn.textContent = '⊘';
+    noMajAdBtn.title = `Comptes SANS le tag majAD de « ${region.name} » — groupés par centre`;
+    noMajAdBtn.addEventListener('click', e => { e.stopPropagation(); showRegionNoMajAd(region); });
+
     header.appendChild(arrow);
     header.appendChild(nameSpan);
     header.appendChild(regionBadge);
+    header.appendChild(noMajAdBtn);
     header.appendChild(refreshBtn);
     header.addEventListener('click', () => toggleRegion(wrap));
 
@@ -742,6 +792,19 @@ function showConfirmModal(title, htmlMsg) {
 }
 
 async function refreshAllCache() {
+    // Resync de l'arbre avec le serveur AVANT tout : state.treeData peut être PARTIEL
+    // (arbre chargé pendant un rebuild → régions incomplètes). On repart de /api/tree
+    // pour un décompte de sites correct dans la modale ET un prefetch complet.
+    try {
+        const fresh = await fetchJSON('/api/tree');
+        if (Array.isArray(fresh) && fresh.length) {
+            state.treeData = fresh;
+            renderTree(fresh);
+            fresh.flatMap(r => r.children || []).forEach(s => { dnNameMap[s.dn] = s.name; });
+            await fetchAndApplyCounts();
+        }
+    } catch { /* si le resync échoue, on garde l'arbre courant */ }
+
     const allSites = state.treeData.flatMap(r => r.children || []);
     if (!allSites.length) return;
 
@@ -1010,7 +1073,7 @@ function renderFlat(users) {
     tbody.innerHTML = '';
 
     if (!users || users.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="7" class="td-hint">Aucun utilisateur dans ce site</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="8" class="td-hint">Aucun utilisateur dans ce site</td></tr>';
         return;
     }
 
@@ -1029,7 +1092,7 @@ function renderGrouped(users, groupBy) {
     tbody.innerHTML = '';
 
     if (!users || users.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="7" class="td-hint">Aucun utilisateur dans ce site</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="8" class="td-hint">Aucun utilisateur dans ce site</td></tr>';
         return;
     }
 
@@ -1061,7 +1124,7 @@ function renderGrouped(users, groupBy) {
             + (isFormateur ? ' group-formateur' : '')
             + (isCategory  ? ' group-category'  : '');
         headerTr.innerHTML = `
-            <td colspan="7">
+            <td colspan="8">
                 <span class="group-toggle expanded">▼</span>
                 <span class="group-label">${esc(key)}</span>
                 <span class="group-count">${groupUsers.length}</span>
@@ -1086,7 +1149,7 @@ function renderCategoryGrouped(users) {
     tbody.innerHTML = '';
 
     if (!users || users.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="7" class="td-hint">Aucun utilisateur dans ce site</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="8" class="td-hint">Aucun utilisateur dans ce site</td></tr>';
         return;
     }
 
@@ -1104,7 +1167,7 @@ function renderCategoryGrouped(users) {
 
         const mainTr = document.createElement('tr');
         mainTr.className = 'group-header group-category' + (isFormateur ? ' group-formateur' : '');
-        mainTr.innerHTML = `<td colspan="7">
+        mainTr.innerHTML = `<td colspan="8">
             <span class="group-toggle expanded">▼</span>
             <span class="group-label">${esc(catKey)}</span>
             <span class="group-count">${catUsers.length}</span>
@@ -1125,7 +1188,7 @@ function renderCategoryGrouped(users) {
 
             const subTr = document.createElement('tr');
             subTr.className = 'group-header group-sub' + (isFormateur ? ' group-formateur' : '');
-            subTr.innerHTML = `<td colspan="7">
+            subTr.innerHTML = `<td colspan="8">
                 <span class="group-toggle expanded">▼</span>
                 <span class="group-label">${esc(title)}</span>
                 <span class="group-count">${titleUsers.length}</span>
@@ -1198,6 +1261,7 @@ const COLUMNS = [
     { c: 'func',   label: 'Fonction' },
     { c: 'mail',   label: 'Adresse de messagerie' },
     { c: 'dept',   label: 'Service' },
+    { c: 'company', label: 'Société' },
     { c: 'ville',  label: 'Ville (OU)' },
     { c: 'office', label: 'Bureau (office)' },
 ];
@@ -1243,9 +1307,11 @@ function createUserRow(u, siteDn) {
         <td class="col-func${u.title ? ' func-clickable' : ''}">${esc(u.title || '')}</td>
         <td class="col-mail">${esc(u.mail || '')}</td>
         <td class="col-dept">${esc(u.department || '')}</td>
+        <td class="col-company">${esc(u.company || '')}</td>
         <td class="col-ville">${esc(ouVille(u.ouDn))}</td>
         <td class="col-office${st !== 'ok' ? ' ' + st : ''}">${esc(u.office || '') || (st === 'manquant' ? '—' : '')}</td>`;
     if (u.enabled === false) tr.classList.add('row-disabled');
+    if (!isMajAd(u)) tr.classList.add('row-nomajad');   // surlignage pastel des comptes SANS le tag majAD
     tr.addEventListener('click', () => {
         if (_selectedUserRow) _selectedUserRow.classList.remove('row-selected');
         _selectedUserRow = tr;
@@ -1293,9 +1359,10 @@ function showUserDetail(u) {
             : (parts[0][0] || '?').toUpperCase();
     })();
 
-    const statusHtml = u.enabled === false
+    const statusHtml = (u.enabled === false
         ? '<span class="detail-status detail-disabled">Compte désactivé</span>'
-        : '<span class="detail-status detail-enabled">Compte actif</span>';
+        : '<span class="detail-status detail-enabled">Compte actif</span>')
+        + (isMajAd(u) ? '<span class="detail-status detail-majad" title="extensionAttribute15 = majAD">majAD</span>' : '');
 
     // ---- Panneau UNIQUE (fusion « Détail » + « MAJ AD ») ----
     // OU + Bureau en tête (pleine largeur, ils vont ensemble) ; le reste sur 2 colonnes.
@@ -1303,7 +1370,7 @@ function showUserDetail(u) {
     // csv = true → champ issu de l'ancien onglet « MAJ AD » (données de mise à jour AD par CSV) : tag « CSV ».
     const detailField = (label, value, wide, csv) => {
         const empty = value == null || String(value).trim() === '';
-        const tag = csv ? ' <span class="detail-csv-tag" title="Champ pris en charge par la mise à jour AD (MAJ AD)">MAJ AD</span>' : '';
+        const tag = csv ? ' <span class="detail-majad-dot" title="Champ pris en charge par la mise à jour AD (MAJ AD)"></span>' : '';
         return `<div class="detail-field${wide ? ' detail-field-wide' : ''}">
                     <span class="detail-label">${esc(label)}${tag}</span>
                     <span class="detail-value${empty ? ' detail-value-empty' : ''}">${empty ? '—' : esc(String(value))}</span>
@@ -1330,7 +1397,7 @@ function showUserDetail(u) {
         <div class="detail-card">
             <div class="detail-avatar">${esc(initials)}</div>
             <div class="detail-name">${esc(u.displayName || u.samAccountName)}</div>
-            ${statusHtml}
+            <div class="detail-status-row">${statusHtml}</div>
             <div class="detail-fields">
                 ${detailField('OU (arborescence)', u.ouDn, true, false)}
                 ${detailField('Bureau (office)', u.office, true, true)}
@@ -1346,12 +1413,12 @@ function renderUsers(users) { displayUsers(users); }
 
 function setTableLoading() {
     document.getElementById('users-tbody').innerHTML =
-        '<tr><td colspan="7" class="td-loading">Chargement…</td></tr>';
+        '<tr><td colspan="8" class="td-loading">Chargement…</td></tr>';
 }
 
 function setTableError(msg) {
     document.getElementById('users-tbody').innerHTML =
-        `<tr><td colspan="7" class="td-hint" style="color:#dc2626">Erreur : ${esc(msg)}</td></tr>`;
+        `<tr><td colspan="8" class="td-hint" style="color:#dc2626">Erreur : ${esc(msg)}</td></tr>`;
 }
 
 // ============================================================
@@ -1563,7 +1630,7 @@ function renderCrossSiteResults(q, preserveScroll) {
     tbody.innerHTML = '';
 
     if (results.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="7" class="td-hint">Aucun résultat trouvé</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="8" class="td-hint">Aucun résultat trouvé</td></tr>';
         return;
     }
 
@@ -1573,7 +1640,7 @@ function renderCrossSiteResults(q, preserveScroll) {
         headerTr.className = 'group-header';
         headerTr.dataset.dn = dn;
         headerTr.innerHTML = `
-            <td colspan="7">
+            <td colspan="8">
                 <span class="group-toggle ${uncached ? '' : 'expanded'}">▼</span>
                 <span class="group-label">${hlText(siteName, lq)}</span>
                 <span class="group-count">${uncached ? '?' : users.length}</span>
@@ -1592,7 +1659,7 @@ function renderCrossSiteResults(q, preserveScroll) {
         if (uncached) {
             const tr = document.createElement('tr');
             tr.className = 'group-member';
-            tr.innerHTML = `<td colspan="7" class="td-hint search-uncached-hint">Cache non disponible · cliquer sur le nom du site ci-dessus pour charger</td>`;
+            tr.innerHTML = `<td colspan="8" class="td-hint search-uncached-hint">Cache non disponible · cliquer sur le nom du site ci-dessus pour charger</td>`;
             frag.appendChild(tr);
         } else {
             for (const u of users.sort((a, b) =>
@@ -1608,6 +1675,77 @@ function renderCrossSiteResults(q, preserveScroll) {
                 tr.querySelector('.col-dept').innerHTML = hlText(u.department  || '', lq);
                 frag.appendChild(tr);
             }
+        }
+    }
+    tbody.appendChild(frag);
+}
+
+// Affiche les comptes SANS le tag majAD d'une région, groupés par centre (tout ouvert).
+async function showRegionNoMajAd(region) {
+    const sites = (region.children || []);
+    if (!sites.length) return;
+
+    // Charger les sites pas encore en cache (allSiteUsers alimenté par le prefetch de fond).
+    document.getElementById('current-site-name').textContent = `${region.name} — sans majAD…`;
+    await Promise.all(sites.map(async s => {
+        if (allSiteUsers[s.dn]) return;
+        try {
+            const r = await fetch('/api/ou/users?dn=' + encodeURIComponent(s.dn), { cache: 'no-store' });
+            const d = await r.json();
+            if (Array.isArray(d)) allSiteUsers[s.dn] = d;
+        } catch { /* site ignoré */ }
+    }));
+
+    // Un groupe par centre ayant au moins un compte sans majAD.
+    const results = [];
+    for (const s of sites) {
+        const users = (allSiteUsers[s.dn] || []).filter(u => !isMajAd(u));
+        if (users.length) results.push({ dn: s.dn, siteName: s.name, users });
+    }
+    results.sort((a, b) => a.siteName.localeCompare(b.siteName, 'fr'));
+    renderNoMajAdGroups(region.name, results);
+}
+
+function renderNoMajAdGroups(regionName, results) {
+    clearDetailPanel();
+    state.selectedSite = null;
+    updateTreeSelection();
+    document.getElementById('current-site-name').textContent = `${regionName} — sans majAD`;
+    const uf = document.getElementById('user-filter');
+    uf.disabled = true; uf.value = '';
+    document.getElementById('user-filter-clear').hidden = true;
+    document.getElementById('group-by').disabled = true;
+
+    const total = results.reduce((s, r) => s + r.users.length, 0);
+    document.getElementById('user-count').textContent = `${total} sans majAD · ${results.length} centre(s)`;
+
+    state.searchActive   = true;   // active le bouton « Tout ouvrir / Tout fermer » du tableau
+    state.groupsExpanded = true;
+    updateToggleBtn();
+
+    const tbody = document.getElementById('users-tbody');
+    tbody.innerHTML = '';
+    if (!results.length) {
+        tbody.innerHTML = '<tr><td colspan="8" class="td-hint">Aucun compte sans majAD dans cette région.</td></tr>';
+        return;
+    }
+    const frag = document.createDocumentFragment();
+    for (const { siteName, dn, users } of results) {
+        const headerTr = document.createElement('tr');
+        headerTr.className = 'group-header';
+        headerTr.dataset.dn = dn;
+        headerTr.innerHTML = `
+            <td colspan="8">
+                <span class="group-toggle expanded">▼</span>
+                <span class="group-label">${esc(siteName)}</span>
+                <span class="group-count">${users.length}</span>
+            </td>`;
+        headerTr.addEventListener('click', () => toggleGroupRows(headerTr));
+        frag.appendChild(headerTr);
+        for (const u of users.sort((a, b) => (a.displayName || '').localeCompare(b.displayName || '', 'fr'))) {
+            const tr = createUserRow(u, dn);
+            tr.classList.add('group-member');
+            frag.appendChild(tr);
         }
     }
     tbody.appendChild(frag);

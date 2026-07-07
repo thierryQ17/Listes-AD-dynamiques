@@ -532,6 +532,50 @@ body {
     color: #b91c1c;
 }
 
+/* Tag « majAD » (extensionAttribute15) — sur la même ligne que « Compte actif » */
+.detail-status-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    flex-wrap: nowrap;
+}
+.detail-majad {
+    background: #ede9fe;
+    color: #6d28d9;
+}
+
+/* Marqueur de champ « MAJ AD » : pastille ronde vide, même couleur que le tag majAD */
+.detail-majad-dot {
+    display: inline-block;
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: #6d28d9;
+    vertical-align: middle;
+    margin-left: 2px;
+}
+
+/* Surlignage pastel des lignes de comptes SANS le tag majAD (la sélection reste prioritaire) */
+tr.row-nomajad td { background: #f5f3ff; }
+
+/* Bouton filtre 3 états majAD (barre de titre du tableau) */
+.btn-majad-filter {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 3px 10px;
+    border-radius: 10px;
+    border: 1px solid #e5e7eb;
+    background: #f9fafb;
+    color: #6b7280;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background .12s, color .12s, border-color .12s;
+}
+.btn-majad-filter:hover { border-color: #c7c9d1; }
+.btn-majad-filter.majad-on  { background: #ede9fe; color: #6d28d9; border-color: #ddd6fe; }
+.btn-majad-filter.majad-off { background: #f3f4f6; color: #4b5563; border-color: #d1d5db; }
+
 .detail-fields {
     width: 100%;
     display: flex;
@@ -881,9 +925,10 @@ tr.row-selected td {
 .users-table.hide-desc   .col-desc,
 .users-table.hide-func   .col-func,
 .users-table.hide-mail   .col-mail,
-.users-table.hide-dept   .col-dept,
-.users-table.hide-ville  .col-ville,
-.users-table.hide-office .col-office { display: none; }
+.users-table.hide-dept    .col-dept,
+.users-table.hide-company .col-company,
+.users-table.hide-ville   .col-ville,
+.users-table.hide-office  .col-office { display: none; }
 
 /* ---- Mode Écarts : colonnes Nom · Ville (OU) · Bureau ---- */
 /* Masquer les colonnes purement « AD » en mode Écarts. */
@@ -1175,6 +1220,27 @@ body.mode-ecarts .tree-region.ecart-empty { display: none; }
     from { transform: rotate(0deg); }
     to   { transform: rotate(360deg); }
 }
+
+/* Bouton « sans majAD » par région (violet, même thème que le tag majAD) */
+.region-nomajad-btn {
+    opacity: .6;
+    width: 20px;
+    height: 20px;
+    border: none;
+    background: transparent;
+    color: #6d28d9;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    border-radius: 3px;
+    padding: 0;
+    flex-shrink: 0;
+    line-height: 20px;
+    text-align: center;
+    transition: opacity .15s, background .1s;
+}
+.tree-region-header:hover .region-nomajad-btn { opacity: 1; }
+.region-nomajad-btn:hover { background: #ede9fe; opacity: 1; }
 
 /* ============================================================
    Footer de progression (scan)
