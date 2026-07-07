@@ -56,47 +56,6 @@ body {
     border-color: #b45309;
 }
 
-/* Sélecteur de source du cache : AD (OU→site) / majAD (Department→Office) */
-.source-bar {
-    display: flex;
-    align-items: center;
-    gap: 7px;
-    padding: 4px 12px 8px;
-    border-bottom: 1px solid var(--border-lt);
-    flex-shrink: 0;
-}
-.source-label {
-    font-size: 11px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: .04em;
-    color: var(--text-sub);
-    white-space: nowrap;
-}
-.source-select {
-    flex: 1;
-    height: 26px;
-    padding: 0 22px 0 8px;
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    font-size: 12px;
-    font-family: inherit;
-    background: var(--bg);
-    color: var(--text);
-    cursor: pointer;
-    -webkit-appearance: none;
-    appearance: none;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%2378716c'/%3E%3C/svg%3E");
-    background-repeat: no-repeat;
-    background-position: right 7px center;
-}
-.source-select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-lt); outline: none; }
-/* En source majAD, l'arbre est Department→Office : pas de rafraîchissement par site/région
-   (données en mémoire), et le mode Écarts (basé sur les OU) n'a pas de sens. */
-body.source-majad .site-refresh-btn,
-body.source-majad .region-refresh-btn,
-body.source-majad .mode-toggle { display: none; }
-
 .tree-search-wrap {
     position: relative;
     padding: 10px 12px;
