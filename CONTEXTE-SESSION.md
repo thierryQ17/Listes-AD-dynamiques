@@ -306,8 +306,14 @@ nouveau serveur via l'en-tête **`Server: Pode`**.
 - Par défaut : **simulation LOCALE** sur le cache (`ddgSource='local'`, `Get-AllUsersFromCache`
   filtré par le sous-ensemble OPATH + partition Office). **`Get-Recipient` (Exchange réel)**
   uniquement si `rule.exoLive = true` (`ddgSource='exo'`). Note d'en-tête **conditionnelle**.
+  ⚠️ Côté serveur, l'aperçu live fait **UN SEUL** `Get-Recipient` global (route `preview-groups`,
+  regroupé par Office en local) — **pas** un appel par centre ⇒ **aucune progression
+  incrémentale** disponible (cf. overlay bloquant, 8 juillet).
 - **Modale « tous les groupes d'une DO »** : clic sur un nom de carte niveau 2 → grille
-  scroll vertical, zoom 80 %, membres 1 colonne (max ~10 lignes) ; handlers en **délégation**.
+  scroll vertical, zoom 80 %, membres 1 colonne ; handlers en **délégation**. En-tête de la
+  modale : **bouton « Cacher / Afficher les fonctions »** scopé (`.do-modal.hide-fn .m-title`),
+  et **blocs de hauteur uniforme** (360 px, mode DDG-seul) avec liste de membres qui **défile**
+  (cf. 8 juillet).
 
 ### Outillage session — `/session-fin`, `/session-debut` + reprise après `/clear`
 - Skill **`/session-fin`** (`~/.claude/skills/`, hors dépôt) : écrit `docs/RECAP-<horodatage>.md`
@@ -328,6 +334,36 @@ nouveau serveur via l'en-tête **`Server: Pode`**.
 > ⚠️ Les blocs de code ci-dessous (`Get-RegionFromDN` sans `extraSites`, usage
 > `-ne 'MONCHY'`, config régions) datent d'avant cette section : la **synthèse ci-dessus fait
 > foi**. Vérifier le code réel avant d'agir.
+
+---
+
+## Évolutions récentes — Ergonomie UI (8 juillet 2026)
+
+**100 % frontend** (fichiers statiques servis par Pode → **rechargement** suffit, pas de
+redémarrage). Cache-bust `?v=` bumpé sur chaque page concernée.
+
+### Explorateur AD — colonne « majAD » (`explorer.*`)
+- **1ʳᵉ colonne** étroite (24 px), non triable, jamais masquable : **pastille grenat**
+  (`#7b1e2b`, classe `.dot-nomajad`) pour les comptes **sans** `extensionAttribute15 = majAD`
+  (`isMajAd(u)`), avec **tooltip** expliquant la cause (champs non maintenus par la MAJ AD).
+- **Plus de surlignage de ligne** : `tr.row-nomajad` n'a plus de style → seule la pastille
+  matérialise l'absence de majAD.
+- Tous les `colspan` du tableau passés de **8 → 9**. Masquage de colonnes **par classes**
+  (`hide-<col>`), donc insensible à l'ajout ; mode « Écarts » réutilise `createUserRow`.
+
+### Modale « groupes d'une DO » (`groups-doc.js`)
+- **Bouton « Cacher / Afficher les fonctions »** dans l'en-tête de la modale (cartes clonées
+  **hors `#tree`** → toggle dédié `.do-modal.hide-fn`), qui reprend l'état de la page à l'ouverture.
+- **Scroll vertical par bloc** : blocs de **hauteur uniforme** (360 px, mode `ddg-only`),
+  en-tête figé, liste membres `flex:1` qui défile. Compromis : vide en bas pour les petits groupes.
+
+### Overlay bloquant pendant l'interrogation Exchange live (`regles.js` / `regles.css`)
+- `#exo-blocker` plein écran **bloquant** + message explicite + **barre indéterminée** +
+  **compteur de temps écoulé**. Pas de faux pourcentage : `Get-Recipient` répond en un bloc
+  (preuve : un seul appel, ligne 683 de `http-server.psm1`).
+- Helper **`previewGroupsFetch(rule)`** centralise les **6** appels à
+  `/api/regles/preview-groups` ; overlay **uniquement si** `exoLive === true && niveau === 3`
+  (condition backend), masqué en `finally`.
 
 ---
 

@@ -337,16 +337,25 @@ function buildGroupsHtmlDoc(data, rule) {
         .do-modal-box{background:#f7f9fc;border-radius:14px;width:96vw;height:92vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.35);overflow:hidden;}
         .do-modal-head{display:flex;align-items:center;justify-content:space-between;padding:12px 20px;border-bottom:1px solid #dbe3ee;background:#fff;flex:none;}
         .do-modal-title{font-size:16px;font-weight:700;color:#1e3a5f;}
+        .do-modal-actions{display:flex;align-items:center;gap:10px;flex:none;}
+        .do-modal-btn{height:32px;border:1px solid #cbd0d8;background:#fff;border-radius:8px;padding:0 14px;font-size:12.5px;font-weight:600;cursor:pointer;color:#374151;font-family:inherit;}
+        .do-modal-btn:hover{background:#eef0f3;}
+        .do-modal-btn.active{background:#1e3a5f;color:#fff;border-color:#1e3a5f;}
         .do-modal-close{border:none;background:transparent;font-size:26px;line-height:1;color:#64748b;cursor:pointer;padding:0 6px;}
         .do-modal-close:hover{color:#ef4444;}
+        /* Bouton d'en-tête « Cacher les fonctions » scopé à la modale (cartes clonées hors #tree) */
+        .do-modal.hide-fn .m-title{display:none;}
         .do-modal-body{flex:1;overflow-y:auto;overflow-x:hidden;padding:16px;zoom:.8;display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:14px;align-content:start;}
-        .do-modal-body .grp{margin:0;}
+        /* Chaque bloc de groupe : en-tête (nom/mail) figé en haut, liste de membres défilante */
+        .do-modal-body .grp{margin:0;display:flex;flex-direction:column;}
+        /* Mode DDG seul (cas courant) : blocs de hauteur UNIFORME → chaque liste a son ascenseur auto */
+        .do-modal.ddg-only .do-modal-body .grp{height:360px;}
         /* Mode DDG seul dans la modale : cartes identiques, sans </>, sans marqueur d'écart */
         .do-modal.ddg-only .grp{background:#fff !important;border-left-color:#7c8ba1 !important;}
         .do-modal.ddg-only .grp-name::after{content:none !important;}
         .do-modal.ddg-only .grp-ddg-btn{display:none !important;}
         /* Listes de membres dans la modale : 1 colonne (sinon chevauchement), max ~10 lignes puis scroll vertical */
-        .do-modal-body .members,.do-modal-body .ddg-list{columns:1 !important;max-height:178px;overflow-y:auto;overflow-x:hidden;}
+        .do-modal-body .members,.do-modal-body .ddg-list{columns:1 !important;flex:1 1 auto;min-height:0;max-height:300px;overflow-y:auto;overflow-x:hidden;}
         .do-modal-body .members li,.do-modal-body .ddg-list li{grid-template-columns:minmax(0,1fr) auto;column-gap:6px;}
         .mails-box{background:#fff;color:#1f2430;border-radius:12px;border-top:4px solid #2563eb;box-shadow:0 16px 50px rgba(0,0,0,.3);width:min(1680px,97vw);max-height:90vh;overflow:auto;padding:0 26px 20px;position:relative;}
         .mails-head{position:sticky;top:0;background:#fff;z-index:5;padding:18px 0 8px;border-bottom:1px solid #e2e5ea;}
@@ -776,6 +785,12 @@ function buildGroupsHtmlDoc(data, rule) {
   // fonctions (membres inline, </> DDG, lien mail) grace a la delegation document ci-dessus.
   var doModal=document.getElementById('doModal');
   var doModalBody=document.getElementById('doModalBody');
+  var doModalFnBtn=document.getElementById('doModalToggleFn');
+  if(doModalFnBtn&&doModal)doModalFnBtn.addEventListener('click',function(){
+    var h=doModal.classList.toggle('hide-fn');
+    doModalFnBtn.textContent=h?'Afficher les fonctions':'Cacher les fonctions';
+    doModalFnBtn.classList.toggle('active', h);
+  });
   function closeDoModal(){ if(doModal)doModal.setAttribute('hidden',''); if(doModalBody)doModalBody.innerHTML=''; }
   function openDoCentres(dokey,name){
     if(!doModal||!doModalBody)return;
@@ -788,6 +803,10 @@ function buildGroupsHtmlDoc(data, rule) {
     cards.forEach(function(c){ doModalBody.appendChild(c.cloneNode(true)); });
     // Refléter le mode DDG-only de la page sur la modale (cartes hors #tree).
     doModal.classList.toggle('ddg-only', !!(treeEl&&treeEl.classList.contains('ddg-only')));
+    // Refléter l'état « fonctions cachées » de la page + libellé du bouton de la modale.
+    var pageHideFn=!!(treeEl&&treeEl.classList.contains('hide-fn'));
+    doModal.classList.toggle('hide-fn', pageHideFn);
+    if(doModalFnBtn){ doModalFnBtn.textContent=pageHideFn?'Afficher les fonctions':'Cacher les fonctions'; doModalFnBtn.classList.toggle('active', pageHideFn); }
     var t=document.getElementById('doModalTitle');
     if(t)t.textContent=name+'  —  '+cards.length+' groupe'+(cards.length>1?'s':'');
     doModal.removeAttribute('hidden');
@@ -867,7 +886,10 @@ function buildGroupsHtmlDoc(data, rule) {
         '<div class="do-modal" id="doModal" hidden><div class="do-modal-box">' +
             '<div class="do-modal-head">' +
                 '<div class="do-modal-title" id="doModalTitle"></div>' +
-                '<button class="do-modal-close" id="doModalClose" type="button" aria-label="Fermer">×</button>' +
+                '<div class="do-modal-actions">' +
+                    '<button class="do-modal-btn" id="doModalToggleFn" type="button" title="Afficher / masquer les fonctions (title) des membres">Cacher les fonctions</button>' +
+                    '<button class="do-modal-close" id="doModalClose" type="button" aria-label="Fermer">×</button>' +
+                '</div>' +
             '</div>' +
             '<div class="do-modal-body" id="doModalBody"></div>' +
         '</div></div>' +

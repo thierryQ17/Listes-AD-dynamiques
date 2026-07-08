@@ -1117,7 +1117,7 @@ function renderFlat(users) {
     tbody.innerHTML = '';
 
     if (!users || users.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="8" class="td-hint">Aucun utilisateur dans ce site</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="9" class="td-hint">Aucun utilisateur dans ce site</td></tr>';
         return;
     }
 
@@ -1136,7 +1136,7 @@ function renderGrouped(users, groupBy) {
     tbody.innerHTML = '';
 
     if (!users || users.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="8" class="td-hint">Aucun utilisateur dans ce site</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="9" class="td-hint">Aucun utilisateur dans ce site</td></tr>';
         return;
     }
 
@@ -1168,7 +1168,7 @@ function renderGrouped(users, groupBy) {
             + (isFormateur ? ' group-formateur' : '')
             + (isCategory  ? ' group-category'  : '');
         headerTr.innerHTML = `
-            <td colspan="8">
+            <td colspan="9">
                 <span class="group-toggle expanded">▼</span>
                 <span class="group-label">${esc(key)}</span>
                 <span class="group-count">${groupUsers.length}</span>
@@ -1193,7 +1193,7 @@ function renderCategoryGrouped(users) {
     tbody.innerHTML = '';
 
     if (!users || users.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="8" class="td-hint">Aucun utilisateur dans ce site</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="9" class="td-hint">Aucun utilisateur dans ce site</td></tr>';
         return;
     }
 
@@ -1211,7 +1211,7 @@ function renderCategoryGrouped(users) {
 
         const mainTr = document.createElement('tr');
         mainTr.className = 'group-header group-category' + (isFormateur ? ' group-formateur' : '');
-        mainTr.innerHTML = `<td colspan="8">
+        mainTr.innerHTML = `<td colspan="9">
             <span class="group-toggle expanded">▼</span>
             <span class="group-label">${esc(catKey)}</span>
             <span class="group-count">${catUsers.length}</span>
@@ -1232,7 +1232,7 @@ function renderCategoryGrouped(users) {
 
             const subTr = document.createElement('tr');
             subTr.className = 'group-header group-sub' + (isFormateur ? ' group-formateur' : '');
-            subTr.innerHTML = `<td colspan="8">
+            subTr.innerHTML = `<td colspan="9">
                 <span class="group-toggle expanded">▼</span>
                 <span class="group-label">${esc(title)}</span>
                 <span class="group-count">${titleUsers.length}</span>
@@ -1346,6 +1346,7 @@ function createUserRow(u, siteDn) {
     const disabledTag = u.enabled === false ? '<span class="tag-disabled">désactivé</span>' : '';
     const st = ecartStatusOf(u);   // 'ok' | 'ecart' | 'manquant' — la CSS ne l'exploite qu'en mode Écarts
     tr.innerHTML = `
+        <td class="col-majad">${isMajAd(u) ? '' : '<span class="dot-nomajad" title="Compte non pris en charge par la MAJ AD : extensionAttribute15 ≠ « majAD ». Ses champs (fonction, service, bureau…) ne sont pas maintenus par le processus majAD."></span>'}</td>
         <td class="col-name">${esc(u.displayName || u.samAccountName)}${disabledTag}</td>
         <td class="col-desc">${esc(u.description || '')}</td>
         <td class="col-func${u.title ? ' func-clickable' : ''}">${esc(u.title || '')}</td>
@@ -1458,12 +1459,12 @@ function renderUsers(users) { displayUsers(users); }
 
 function setTableLoading() {
     document.getElementById('users-tbody').innerHTML =
-        '<tr><td colspan="8" class="td-loading">Chargement…</td></tr>';
+        '<tr><td colspan="9" class="td-loading">Chargement…</td></tr>';
 }
 
 function setTableError(msg) {
     document.getElementById('users-tbody').innerHTML =
-        `<tr><td colspan="8" class="td-hint" style="color:#dc2626">Erreur : ${esc(msg)}</td></tr>`;
+        `<tr><td colspan="9" class="td-hint" style="color:#dc2626">Erreur : ${esc(msg)}</td></tr>`;
 }
 
 // ============================================================
@@ -1675,7 +1676,7 @@ function renderCrossSiteResults(q, preserveScroll) {
     tbody.innerHTML = '';
 
     if (results.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="8" class="td-hint">Aucun résultat trouvé</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="9" class="td-hint">Aucun résultat trouvé</td></tr>';
         return;
     }
 
@@ -1685,7 +1686,7 @@ function renderCrossSiteResults(q, preserveScroll) {
         headerTr.className = 'group-header';
         headerTr.dataset.dn = dn;
         headerTr.innerHTML = `
-            <td colspan="8">
+            <td colspan="9">
                 <span class="group-toggle ${uncached ? '' : 'expanded'}">▼</span>
                 <span class="group-label">${hlText(siteName, lq)}</span>
                 <span class="group-count">${uncached ? '?' : users.length}</span>
@@ -1704,7 +1705,7 @@ function renderCrossSiteResults(q, preserveScroll) {
         if (uncached) {
             const tr = document.createElement('tr');
             tr.className = 'group-member';
-            tr.innerHTML = `<td colspan="8" class="td-hint search-uncached-hint">Cache non disponible · cliquer sur le nom du site ci-dessus pour charger</td>`;
+            tr.innerHTML = `<td colspan="9" class="td-hint search-uncached-hint">Cache non disponible · cliquer sur le nom du site ci-dessus pour charger</td>`;
             frag.appendChild(tr);
         } else {
             for (const u of users.sort((a, b) =>
@@ -1771,7 +1772,7 @@ function renderNoMajAdGroups(regionName, results) {
     const tbody = document.getElementById('users-tbody');
     tbody.innerHTML = '';
     if (!results.length) {
-        tbody.innerHTML = '<tr><td colspan="8" class="td-hint">Aucun compte sans majAD dans cette région.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="9" class="td-hint">Aucun compte sans majAD dans cette région.</td></tr>';
         return;
     }
     const frag = document.createDocumentFragment();
@@ -1780,7 +1781,7 @@ function renderNoMajAdGroups(regionName, results) {
         headerTr.className = 'group-header';
         headerTr.dataset.dn = dn;
         headerTr.innerHTML = `
-            <td colspan="8">
+            <td colspan="9">
                 <span class="group-toggle expanded">▼</span>
                 <span class="group-label">${esc(siteName)}</span>
                 <span class="group-count">${users.length}</span>

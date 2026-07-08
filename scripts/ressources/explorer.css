@@ -577,8 +577,28 @@ body {
     margin-left: 2px;
 }
 
-/* Surlignage pastel des lignes de comptes SANS le tag majAD (la sélection reste prioritaire) */
-tr.row-nomajad td { background: #f5f3ff; }
+/* Comptes SANS le tag majAD : plus de surlignage de ligne — seule la pastille grenat
+   de la colonne dédiée (à gauche) matérialise l'absence de majAD. */
+
+/* Colonne « majAD » (1re colonne, étroite) : pastille grenat si le compte n'a pas le tag */
+.users-table th.col-majad,
+.users-table td.col-majad {
+    width: 24px;
+    min-width: 24px;
+    max-width: 24px;
+    padding-left: 0;
+    padding-right: 0;
+    text-align: center;
+}
+.dot-nomajad {
+    display: inline-block;
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: #7b1e2b;                 /* rouge grenat */
+    box-shadow: 0 0 0 1px rgba(123, 30, 43, .25);
+    vertical-align: middle;
+}
 
 /* Bouton filtre 3 états majAD (barre de titre du tableau) */
 .btn-majad-filter {

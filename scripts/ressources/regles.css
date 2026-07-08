@@ -2995,3 +2995,43 @@ body { overflow: hidden; }
 .ct-role  { font-weight: 600; white-space: nowrap; }
 .ct-detail code { font-size: 11px; color: #7c3aed; background: #f5f3ff; padding: 1px 4px; border-radius: 3px; }
 
+/* ── Overlay BLOQUANT : interrogation Exchange en direct (Get-Recipient, lecture seule) ──
+   Barre INDÉTERMINÉE (activité) + temps écoulé — Get-Recipient répond en un bloc,
+   aucune progression réelle n'est disponible (on ne fabrique pas de pourcentage). */
+.exo-blocker {
+    position: fixed; inset: 0; z-index: 4000;
+    display: none; align-items: center; justify-content: center;
+    background: rgba(15, 23, 42, .55); backdrop-filter: blur(1.5px);
+    padding: 24px;
+}
+.exo-blocker.show { display: flex; }
+.exo-blocker-box {
+    background: #fff; color: #1f2430; border-radius: 14px;
+    border-top: 4px solid #2563eb;
+    box-shadow: 0 24px 70px rgba(0, 0, 0, .35);
+    width: min(460px, 92vw); padding: 26px 28px 24px; text-align: center;
+}
+.exo-blocker-title { font-size: 16px; font-weight: 700; color: #1e3a5f; margin-bottom: 10px; }
+.exo-blocker-msg { font-size: 13.5px; line-height: 1.5; color: #4b5563; margin-bottom: 18px; }
+.exo-blocker-msg code {
+    background: #eef2f8; border-radius: 4px; padding: 1px 5px;
+    font-family: 'Cascadia Code', Consolas, monospace; font-size: .88em; color: #1e3a5f;
+}
+.exo-blocker-bar {
+    position: relative; height: 8px; border-radius: 999px;
+    background: #e5e9f0; overflow: hidden;
+}
+.exo-blocker-bar-fill {
+    position: absolute; top: 0; height: 100%; width: 38%; border-radius: 999px;
+    background: linear-gradient(90deg, #60a5fa, #2563eb);
+    animation: exoBarSlide 1.2s ease-in-out infinite;
+}
+@keyframes exoBarSlide {
+    0%   { left: -40%; }
+    100% { left: 100%; }
+}
+.exo-blocker-elapsed {
+    margin-top: 12px; font-size: 12px; font-weight: 600; color: #6b7280;
+    font-variant-numeric: tabular-nums;
+}
+

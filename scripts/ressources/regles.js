@@ -1463,11 +1463,7 @@ function showPairCsvModal(data) {
 async function fetchAndShowPreview(rule, spinEl = null) {
     if (spinEl) { spinEl.disabled = true; }
     try {
-        const r    = await fetch('/api/regles/preview-groups', {
-            method:  'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body:    JSON.stringify(rule),
-        });
+        const r    = await previewGroupsFetch(rule);
         const data = await r.json();
         if (data.error) { showToast(data.error, 'error'); return; }
         showGroupsPreviewModal(data, rule);
@@ -1484,11 +1480,7 @@ async function showGroupsHtmlPage() {
     const btn = document.getElementById('btn-html-page');
     if (btn) { btn.disabled = true; }
     try {
-        const r    = await fetch('/api/regles/preview-groups', {
-            method:  'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body:    JSON.stringify(rule),
-        });
+        const r    = await previewGroupsFetch(rule);
         const data = await r.json();
         if (data.error) { showToast(data.error, 'error'); return; }
         const w = window.open('', '_blank');
@@ -1552,6 +1544,62 @@ function apercuMsgDoc(msg) {
         esc(msg) + '</body></html>';
 }
 
+// ── Overlay BLOQUANT pendant une interrogation Exchange en direct ────────────
+// Get-Recipient (live) répond en un seul bloc — aucune progression incrémentale
+// n'est disponible côté serveur. On affiche donc une barre INDÉTERMINÉE (activité)
+// + le temps écoulé, jamais un pourcentage fabriqué.
+let _exoBlockerTimer = null;
+function showExoBlocker() {
+    let ov = document.getElementById('exo-blocker');
+    if (!ov) {
+        ov = document.createElement('div');
+        ov.id = 'exo-blocker';
+        ov.className = 'exo-blocker';
+        ov.innerHTML =
+            '<div class="exo-blocker-box" role="alertdialog" aria-live="assertive" aria-busy="true">' +
+                '<div class="exo-blocker-title">Interrogation directe d\'Exchange&nbsp;Online…</div>' +
+                '<div class="exo-blocker-msg">Requête <code>Get-Recipient</code> (lecture seule) en cours. ' +
+                'Exchange peut mettre <b>plusieurs dizaines de secondes</b> à répondre&nbsp;: ' +
+                'l\'application est <b>momentanément bloquée</b>, merci de patienter.</div>' +
+                '<div class="exo-blocker-bar"><div class="exo-blocker-bar-fill"></div></div>' +
+                '<div class="exo-blocker-elapsed" id="exo-blocker-elapsed">Temps écoulé&nbsp;: 0&nbsp;s</div>' +
+            '</div>';
+        document.body.appendChild(ov);
+    }
+    ov.classList.add('show');
+    const el = ov.querySelector('#exo-blocker-elapsed');
+    const t0 = Date.now();
+    if (el) el.textContent = 'Temps écoulé : 0 s';
+    clearInterval(_exoBlockerTimer);
+    _exoBlockerTimer = setInterval(() => {
+        const s = Math.round((Date.now() - t0) / 1000);
+        if (el) el.textContent = 'Temps écoulé : ' + s + ' s';
+    }, 250);
+}
+function hideExoBlocker() {
+    clearInterval(_exoBlockerTimer);
+    _exoBlockerTimer = null;
+    const ov = document.getElementById('exo-blocker');
+    if (ov) ov.classList.remove('show');
+}
+
+// Requête d'aperçu des groupes — centralise l'appel POST /api/regles/preview-groups.
+// Affiche l'overlay bloquant UNIQUEMENT quand la règle interroge Exchange en direct
+// (exoLive coché ET niveau 3 — seule combinaison qui déclenche Get-Recipient côté serveur).
+async function previewGroupsFetch(ruleObj) {
+    const live = !!(ruleObj && ruleObj.exoLive === true && Number(ruleObj.niveau) === 3);
+    if (live) showExoBlocker();
+    try {
+        return await fetch('/api/regles/preview-groups', {
+            method:  'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body:    JSON.stringify(ruleObj),
+        });
+    } finally {
+        if (live) hideExoBlocker();
+    }
+}
+
 async function loadApercuGroupes() {
     const frame = document.getElementById('apercu-frame');
     if (!frame) return;
@@ -1570,11 +1618,7 @@ async function loadApercuGroupes() {
 
     frame.srcdoc = apercuMsgDoc('Chargement…');
     try {
-        const r    = await fetch('/api/regles/preview-groups', {
-            method:  'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body:    JSON.stringify(rule),
-        });
+        const r    = await previewGroupsFetch(rule);
         const data = await r.json();
         if (data.error) { frame.srcdoc = apercuMsgDoc(data.error); return; }
         // Exactement la même page que « Afficher page HTML », dans l'iframe
@@ -1864,10 +1908,7 @@ async function loadDdg() {
 
     pre.innerHTML = '<span class="ddg-hint">Chargement…</span>';
     try {
-        const r = await fetch('/api/regles/preview-groups', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(rule),
-        });
+        const r = await previewGroupsFetch(rule);
         const data = await r.json();
         if (data.error) { pre.innerHTML = `<span class="ddg-hint">${esc(data.error)}</span>`; pre._ddgLines = []; return; }
         const lines = buildDdgScriptText(data, rule);
@@ -1885,11 +1926,7 @@ async function loadDdg() {
 window.recalcGroupsHtmlPage = async function (win, rule) {
     if (!win || win.closed || !rule) return;
     try {
-        const r    = await fetch('/api/regles/preview-groups', {
-            method:  'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body:    JSON.stringify(rule),
-        });
+        const r    = await previewGroupsFetch(rule);
         const data = await r.json();
         if (data.error) { showToast(data.error, 'error'); return; }
         win.document.open();
@@ -2130,10 +2167,7 @@ function showGroupsPreviewModal(data, sourceRule = null) {
             btn.disabled = true;
             if (!modal._peerData) {
                 try {
-                    const r = await fetch('/api/regles/preview-groups', {
-                        method: 'POST', headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(modal._peerRule),
-                    });
+                    const r = await previewGroupsFetch(modal._peerRule);
                     const d = await r.json();
                     if (d.error) { showToast(d.error, 'error'); btn.disabled = false; return; }
                     modal._peerData = d;
