@@ -7,8 +7,8 @@ let activeFormTab = 'params';
 let apercuCache = {};   // cache du rendu de l'onglet « Aperçu groupes », par signature de règle
 let ddgCache    = {};   // cache du rendu de l'onglet « DDG », par signature de règle
 let ddgVisible  = { new: true, set: true, get: true, recipient: true };   // filtres d'affichage des lignes DDG (persistant)
-// Regroupement du menu de gauche par RUBRIQUE (catégorie libre, onglet « Liste Rubrique »).
-// Remplace l'ancien regroupement « par niveau ». Activé par défaut.
+// Vue du menu de gauche : groupé par rubrique (défaut) OU liste à plat.
+// Piloté par le menu du bouton unique (déplier / replier / basculer la vue).
 let groupByRubrique = (() => { try { const v = localStorage.getItem('regles_group_rubrique'); return v === null ? true : v === '1'; } catch { return true; } })();
 let rubriques = [];   // [{ id, label, ordre }] — chargées depuis /api/rubriques
 // Rubriques ouvertes dans le menu (mémorisées).
@@ -382,7 +382,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     document.getElementById('btn-new-rule').addEventListener('click', openNewForm);
     document.getElementById('btn-view-json').addEventListener('click', openJsonModal);
-    setupGroupNiveauBtn();
     setupAccordionBtn();
     setupLockAllBtn();
 
@@ -530,8 +529,9 @@ function renderList() {
         return;
     }
 
-    const active   = rules.filter(r => r.active !== false);
-    const inactive = rules.filter(r => r.active === false);
+    // Vue à plat (non groupée) : actives triées A→Z, puis inactives.
+    const active   = rules.filter(r => r.active !== false).sort(byLabelFr);
+    const inactive = rules.filter(r => r.active === false).sort(byLabelFr);
     for (const rule of active)   el.appendChild(buildCard(rule));
     if (inactive.length) {
         const sep = document.createElement('div');
@@ -540,18 +540,7 @@ function renderList() {
         el.appendChild(sep);
         for (const rule of inactive) el.appendChild(buildCard(rule));
     }
-}
-
-function setupGroupNiveauBtn() {
-    const btn = document.getElementById('btn-group-niveau');
-    if (!btn) return;
-    btn.classList.toggle('active', groupByRubrique);
-    btn.addEventListener('click', () => {
-        groupByRubrique = !groupByRubrique;
-        try { localStorage.setItem('regles_group_rubrique', groupByRubrique ? '1' : '0'); } catch { /* ignore */ }
-        btn.classList.toggle('active', groupByRubrique);
-        renderList();
-    });
+    updateAccordionBtn();
 }
 
 // ── Accordéon des rubriques ────────────────────────────────────────────────
@@ -563,30 +552,62 @@ function toggleRubriqueAccordion(key) {
     renderList();
 }
 
+// ── Bouton unique cyclique : Ouvrir → Fermer → À plat → (et ainsi de suite) ──
+// L'icône affichée = l'action du PROCHAIN clic.
 function setupAccordionBtn() {
-    const btn = document.getElementById('btn-accordion');
-    if (!btn) return;
-    btn.addEventListener('click', toggleAllRubriques);
+    document.getElementById('btn-view-cycle')?.addEventListener('click', cycleView);
     updateAccordionBtn();
 }
 
-// Bouton double-chevron : TOUT ouvrir / TOUT fermer.
-function toggleAllRubriques() {
-    const keys = [...document.querySelectorAll('.rubrique-block')].map(b => b.dataset.key);
-    if (!keys.length) return;
-    const allOpen = keys.every(k => expandedRubriques.has(k));
-    expandedRubriques = allOpen ? new Set() : new Set(keys);
-    saveExpandedRubriques();
+// Toutes les clés de groupe présentes dans les données (rubriques utilisées + « Non classé »).
+function groupKeysFromData() {
+    const known = new Set(rubriques.map(r => r.id));
+    const keys = new Set();
+    let hasUnclassed = false;
+    for (const r of rules) {
+        if (r.rubriqueId && known.has(r.rubriqueId)) keys.add(r.rubriqueId);
+        else hasUnclassed = true;
+    }
+    if (hasUnclassed) keys.add('__none__');
+    return [...keys];
+}
+
+// Action que déclenchera le prochain clic, selon l'état courant.
+//   à plat → 'expand' (grouper + tout déplier) · déplié → 'collapse' · replié/partiel → 'flat'
+function nextViewAction() {
+    if (!groupByRubrique) return 'expand';
+    const keys = groupKeysFromData();
+    const allOpen = keys.length > 0 && keys.every(k => expandedRubriques.has(k));
+    return allOpen ? 'collapse' : 'flat';
+}
+
+function cycleView() {
+    const act = nextViewAction();
+    if (act === 'expand') {              // (depuis « à plat ») grouper + tout déplier
+        groupByRubrique = true;
+        try { localStorage.setItem('regles_group_rubrique', '1'); } catch { /* ignore */ }
+        expandedRubriques = new Set(groupKeysFromData());
+        saveExpandedRubriques();
+    } else if (act === 'collapse') {     // tout replier
+        expandedRubriques = new Set();
+        saveExpandedRubriques();
+    } else {                             // 'flat' : passer en liste à plat
+        groupByRubrique = false;
+        try { localStorage.setItem('regles_group_rubrique', '0'); } catch { /* ignore */ }
+    }
     renderList();
 }
 
+// Met à jour l'icône (via classe act-*) + le tooltip du bouton unique.
 function updateAccordionBtn() {
-    const btn = document.getElementById('btn-accordion');
+    const btn = document.getElementById('btn-view-cycle');
     if (!btn) return;
-    const blocks  = [...document.querySelectorAll('.rubrique-block')];
-    const allOpen = blocks.length > 0 && blocks.every(b => expandedRubriques.has(b.dataset.key));
-    btn.classList.toggle('all-open', allOpen);
-    btn.title = allOpen ? 'Tout replier' : 'Tout déplier';
+    const act = nextViewAction();
+    btn.classList.remove('act-expand', 'act-collapse', 'act-flat');
+    btn.classList.add('act-' + act);
+    btn.title = act === 'expand' ? 'Grouper et tout déplier'
+              : act === 'collapse' ? 'Tout replier'
+              : 'Liste à plat';
 }
 
 // ── Bouton « Verrouiller toutes les règles » (à droite de « Par niveau ») ──

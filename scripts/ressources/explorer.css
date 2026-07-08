@@ -183,10 +183,11 @@ body {
 /* Footer sidebar : compteurs de cache (utilisateurs chargés + tagués majAD).
    Même bleu foncé + même hauteur que le scan-footer → barre du bas continue. */
 .tree-sidebar-footer {
+    /* Compteurs déplacés dans le badge « Cache » du header → footer masqué */
+    display: none;
     flex-shrink: 0;
     box-sizing: border-box;
     height: 40px;
-    display: flex;
     align-items: center;
     justify-content: center;
     padding: 4px 14px;
@@ -1289,11 +1290,11 @@ body.mode-ecarts .tree-region.ecart-empty { display: none; }
 .scan-footer {
     position: fixed;
     bottom: 0;
-    left: 300px;   /* démarre après la sidebar (300px) pour ne pas couvrir le footer compteurs */
+    left: 0;    /* footer unique pleine largeur (footer menu + footer page fusionnés) */
     right: 0;
     z-index: 200;
     box-sizing: border-box;
-    height: 40px;   /* identique au footer compteurs de la sidebar → barre du bas alignée */
+    height: 40px;
     background: #1e3a5f;
     color: #e2eaf4;
     padding: 6px 16px 8px;

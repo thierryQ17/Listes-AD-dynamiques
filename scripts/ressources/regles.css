@@ -311,18 +311,20 @@ body { overflow: hidden; }
 .regles-sidebar.collapsed .rub-chevron { display: none; }
 .regles-sidebar.collapsed .regles-list.by-rubrique .rule-card { margin-left: 0; }
 
-/* Bouton « Grouper » réduit à l'icône + bouton accordéon (tout replier/déplier) */
-.btn-group-niveau.btn-icon-only { padding: 5px 9px; }
-.btn-accordion {
+/* Bouton unique cyclique (Ouvrir → Fermer → À plat) : l'icône change selon act-* */
+.btn-view {
     display: inline-flex; align-items: center; justify-content: center;
-    margin-left: 6px; width: 28px; height: 26px; padding: 0;
+    width: 28px; height: 26px; padding: 0;
     background: #fff; border: 1px solid var(--border);
     color: var(--text-sub); border-radius: 999px; cursor: pointer;
     transition: background .15s, color .15s, border-color .15s;
 }
-.btn-accordion:hover { background: var(--accent-lt); color: var(--text); }
-.btn-accordion.all-open { background: var(--accent); border-color: var(--accent); color: #fff; }
-.regles-sidebar.collapsed .btn-accordion { display: none; }
+.btn-view:hover { background: var(--accent-lt); color: var(--text); }
+.btn-view svg { display: none; }
+.btn-view.act-expand   .ic-expand   { display: block; }
+.btn-view.act-collapse .ic-collapse { display: block; }
+.btn-view.act-flat     .ic-flat     { display: block; }
+.regles-sidebar.collapsed .btn-view { display: none; }
 
 .regles-list {
     flex: 1;
@@ -2830,14 +2832,16 @@ body { overflow: hidden; }
     flex-shrink: 0;
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    justify-content: flex-end;
     gap: 6px;
     padding: 5px 12px;
     border-top: 1px solid var(--border-lt);
     background: var(--surface-alt);
     min-height: 26px;
 }
+/* Texte d'info cache masqué (l'élément reste pour le JS ; le bouton ↻ demeure) */
 .cache-info-msg {
+    display: none;
     font-size: 11px;
     color: var(--text-sub);
     white-space: nowrap;

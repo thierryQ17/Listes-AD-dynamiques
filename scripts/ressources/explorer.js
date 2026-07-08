@@ -314,6 +314,9 @@ function updateCacheStats() {
         total += users.length;
         for (const u of users) if (isMajAd(u)) majad++;
     }
+    // Remonte les compteurs au header du shell (badge « Cache (… en cache · … majAD) »).
+    try { window.top.postMessage({ type: 'cache-stats', total, majad }, '*'); } catch { /* hors iframe */ }
+
     const el = document.getElementById('tree-cache-stats');
     if (!el) return;
     // Texte enveloppé dans un <span> : le footer est en flex, sinon <b> et texte

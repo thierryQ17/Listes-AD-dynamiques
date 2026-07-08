@@ -20,6 +20,132 @@
     let activeId = null;
     let pageCounts = {};    // { safeFileName(label): nb de groupes } — compteurs mis en cache par le serveur
 
+    // ── Menu groupé par rubrique + accordéon (identique à l'onglet Règles) ──
+    let rubriques = [];
+    let groupByRubrique = (() => { try { const v = localStorage.getItem('ag_group_rubrique'); return v === null ? true : v === '1'; } catch { return true; } })();
+    let expandedRubriques = (() => {
+        try { const raw = localStorage.getItem('ag_expanded_rubriques'); return raw === null ? undefined : new Set(JSON.parse(raw || '[]')); }
+        catch { return undefined; }
+    })();
+    function saveExpanded() { try { localStorage.setItem('ag_expanded_rubriques', JSON.stringify(expandedRubriques instanceof Set ? [...expandedRubriques] : [])); } catch { /* ignore */ } }
+
+    const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+    const byLabelFr = (a, b) => String(a.label || '').localeCompare(String(b.label || ''), 'fr', { sensitivity: 'base' });
+    const miniOf = s => String(s).split(/\s+/).filter(Boolean).map(w => w[0]).join('').slice(0, 3).toUpperCase();
+    function sortedRubriques() { return [...rubriques].sort((a, b) => (a.ordre || 0) - (b.ordre || 0)); }
+    function orderRulesInRubrique(items, rub) {
+        const ord  = (rub && Array.isArray(rub.ruleOrder)) ? rub.ruleOrder : [];
+        const rank = id => { const i = ord.indexOf(id); return i < 0 ? 1e9 : i; };
+        return [...items].sort((a, b) => (rank(a.id) - rank(b.id)) || byLabelFr(a, b));
+    }
+    function groupKeysFromData() {
+        const known = new Set(rubriques.map(r => r.id));
+        const keys = new Set(); let hasUnclassed = false;
+        for (const r of rules) { if (r.rubriqueId && known.has(r.rubriqueId)) keys.add(r.rubriqueId); else hasUnclassed = true; }
+        if (hasUnclassed) keys.add('__none__');
+        return [...keys];
+    }
+
+    const AG_CHEVRON = '<svg class="ag-rub-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>';
+
+    // (Re)construit le menu en ré-utilisant les onglets déjà créés (state[id].tabEl).
+    function renderMenu() {
+        tablist.innerHTML = '';
+        tablist.classList.toggle('by-rubrique', groupByRubrique);
+
+        if (groupByRubrique) {
+            const groups = sortedRubriques().map(rub => ({
+                key: rub.id, label: rub.label, rub, items: rules.filter(r => r.rubriqueId === rub.id),
+            })).sort(byLabelFr);
+            const known     = new Set(rubriques.map(r => r.id));
+            const unclassed = rules.filter(r => !r.rubriqueId || !known.has(r.rubriqueId));
+            if (unclassed.length) groups.push({ key: '__none__', label: 'Non classé', rub: null, items: unclassed });
+
+            if (expandedRubriques === undefined) {
+                const first = groups.find(g => g.items.length)?.key;
+                expandedRubriques = new Set(first ? [first] : []);
+            }
+
+            for (const g of groups) {
+                if (!g.items.length) continue;
+                const block = document.createElement('div');
+                block.className = 'ag-rub-block' + (expandedRubriques.has(g.key) ? '' : ' collapsed');
+                block.dataset.key = g.key;
+
+                const hdr = document.createElement('div');
+                hdr.className = 'ag-rub-hdr' + (g.key === '__none__' ? ' unclassed' : '');
+                hdr.innerHTML =
+                    '<span class="ag-rub-hdr-left">' + AG_CHEVRON +
+                        '<span class="ag-rub-lbl">' + esc(g.label) + '</span>' +
+                        '<span class="ag-rub-mini" title="' + esc(g.label) + '">' + esc(miniOf(g.label)) + '</span>' +
+                    '</span>' +
+                    '<span class="ag-rub-cnt">' + g.items.length + '</span>';
+                hdr.addEventListener('click', () => toggleRubriqueAccordion(g.key));
+                block.appendChild(hdr);
+
+                const wrap = document.createElement('div');
+                wrap.className = 'ag-rub-items';
+                const ordered   = orderRulesInRubrique(g.items, g.rub);
+                const activeN   = ordered.filter(r => r.active !== false);
+                const inactiveN = ordered.filter(r => r.active === false);
+                for (const r of activeN)   if (state[r.id]) wrap.appendChild(state[r.id].tabEl);
+                for (const r of inactiveN) if (state[r.id]) wrap.appendChild(state[r.id].tabEl);
+                block.appendChild(wrap);
+                tablist.appendChild(block);
+            }
+            updateCycleBtn();
+            return;
+        }
+
+        // Vue à plat : actives triées A→Z, puis inactives.
+        const active   = rules.filter(r => r.active !== false).sort(byLabelFr);
+        const inactive = rules.filter(r => r.active === false).sort(byLabelFr);
+        for (const r of active)   if (state[r.id]) tablist.appendChild(state[r.id].tabEl);
+        for (const r of inactive) if (state[r.id]) tablist.appendChild(state[r.id].tabEl);
+        updateCycleBtn();
+    }
+
+    // Accordéon STRICT : clic sur un en-tête → n'ouvre que celui-ci (referme les autres).
+    function toggleRubriqueAccordion(key) {
+        if (expandedRubriques.has(key) && expandedRubriques.size === 1) expandedRubriques = new Set();
+        else expandedRubriques = new Set([key]);
+        saveExpanded();
+        renderMenu();
+    }
+
+    // Bouton unique cyclique : Ouvrir → Fermer → À plat (l'icône = action du prochain clic).
+    function nextViewAction() {
+        if (!groupByRubrique) return 'expand';
+        const keys = groupKeysFromData();
+        const exp  = expandedRubriques instanceof Set ? expandedRubriques : new Set();
+        const allOpen = keys.length > 0 && keys.every(k => exp.has(k));
+        return allOpen ? 'collapse' : 'flat';
+    }
+    function cycleView() {
+        const act = nextViewAction();
+        if (act === 'expand') {
+            groupByRubrique = true;
+            try { localStorage.setItem('ag_group_rubrique', '1'); } catch { /* ignore */ }
+            expandedRubriques = new Set(groupKeysFromData());
+            saveExpanded();
+        } else if (act === 'collapse') {
+            expandedRubriques = new Set();
+            saveExpanded();
+        } else {
+            groupByRubrique = false;
+            try { localStorage.setItem('ag_group_rubrique', '0'); } catch { /* ignore */ }
+        }
+        renderMenu();
+    }
+    function updateCycleBtn() {
+        const btn = document.getElementById('ag-cycle');
+        if (!btn) return;
+        const act = nextViewAction();
+        btn.classList.remove('act-expand', 'act-collapse', 'act-flat');
+        btn.classList.add('act-' + act);
+        btn.title = act === 'expand' ? 'Grouper et tout déplier' : act === 'collapse' ? 'Tout replier' : 'Liste à plat';
+    }
+
     // ── Repli du menu (comme la sidebar Règles) ──
     const COLLAPSE_KEY = 'ag_sidebar_collapsed';
     function applyCollapsed(c) {
@@ -182,6 +308,10 @@
         if (emptyEl) emptyEl.remove();
         rules.forEach(r => { rulesById[r.id] = r; });
 
+        // Rubriques (pour le regroupement du menu) — même source que l'onglet Règles.
+        const rub = await fetchJson('/api/rubriques', []);
+        rubriques = Array.isArray(rub) ? rub : [];
+
         rules.forEach(rule => {
             const tab = document.createElement('button');
             tab.className = 'ag-tab' + (rule.active === false ? ' inactive' : '');
@@ -192,7 +322,7 @@
             const cnt = document.createElement('span'); cnt.className = 'ag-cnt';
             tab.appendChild(ini); tab.appendChild(lbl); tab.appendChild(cnt);
             tab.addEventListener('click', () => activate(rule.id));
-            tablist.appendChild(tab);
+            // (les onglets sont placés dans le menu par renderMenu — groupés par rubrique)
 
             const frame = document.createElement('iframe');
             frame.className = 'ag-frame';
@@ -202,6 +332,10 @@
 
             state[rule.id] = { rule, data: null, html: null, rendered: false, useCache: false, tabEl: tab, frameEl: frame, cntEl: cnt };
         });
+
+        renderMenu();            // place les onglets dans le menu groupé par rubrique (accordéon)
+        document.getElementById('ag-cycle')?.addEventListener('click', cycleView);
+
         activate(rules[0].id);   // affiche l'onglet actif (placeholder pour l'instant)
 
         // 2) UNE seule requête RAPIDE (~0,2 s) : meta → existence des pages + compteurs mis en cache.

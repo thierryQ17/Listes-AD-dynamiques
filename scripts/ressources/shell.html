@@ -213,22 +213,34 @@
 
         let _cachePollingTimer = null;
 
+        // Badge « Cache (… en cache · … majAD) : <date> » — la date vient de /api/cache/info,
+        // les compteurs sont remontés par l'Explorateur AD (postMessage 'cache-stats').
+        let _cacheDateStr = null;
+        let _cacheCounts  = null;   // { total, majad }
+        function renderCacheBadge() {
+            const el = document.getElementById('cache-date');
+            if (!el) return;
+            const c = _cacheCounts
+                ? ` (${_cacheCounts.total.toLocaleString('fr-FR')} en cache · ${_cacheCounts.majad.toLocaleString('fr-FR')} majAD)`
+                : '';
+            el.textContent = _cacheDateStr ? `Cache${c} : ${_cacheDateStr}` : `Cache${c} : absent`;
+            el.hidden = false;
+        }
+
         async function refreshCacheDate() {
             try {
                 const r = await fetch('/api/cache/info');
                 const d = await r.json();
-                const el = document.getElementById('cache-date');
                 if (d.builtAt) {
                     const dt = new Date(d.builtAt);
                     const pad = n => String(n).padStart(2, '0');
                     const days   = ['dimanche','lundi','mardi','mercredi','jeudi','vendredi','samedi'];
                     const months = ['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'];
-                    el.textContent = `Cache : ${days[dt.getDay()]} ${dt.getDate()} ${months[dt.getMonth()]} ${dt.getFullYear()} ${pad(dt.getHours())}:${pad(dt.getMinutes())}`;
-                    el.hidden = false;
+                    _cacheDateStr = `${days[dt.getDay()]} ${dt.getDate()} ${months[dt.getMonth()]} ${dt.getFullYear()} ${pad(dt.getHours())}:${pad(dt.getMinutes())}`;
                 } else {
-                    el.textContent = 'Cache : absent';
-                    el.hidden = false;
+                    _cacheDateStr = null;
                 }
+                renderCacheBadge();
                 return d.builtAt || null;
             } catch { return null; }
         }
@@ -308,6 +320,11 @@
             // La page Règles notifie tout changement (ajout/suppression) → pastille à jour
             if (e.data?.type === 'rules-changed' && typeof e.data.count === 'number') {
                 setRulesCount(e.data.count);
+            }
+            // Compteurs de cache remontés par l'Explorateur AD → badge « Cache (…) »
+            if (e.data?.type === 'cache-stats' && typeof e.data.total === 'number') {
+                _cacheCounts = { total: e.data.total, majad: e.data.majad };
+                renderCacheBadge();
             }
             // La page « Liste Rubrique » a changé → prévenir l'onglet Règles (recharge ses rubriques)
             if (e.data?.type === 'rubriques-changed') {
