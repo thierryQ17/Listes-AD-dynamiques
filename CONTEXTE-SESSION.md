@@ -309,11 +309,21 @@ nouveau serveur via l'en-tête **`Server: Pode`**.
 - **Modale « tous les groupes d'une DO »** : clic sur un nom de carte niveau 2 → grille
   scroll vertical, zoom 80 %, membres 1 colonne (max ~10 lignes) ; handlers en **délégation**.
 
-### Outillage session — `/fin-session` + reprise après `/clear`
-- Skill **`/fin-session`** (`~/.claude/skills/`, hors dépôt) : écrit `docs/RECAP-<horodatage>.md`
+### Outillage session — `/session-fin`, `/session-debut` + reprise après `/clear`
+- Skill **`/session-fin`** (`~/.claude/skills/`, hors dépôt) : écrit `docs/RECAP-<horodatage>.md`
   + met à jour **ce fichier** + commit/push + invite `/clear`.
-- Hook **`SessionStart(clear)`** (`.claude/settings.json` + `.claude/hooks/resume-context.ps1`) :
-  réinjecte **`CONTEXTE-SESSION.md`** après `/clear` → reprise automatique du contexte.
+- Skill **`/session-debut`** (`~/.claude/skills/`, hors dépôt) : **prise de poste** — lit
+  `CONTEXTE-SESSION.md` puis le dernier `docs/RECAP-*.md`, **confronte à l'état réel du dépôt**
+  (`git status` / `log` / `diff`) et restitue un **briefing court** (où on en est / points
+  ouverts / prochaine action).
+- Hook **GLOBAL** `SessionStart(clear)` (`~/.claude/settings.json` +
+  `~/.claude/hooks/resume-context.ps1`) : réinjecte le **`CONTEXTE-SESSION.md` du projet courant**
+  après `/clear` → reprise auto **dans TOUS les projets** (inoffensif si le fichier est absent).
+  Le hook **projet local** (ex-`.claude/hooks/` + `.claude/settings.json`) a été **retiré** pour
+  éviter le double déclenchement.
+- Doublon **assumé** (option ②) : dans le flux `clear → /session-debut`, le hook **et** l'étape 1
+  de la skill injectent tous deux `CONTEXTE-SESSION.md` — léger recoupement accepté pour garder
+  `/session-debut` autonome (marche aussi au lancement à froid, où le hook `clear` ne tire pas).
 
 > ⚠️ Les blocs de code ci-dessous (`Get-RegionFromDN` sans `extraSites`, usage
 > `-ne 'MONCHY'`, config régions) datent d'avant cette section : la **synthèse ci-dessus fait

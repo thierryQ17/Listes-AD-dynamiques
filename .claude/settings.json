@@ -1,15 +1,1 @@
-{
-  "hooks": {
-    "SessionStart": [
-      {
-        "matcher": "clear",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "pwsh -NoProfile -File .claude/hooks/resume-context.ps1"
-          }
-        ]
-      }
-    ]
-  }
-}
+{}
