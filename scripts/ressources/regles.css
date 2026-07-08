@@ -95,6 +95,46 @@ body { overflow: hidden; }
     background: #f4f5f7;
 }
 
+/* Sous-onglet « Liste Rubrique » — gestionnaire inline (pas d'iframe) */
+.rubmgr { max-width: 720px; }
+.rubmgr-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; margin-bottom: 18px; }
+.rubmgr-title { margin: 0 0 4px; font-size: 17px; font-weight: 800; color: var(--text); }
+.rubmgr-sub   { margin: 0; font-size: 12.5px; color: var(--text-sub); line-height: 1.5; max-width: 56ch; }
+.rubmgr-count {
+    flex-shrink: 0; background: var(--accent-lt); color: var(--accent);
+    border-radius: 999px; padding: 3px 12px; font-size: 12px; font-weight: 700; white-space: nowrap;
+}
+.rubmgr-add { display: flex; gap: 8px; margin-bottom: 16px; }
+.rubmgr-input {
+    flex: 1; font: inherit; font-size: 14px; padding: 9px 12px;
+    border: 1px solid var(--border); border-radius: 8px; color: var(--text); background: #fff;
+}
+.rubmgr-input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(37,99,235,.12); }
+.rubmgr-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.rubmgr-empty { color: var(--text-sub); font-size: 13px; padding: 18px 4px; text-align: center; }
+.rubmgr-item {
+    display: flex; align-items: center; gap: 10px; padding: 8px 10px 8px 12px;
+    border: 1px solid var(--border); border-radius: 10px; background: var(--surface, #fafafa);
+}
+.rubmgr-handle { flex-shrink: 0; color: var(--text-sub); font-size: 12px; font-weight: 700; min-width: 22px; text-align: center; }
+.rubmgr-label {
+    flex: 1; font: inherit; font-size: 14px; padding: 6px 8px;
+    border: 1px solid transparent; border-radius: 6px; background: transparent; color: var(--text);
+}
+.rubmgr-label:focus { outline: none; background: #fff; border-color: var(--accent); }
+.rubmgr-actions { display: flex; gap: 4px; }
+.rubmgr-ic {
+    display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; padding: 0;
+    border: 1px solid var(--border); border-radius: 7px; background: #fff; color: var(--text-sub); cursor: pointer;
+    transition: background .12s, color .12s, border-color .12s;
+}
+.rubmgr-ic:hover { background: var(--accent-lt); color: var(--accent); border-color: #93c5fd; }
+.rubmgr-ic:disabled { opacity: .3; cursor: not-allowed; }
+.rubmgr-ic:disabled:hover { background: #fff; color: var(--text-sub); border-color: var(--border); }
+.rubmgr-ic-del:hover { background: #fef2f2; color: #dc2626; border-color: #fca5a5; }
+.rubmgr-foot { display: flex; align-items: center; justify-content: flex-end; gap: 14px; margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--border-lt); }
+.rubmgr-dirty { margin-right: auto; font-size: 12.5px; font-weight: 600; color: #b45309; }
+
 .apercu-groupes { padding: 4px 2px 20px; }
 .apercu-meta { font-size: .82rem; color: var(--text-sub); padding: 2px 2px 10px; border-bottom: 1px solid var(--border-lt); margin-bottom: 8px; }
 .apercu-meta b { color: var(--text); }
@@ -196,6 +236,19 @@ body { overflow: hidden; }
 .btn-group-niveau:hover { background: var(--accent-lt); color: var(--text); }
 .btn-group-niveau.active { background: var(--accent); border-color: var(--accent); color: #fff; }
 
+/* Bouton « Verrouiller toutes les règles » (à droite de « Par niveau ») */
+.btn-lock-all {
+    display: inline-flex; align-items: center; justify-content: center;
+    margin-left: 6px; width: 28px; height: 26px; padding: 0;
+    background: #fff; border: 1px solid var(--border);
+    color: var(--text-sub); border-radius: 999px; cursor: pointer;
+    transition: background .15s, color .15s, border-color .15s;
+}
+.btn-lock-all:hover { background: var(--accent-lt); color: var(--text); }
+.btn-lock-all.all-locked { background: var(--warning-bg); border-color: var(--warning-bd); color: var(--warning-tx); }
+.btn-lock-all svg[hidden] { display: none; }
+.regles-sidebar.collapsed .btn-lock-all { display: none; }
+
 /* Total des groupes à créer (somme des pastilles des règles actives) */
 .regles-total-badge {
     margin-left: auto;
@@ -220,6 +273,56 @@ body { overflow: hidden; }
     background: var(--border-lt); color: var(--text-sub);
     border-radius: 999px; padding: 0 7px; font-size: 10px; font-weight: 700;
 }
+
+/* En-têtes de RUBRIQUE (menu groupé par rubrique) — nettement marqués + cliquables (accordéon) */
+.rubrique-block { margin: 11px 0 0; }
+.regles-list > .rubrique-block:first-child { margin-top: 2px; }
+.rubrique-hdr {
+    padding: 5px 8px 5px 9px;
+    margin: 0 0 6px;
+    color: var(--accent);
+    background: var(--accent-lt);
+    border-left: 3px solid var(--accent);
+    border-radius: 0 6px 6px 0;
+    font-size: 10.5px; font-weight: 800;
+    cursor: pointer; user-select: none;
+}
+.rubrique-hdr:hover { filter: brightness(.97); }
+.rub-hdr-left { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.rub-chevron { flex-shrink: 0; transition: transform .15s ease; }
+.rubrique-block.collapsed .rub-chevron { transform: rotate(-90deg); }
+.rubrique-block.collapsed .rubrique-items { display: none; }
+.rubrique-hdr .rules-niveau-count { background: var(--accent); color: #fff; }
+/* Section « Non classé » — gris neutre pour la distinguer des vraies rubriques */
+.rubrique-hdr.unclassed {
+    color: var(--text-sub);
+    background: var(--border-lt);
+    border-left-color: var(--border);
+}
+.rubrique-hdr.unclassed .rules-niveau-count { background: var(--text-sub); color: #fff; }
+
+/* Indentation des règles sous chaque rubrique (menu déplié) */
+.regles-sidebar:not(.collapsed) .regles-list.by-rubrique .rule-card { margin-left: 20px; }
+
+/* Menu replié : en-tête et cartes sans décor/indent de bloc, chevron masqué */
+.regles-sidebar.collapsed .rubrique-hdr {
+    background: none; border-left: none; border-radius: 0; margin: 6px 0 3px; color: var(--text-sub);
+}
+.regles-sidebar.collapsed .rub-chevron { display: none; }
+.regles-sidebar.collapsed .regles-list.by-rubrique .rule-card { margin-left: 0; }
+
+/* Bouton « Grouper » réduit à l'icône + bouton accordéon (tout replier/déplier) */
+.btn-group-niveau.btn-icon-only { padding: 5px 9px; }
+.btn-accordion {
+    display: inline-flex; align-items: center; justify-content: center;
+    margin-left: 6px; width: 28px; height: 26px; padding: 0;
+    background: #fff; border: 1px solid var(--border);
+    color: var(--text-sub); border-radius: 999px; cursor: pointer;
+    transition: background .15s, color .15s, border-color .15s;
+}
+.btn-accordion:hover { background: var(--accent-lt); color: var(--text); }
+.btn-accordion.all-open { background: var(--accent); border-color: var(--accent); color: #fff; }
+.regles-sidebar.collapsed .btn-accordion { display: none; }
 
 .regles-list {
     flex: 1;
@@ -393,6 +496,24 @@ body { overflow: hidden; }
     padding-bottom: 14px;
     border-bottom: 1px solid var(--border-lt);
 }
+
+/* En-tête du formulaire : titre à gauche + sélecteur de rubrique à droite (zone bleue) */
+.form-title-row {
+    display: flex; align-items: center; justify-content: space-between; gap: 16px;
+    margin-bottom: 22px; padding-bottom: 14px; border-bottom: 1px solid var(--border-lt);
+}
+.form-title-row .form-title { margin: 0; padding: 0; border: none; }
+.form-rubrique { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.form-rubrique-lbl {
+    font-size: 11px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .04em; color: var(--text-sub); white-space: nowrap;
+}
+.form-rubrique-select {
+    font: inherit; font-size: 13px; padding: 6px 10px;
+    border: 1px solid var(--border); border-radius: 8px;
+    background: #fff; color: var(--text); min-width: 190px; cursor: pointer;
+}
+.form-rubrique-select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(37, 99, 235, .12); }
 
 .form-group { margin-bottom: 20px; }
 

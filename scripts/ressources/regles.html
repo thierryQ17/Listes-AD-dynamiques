@@ -6,7 +6,7 @@
     <title>Règles — I2N</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%232563eb'/%3E%3Ctext x='16' y='22' text-anchor='middle' font-family='system-ui,sans-serif' font-size='13' font-weight='700' fill='white'%3EAD%3C/text%3E%3C/svg%3E">
     <link rel="stylesheet" href="/style.css">
-    <link rel="stylesheet" href="/regles.css?v=26">
+    <link rel="stylesheet" href="/regles.css?v=35">
 </head>
 <body>
     <header>
@@ -47,9 +47,15 @@
                 </div>
             </div>
             <div class="regles-list-toolbar">
-                <button id="btn-group-niveau" class="btn-group-niveau" title="Grouper les règles par niveau de groupement">
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
-                    <span>Par niveau</span>
+                <button id="btn-group-niveau" class="btn-group-niveau btn-icon-only" title="Grouper les règles par rubrique">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+                </button>
+                <button id="btn-accordion" class="btn-accordion" type="button" title="Tout replier">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="7 13 12 18 17 13"/><polyline points="7 6 12 11 17 6"/></svg>
+                </button>
+                <button id="btn-lock-all" class="btn-lock-all" type="button" title="Verrouiller toutes les règles">
+                    <svg class="lockall-locked" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                    <svg class="lockall-open" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" hidden><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg>
                 </button>
                 <span id="regles-total-badge" class="regles-total-badge" hidden></span>
             </div>
@@ -322,6 +328,6 @@
     </div>
 
     <script src="/groups-doc.js?v=19"></script>
-    <script src="/regles.js?v=57"></script>
+    <script src="/regles.js?v=66"></script>
 </body>
 </html>

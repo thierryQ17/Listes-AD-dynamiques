@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rubriques — I2N</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%232563eb'/%3E%3Ctext x='16' y='22' text-anchor='middle' font-family='system-ui,sans-serif' font-size='13' font-weight='700' fill='white'%3EAD%3C/text%3E%3C/svg%3E">
+    <link rel="stylesheet" href="/style.css">
+    <link rel="stylesheet" href="/rubriques.css?v=1">
+</head>
+<body>
+    <header>
+        <div class="header-left">
+            <nav class="header-nav">
+                <a href="/explorer" class="nav-link">Explorateur AD</a>
+                <a href="/regles" class="nav-link">Règles</a>
+                <a href="/rubriques" class="nav-link active">Liste Rubrique</a>
+            </nav>
+        </div>
+        <div class="header-right">
+            <span class="badge-readonly">Lecture seule</span>
+        </div>
+    </header>
+
+    <div class="rub-layout">
+        <div class="rub-card">
+            <div class="rub-card-hd">
+                <div>
+                    <h1 class="rub-title">Rubriques du menu</h1>
+                    <p class="rub-sub">Catégories servant à classer les règles dans le menu de gauche. Purement organisationnel — n'affecte pas la génération des groupes.</p>
+                </div>
+                <span id="rub-count" class="rub-count"></span>
+            </div>
+
+            <div class="rub-add">
+                <input id="rub-new-input" class="rub-input" type="text" placeholder="Nouvelle rubrique (ex. Par direction régionale)" maxlength="60">
+                <button id="rub-add-btn" class="rub-btn rub-btn-primary" type="button">+ Ajouter</button>
+            </div>
+
+            <ul id="rub-list" class="rub-list">
+                <li class="rub-empty">Chargement…</li>
+            </ul>
+
+            <div class="rub-foot">
+                <span id="rub-dirty" class="rub-dirty" hidden>● Modifications non enregistrées</span>
+                <button id="rub-save-btn" class="rub-btn rub-btn-primary" type="button" disabled>Enregistrer</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast" class="toast" aria-live="polite"></div>
+
+    <script src="/rubriques.js?v=2"></script>
+</body>
+</html>

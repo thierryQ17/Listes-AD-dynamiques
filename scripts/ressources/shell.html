@@ -72,6 +72,17 @@
         }
         #app-overlay .ov-status b { color: #1d4ed8; }
 
+        /* Bouton plein écran (F11) */
+        .fullscreen-btn {
+            display: inline-flex; align-items: center; justify-content: center;
+            width: 30px; height: 30px; padding: 0;
+            border: 1px solid #d1d5db; border-radius: 7px;
+            background: #fff; color: #4b5563; cursor: pointer;
+            transition: background .15s, color .15s, border-color .15s;
+        }
+        .fullscreen-btn:hover { background: #eff6ff; color: #2563eb; border-color: #93c5fd; }
+        .fullscreen-btn svg[hidden] { display: none; }
+
         /* Badge « Cache » cliquable → modale des requêtes */
         .cache-date-badge { cursor: pointer; }
         .cache-date-badge:hover { text-decoration: underline; }
@@ -127,6 +138,10 @@
         <div class="header-right">
             <span id="cache-date" class="cache-date-badge" title="Date de construction du cache utilisateurs"></span>
             <span class="badge-readonly">Lecture seule</span>
+            <button id="fullscreen-btn" class="fullscreen-btn" type="button" title="Plein écran (F11)" aria-label="Plein écran">
+                <svg class="fs-enter" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M8 21H5a2 2 0 0 1-2-2v-3M16 21h3a2 2 0 0 0 2-2v-3"/></svg>
+                <svg class="fs-exit" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" hidden><path d="M8 3v3a2 2 0 0 1-2 2H3M21 8h-3a2 2 0 0 1-2-2V3M3 16h3a2 2 0 0 1 2 2v3M16 21v-3a2 2 0 0 1 2-2h3"/></svg>
+            </button>
         </div>
     </header>
 
@@ -177,6 +192,24 @@
         }));
 
         window.switchTab = switchTab;
+
+        // ── Plein écran (F11) ──
+        const fsBtn = document.getElementById('fullscreen-btn');
+        function toggleFullscreen() {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen().catch(() => {});
+            } else {
+                document.exitFullscreen().catch(() => {});
+            }
+        }
+        function syncFullscreenIcon() {
+            const on = !!document.fullscreenElement;
+            fsBtn.querySelector('.fs-enter').hidden = on;
+            fsBtn.querySelector('.fs-exit').hidden = !on;
+            fsBtn.title = on ? 'Quitter le plein écran (F11)' : 'Plein écran (F11)';
+        }
+        fsBtn.addEventListener('click', toggleFullscreen);
+        document.addEventListener('fullscreenchange', syncFullscreenIcon);
 
         let _cachePollingTimer = null;
 
@@ -275,6 +308,11 @@
             // La page Règles notifie tout changement (ajout/suppression) → pastille à jour
             if (e.data?.type === 'rules-changed' && typeof e.data.count === 'number') {
                 setRulesCount(e.data.count);
+            }
+            // La page « Liste Rubrique » a changé → prévenir l'onglet Règles (recharge ses rubriques)
+            if (e.data?.type === 'rubriques-changed') {
+                const fr = document.getElementById('frame-regles');
+                if (fr && fr.contentWindow) fr.contentWindow.postMessage({ type: 'rubriques-changed' }, '*');
             }
             // La page GROUPES demande le bandeau bloquant pendant la génération
             if (e.data?.type === 'groupes-generating') {

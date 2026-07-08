@@ -7,7 +7,21 @@ let activeFormTab = 'params';
 let apercuCache = {};   // cache du rendu de l'onglet « Aperçu groupes », par signature de règle
 let ddgCache    = {};   // cache du rendu de l'onglet « DDG », par signature de règle
 let ddgVisible  = { new: true, set: true, get: true, recipient: true };   // filtres d'affichage des lignes DDG (persistant)
-let groupByNiveau = (() => { try { return localStorage.getItem('regles_group_niveau') === '1'; } catch { return false; } })();
+// Regroupement du menu de gauche par RUBRIQUE (catégorie libre, onglet « Liste Rubrique »).
+// Remplace l'ancien regroupement « par niveau ». Activé par défaut.
+let groupByRubrique = (() => { try { const v = localStorage.getItem('regles_group_rubrique'); return v === null ? true : v === '1'; } catch { return true; } })();
+let rubriques = [];   // [{ id, label, ordre }] — chargées depuis /api/rubriques
+// Rubriques ouvertes dans le menu (mémorisées).
+//   - clic sur un en-tête = accordéon STRICT (une seule ouverte à la fois)
+//   - bouton double-chevron = tout ouvrir / tout fermer
+//   undefined = jamais défini (→ ouvrir la 1re)
+let expandedRubriques = (() => {
+    try { const raw = localStorage.getItem('regles_expanded_rubriques'); return raw === null ? undefined : new Set(JSON.parse(raw || '[]')); }
+    catch { return undefined; }
+})();
+function saveExpandedRubriques() {
+    try { localStorage.setItem('regles_expanded_rubriques', JSON.stringify(expandedRubriques ? [...expandedRubriques] : [])); } catch { /* ignore */ }
+}
 
 
 const NIV_LABELS = { 1: 'Global', 2: 'Par DO', 3: 'Par centre' };
@@ -17,6 +31,153 @@ const NIV_DESCRIPTIONS = {
     2: `1 CSV par Direction Opérationnelle + 1 CSV global.<br>→ <strong>Groupes DO</strong> (membres = utilisateurs) + <strong>1 groupe global</strong> (membres = groupes DO).`,
     3: `1 CSV par centre + 1 CSV par DO + 1 CSV global.<br>→ <strong>Groupes centres</strong> (utilisateurs) → <strong>Groupes DO</strong> (groupes centres) → <strong>Groupe global</strong> (groupes DO).`,
 };
+
+// ── Rubriques (catégories du menu de gauche) ──────────────────────────
+async function loadRubriques() {
+    try {
+        const r = await fetch('/api/rubriques');
+        const d = await r.json();
+        rubriques = Array.isArray(d) ? d : [];
+    } catch { rubriques = []; }
+}
+function sortedRubriques() {
+    return [...rubriques].sort((a, b) => (a.ordre || 0) - (b.ordre || 0));
+}
+// Comparateur alphabétique français (par libellé) — réutilisé pour rubriques et règles
+function byLabelFr(a, b) {
+    return String(a.label || '').localeCompare(String(b.label || ''), 'fr', { sensitivity: 'base' });
+}
+// Ordre d'affichage des règles d'une rubrique : ruleOrder (manuel) d'abord, puis alpha
+function orderRulesInRubrique(items, rubObj) {
+    const ord  = (rubObj && Array.isArray(rubObj.ruleOrder)) ? rubObj.ruleOrder : [];
+    const rank = id => { const i = ord.indexOf(id); return i < 0 ? 1e9 : i; };
+    return [...items].sort((a, b) => (rank(a.id) - rank(b.id)) || byLabelFr(a, b));
+}
+function rubriqueLabel(id) {
+    const r = rubriques.find(x => x.id === id);
+    return r ? r.label : null;
+}
+// Remplit le <select> de rubrique du formulaire (zone bleue) avec l'option courante sélectionnée.
+function fillRubriqueSelect(sel, currentId) {
+    if (!sel) return;
+    const opts = ['<option value="">— Non classé —</option>']
+        .concat(sortedRubriques().map(r =>
+            `<option value="${esc(r.id)}"${r.id === currentId ? ' selected' : ''}>${esc(r.label)}</option>`));
+    // Rubrique référencée mais absente de la liste (supprimée) : la garder visible le temps de l'édition
+    if (currentId && !rubriques.some(r => r.id === currentId)) {
+        opts.push(`<option value="${esc(currentId)}" selected>(rubrique supprimée)</option>`);
+    }
+    sel.innerHTML = opts.join('');
+    sel.value = currentId || '';
+}
+
+// ── Gestionnaire de rubriques INLINE (sous-onglet « Liste Rubrique ») ──────
+// Rendu directement dans le panneau (pas d'iframe) : réutilise le tableau `rubriques`
+// déjà chargé, et le POST /api/rubriques (remplacement complet de la liste).
+let rubDraft      = null;   // copie de travail éditée dans le sous-onglet
+let rubDraftDirty = false;
+
+function renderRubMgr() {
+    const box = document.getElementById('rubmgr');
+    if (!box) return;
+    // Repart d'une copie fraîche des rubriques courantes (sauf édition en cours)
+    if (!rubDraft) rubDraft = sortedRubriques().map(r => ({ id: r.id, label: r.label, ordre: r.ordre }));
+    drawRubMgr();
+}
+
+function drawRubMgr() {
+    const box = document.getElementById('rubmgr');
+    if (!box) return;
+    const rows = rubDraft.map((r, i) =>
+        `<li class="rubmgr-item" data-id="${esc(r.id)}">` +
+            `<span class="rubmgr-handle">${i + 1}</span>` +
+            `<input class="rubmgr-label" type="text" value="${esc(r.label)}" maxlength="60" data-id="${esc(r.id)}">` +
+            `<div class="rubmgr-actions">` +
+                `<button class="rubmgr-ic" data-act="up" data-id="${esc(r.id)}" title="Monter"${i === 0 ? ' disabled' : ''}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"/></svg></button>` +
+                `<button class="rubmgr-ic" data-act="down" data-id="${esc(r.id)}" title="Descendre"${i === rubDraft.length - 1 ? ' disabled' : ''}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>` +
+                `<button class="rubmgr-ic rubmgr-ic-del" data-act="del" data-id="${esc(r.id)}" title="Supprimer"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>` +
+            `</div>` +
+        `</li>`).join('');
+
+    box.innerHTML =
+        `<div class="rubmgr-head">` +
+            `<div><h2 class="rubmgr-title">Rubriques du menu</h2>` +
+            `<p class="rubmgr-sub">Catégories de classement des règles (menu de gauche). Purement organisationnel — sans effet sur la génération.</p></div>` +
+            `<span class="rubmgr-count">${rubDraft.length} rubrique${rubDraft.length > 1 ? 's' : ''}</span>` +
+        `</div>` +
+        `<div class="rubmgr-add">` +
+            `<input id="rubmgr-new" class="rubmgr-input" type="text" placeholder="Nouvelle rubrique (ex. Par direction régionale)" maxlength="60">` +
+            `<button id="rubmgr-add-btn" class="btn-primary" type="button">+ Ajouter</button>` +
+        `</div>` +
+        `<ul class="rubmgr-list">${rows || '<li class="rubmgr-empty">Aucune rubrique — ajoutez-en une ci-dessus.</li>'}</ul>` +
+        `<div class="rubmgr-foot">` +
+            (rubDraftDirty ? `<span class="rubmgr-dirty">● Modifications non enregistrées</span>` : '') +
+            `<button id="rubmgr-save" class="btn-primary" type="button"${rubDraftDirty ? '' : ' disabled'}>Enregistrer</button>` +
+        `</div>`;
+
+    // Câblage
+    box.querySelector('#rubmgr-add-btn')?.addEventListener('click', rubMgrAdd);
+    box.querySelector('#rubmgr-new')?.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); rubMgrAdd(); } });
+    box.querySelector('#rubmgr-save')?.addEventListener('click', rubMgrSave);
+    box.querySelectorAll('.rubmgr-label').forEach(inp => inp.addEventListener('input', () => {
+        const r = rubDraft.find(x => x.id === inp.dataset.id);
+        if (r) { r.label = inp.value; rubDraftDirty = true; syncRubMgrFoot(); }
+    }));
+    box.querySelectorAll('.rubmgr-ic').forEach(b => b.addEventListener('click', () => {
+        const id = b.dataset.id, act = b.dataset.act;
+        if (act === 'del')      rubDraft = rubDraft.filter(x => x.id !== id);
+        else                    rubMgrMove(id, act === 'up' ? -1 : 1);
+        rubDraftDirty = true;
+        drawRubMgr();
+    }));
+}
+
+function syncRubMgrFoot() {
+    const save  = document.getElementById('rubmgr-save');
+    const foot  = document.querySelector('#rubmgr .rubmgr-foot');
+    if (save) save.disabled = !rubDraftDirty;
+    if (foot && rubDraftDirty && !foot.querySelector('.rubmgr-dirty')) {
+        foot.insertAdjacentHTML('afterbegin', `<span class="rubmgr-dirty">● Modifications non enregistrées</span>`);
+    }
+}
+
+function rubMgrAdd() {
+    const inp = document.getElementById('rubmgr-new');
+    const label = (inp?.value || '').trim();
+    if (!label) { inp?.focus(); return; }
+    if (rubDraft.some(r => r.label.toLowerCase() === label.toLowerCase())) { showToast('Cette rubrique existe déjà', 'error'); return; }
+    rubDraft.push({ id: 'rub-' + uid(), label, ordre: rubDraft.length + 1 });
+    rubDraftDirty = true;
+    drawRubMgr();
+    document.getElementById('rubmgr-new')?.focus();
+}
+
+function rubMgrMove(id, dir) {
+    const i = rubDraft.findIndex(r => r.id === id);
+    const j = i + dir;
+    if (i < 0 || j < 0 || j >= rubDraft.length) return;
+    [rubDraft[i], rubDraft[j]] = [rubDraft[j], rubDraft[i]];
+}
+
+async function rubMgrSave() {
+    const clean = rubDraft.map(r => ({ ...r, label: r.label.trim() })).filter(r => r.label);
+    clean.forEach((r, i) => { r.ordre = i + 1; });
+    try {
+        const res = await fetch('/api/rubriques', {
+            method:  'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body:    JSON.stringify(clean),
+        });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        await loadRubriques();
+        rubDraft = null; rubDraftDirty = false;
+        renderList();                                   // menu de gauche à jour
+        const sel = document.getElementById('f-rubrique');
+        if (sel) fillRubriqueSelect(sel, sel.value);    // sélecteur zone bleue à jour
+        renderRubMgr();                                 // re-render depuis les données fraîches
+        showToast('Rubriques enregistrées', 'success');
+    } catch { showToast("Erreur lors de l'enregistrement", 'error'); }
+}
 
 function metaLabel(rule) {
     if (rule?.invertOf) {
@@ -201,7 +362,19 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.querySelector('.regles-layout').style.height = '100vh';
     }
 
+    await loadRubriques();
     await loadRules();
+
+    // La page « Liste Rubrique » (ou l'activation de l'onglet) → recharger les rubriques
+    window.addEventListener('message', async e => {
+        if (e.data?.type === 'rubriques-changed' || e.data?.type === 'tab-activated') {
+            await loadRubriques();
+            renderList();
+            const sel = document.getElementById('f-rubrique');
+            if (sel) fillRubriqueSelect(sel, sel.value);
+        }
+    });
+
     const raw = localStorage.getItem('regles_draft');
     if (raw) {
         localStorage.removeItem('regles_draft');
@@ -210,6 +383,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('btn-new-rule').addEventListener('click', openNewForm);
     document.getElementById('btn-view-json').addEventListener('click', openJsonModal);
     setupGroupNiveauBtn();
+    setupAccordionBtn();
+    setupLockAllBtn();
 
     const sidebar = document.querySelector('.regles-sidebar');
     if (sidebar) {
@@ -234,6 +409,7 @@ async function loadRules() {
         const data = await r.json();
         rules = Array.isArray(data) ? data : [];
         renderList();
+        updateLockAllBtn();
         loadGroupCounts();
         // Notifie le shell (onglet principal) du nombre total de règles → pastille de nav
         try { window.top.postMessage({ type: 'rules-changed', count: rules.length }, '*'); } catch { /* hors iframe */ }
@@ -305,20 +481,52 @@ function renderList() {
         return;
     }
     el.innerHTML = '';
+    el.classList.toggle('by-rubrique', groupByRubrique);
 
-    if (groupByNiveau) {
-        for (const niv of [1, 2, 3]) {
-            const inNiv = rules.filter(r => (r.niveau || 1) === niv);
-            if (!inNiv.length) continue;
-            const hdr = document.createElement('div');
-            hdr.className = 'rules-niveau-hdr';
-            hdr.innerHTML = `<span class="niv-full">Niveau ${niv} (${NIV_LABELS[niv] || ''})</span><span class="niv-mini">N${niv}</span><span class="rules-niveau-count">${inNiv.length}</span>`;
-            el.appendChild(hdr);
-            const activeN   = inNiv.filter(r => r.active !== false);
-            const inactiveN = inNiv.filter(r => r.active === false);
-            for (const rule of activeN)   el.appendChild(buildCard(rule));
-            for (const rule of inactiveN) el.appendChild(buildCard(rule));
+    if (groupByRubrique) {
+        // Catégories triées A→Z, puis « Non classé » toujours en dernier.
+        const miniOf  = s => String(s).split(/\s+/).filter(Boolean).map(w => w[0]).join('').slice(0, 3).toUpperCase();
+        const groups  = sortedRubriques().map(rub => ({
+            key: rub.id, label: rub.label, mini: miniOf(rub.label), rub,
+            items: rules.filter(r => r.rubriqueId === rub.id),
+        })).sort(byLabelFr);
+        const known    = new Set(rubriques.map(r => r.id));
+        const unclassed = rules.filter(r => !r.rubriqueId || !known.has(r.rubriqueId));
+        if (unclassed.length) groups.push({ key: '__none__', label: 'Non classé', mini: '—', rub: null, items: unclassed });
+
+        // Première utilisation (aucun état mémorisé) → ouvrir la 1re rubrique non vide.
+        if (expandedRubriques === undefined) {
+            const first = groups.find(g => g.items.length)?.key;
+            expandedRubriques = new Set(first ? [first] : []);
         }
+
+        const CHEVRON = `<svg class="rub-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>`;
+        for (const g of groups) {
+            if (!g.items.length) continue;
+            const block = document.createElement('div');
+            block.className = 'rubrique-block' + (expandedRubriques.has(g.key) ? '' : ' collapsed');
+            block.dataset.key = g.key;
+
+            const hdr = document.createElement('div');
+            hdr.className = 'rules-niveau-hdr rubrique-hdr' + (g.key === '__none__' ? ' unclassed' : '');
+            hdr.innerHTML =
+                `<span class="rub-hdr-left">${CHEVRON}<span class="niv-full">${esc(g.label)}</span><span class="niv-mini" title="${esc(g.label)}">${esc(g.mini)}</span></span>` +
+                `<span class="rules-niveau-count">${g.items.length}</span>`;
+            hdr.addEventListener('click', () => toggleRubriqueAccordion(g.key));
+            block.appendChild(hdr);
+
+            const wrap = document.createElement('div');
+            wrap.className = 'rubrique-items';
+            // Ordre manuel (ruleOrder de la rubrique) puis alpha ; actives avant inactives.
+            const ordered   = orderRulesInRubrique(g.items, g.rub);
+            const activeN   = ordered.filter(r => r.active !== false);
+            const inactiveN = ordered.filter(r => r.active === false);
+            for (const rule of activeN)   wrap.appendChild(buildCard(rule));
+            for (const rule of inactiveN) wrap.appendChild(buildCard(rule));
+            block.appendChild(wrap);
+            el.appendChild(block);
+        }
+        updateAccordionBtn();
         return;
     }
 
@@ -337,13 +545,102 @@ function renderList() {
 function setupGroupNiveauBtn() {
     const btn = document.getElementById('btn-group-niveau');
     if (!btn) return;
-    btn.classList.toggle('active', groupByNiveau);
+    btn.classList.toggle('active', groupByRubrique);
     btn.addEventListener('click', () => {
-        groupByNiveau = !groupByNiveau;
-        try { localStorage.setItem('regles_group_niveau', groupByNiveau ? '1' : '0'); } catch { /* ignore */ }
-        btn.classList.toggle('active', groupByNiveau);
+        groupByRubrique = !groupByRubrique;
+        try { localStorage.setItem('regles_group_rubrique', groupByRubrique ? '1' : '0'); } catch { /* ignore */ }
+        btn.classList.toggle('active', groupByRubrique);
         renderList();
     });
+}
+
+// ── Accordéon des rubriques ────────────────────────────────────────────────
+// Clic sur un en-tête : accordéon STRICT — n'ouvre que celle-ci (referme les autres).
+function toggleRubriqueAccordion(key) {
+    if (expandedRubriques.has(key) && expandedRubriques.size === 1) expandedRubriques = new Set();      // re-clic sur la seule ouverte → fermer
+    else expandedRubriques = new Set([key]);                                                            // ouvrir celle-ci uniquement
+    saveExpandedRubriques();
+    renderList();
+}
+
+function setupAccordionBtn() {
+    const btn = document.getElementById('btn-accordion');
+    if (!btn) return;
+    btn.addEventListener('click', toggleAllRubriques);
+    updateAccordionBtn();
+}
+
+// Bouton double-chevron : TOUT ouvrir / TOUT fermer.
+function toggleAllRubriques() {
+    const keys = [...document.querySelectorAll('.rubrique-block')].map(b => b.dataset.key);
+    if (!keys.length) return;
+    const allOpen = keys.every(k => expandedRubriques.has(k));
+    expandedRubriques = allOpen ? new Set() : new Set(keys);
+    saveExpandedRubriques();
+    renderList();
+}
+
+function updateAccordionBtn() {
+    const btn = document.getElementById('btn-accordion');
+    if (!btn) return;
+    const blocks  = [...document.querySelectorAll('.rubrique-block')];
+    const allOpen = blocks.length > 0 && blocks.every(b => expandedRubriques.has(b.dataset.key));
+    btn.classList.toggle('all-open', allOpen);
+    btn.title = allOpen ? 'Tout replier' : 'Tout déplier';
+}
+
+// ── Bouton « Verrouiller toutes les règles » (à droite de « Par niveau ») ──
+function setupLockAllBtn() {
+    const btn = document.getElementById('btn-lock-all');
+    if (!btn) return;
+    btn.addEventListener('click', toggleLockAll);
+    updateLockAllBtn();
+}
+
+// Reflète l'état global sur le bouton : tout verrouillé → l'action devient « déverrouiller »
+function updateLockAllBtn() {
+    const btn = document.getElementById('btn-lock-all');
+    if (!btn) return;
+    const icoLocked = btn.querySelector('.lockall-locked');
+    const icoOpen   = btn.querySelector('.lockall-open');
+    const has     = rules.length > 0;
+    const allLock = has && rules.every(r => !!r.locked);
+    btn.disabled = !has;
+    btn.classList.toggle('all-locked', allLock);
+    if (icoLocked) icoLocked.hidden = allLock;   // cadenas ouvert quand tout est déjà verrouillé
+    if (icoOpen)   icoOpen.hidden   = !allLock;
+    btn.title = allLock ? 'Déverrouiller toutes les règles' : 'Verrouiller toutes les règles';
+}
+
+// Verrouille (ou déverrouille si tout est déjà verrouillé) toutes les règles en une passe
+async function toggleLockAll() {
+    if (!rules.length) return;
+    const target = !rules.every(r => !!r.locked);   // false si tout verrouillé → déverrouille, sinon verrouille
+    const todo   = rules.filter(r => !!r.locked !== target);
+    if (!todo.length) return;
+
+    const n   = todo.length;
+    const msg = target
+        ? `Verrouiller ${n} règle${n > 1 ? 's' : ''} ?\nToute modification et suppression sera bloquée (déverrouillage possible ensuite).`
+        : `Déverrouiller ${n} règle${n > 1 ? 's' : ''} pour autoriser les modifications ?`;
+    if (!await showConfirm(msg)) return;
+
+    let ok = 0, fail = 0;
+    for (const r of todo) {
+        try {
+            const res = await fetch('/api/regles', {
+                method:  'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body:    JSON.stringify({ ...r, locked: target, updatedAt: now() })
+            });
+            if (res.ok) ok++; else fail++;
+        } catch { fail++; }
+    }
+    await loadRules();
+    if (editingId) renderForm(rules.find(r => r.id === editingId));
+    const verb = target ? 'verrouillée' : 'déverrouillée';
+    if (fail) showToast(`${ok} règle(s) ${verb}(s), ${fail} échec(s)`, 'error');
+    else      showToast(`${ok} règle${ok > 1 ? 's' : ''} ${verb}${ok > 1 ? 's' : ''}`, 'success');
 }
 
 // Maître : icône "git-fork" (la règle alimente d'autres règles)
@@ -626,6 +923,23 @@ function closeForm() {
         '<div class="regles-empty"><p>Sélectionner une règle ou créer une nouvelle règle</p></div>';
 }
 
+// Câblage générique des sous-onglets du formulaire (Paramètres / Aperçu / DDG / Liste Rubrique / Circuit).
+function wireFormTabs() {
+    document.querySelectorAll('.form-tab-btn').forEach(btn =>
+        btn.addEventListener('click', () => {
+            activeFormTab = btn.dataset.tab;
+            document.querySelectorAll('.form-tab-btn').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.form-tab-pane').forEach(p => { p.hidden = true; });
+            btn.classList.add('active');
+            const pane = document.getElementById('tab-' + btn.dataset.tab);
+            if (pane) pane.hidden = false;
+            if (btn.dataset.tab === 'apercu') loadApercuGroupes();
+            if (btn.dataset.tab === 'ddg')    loadDdg();
+            if (btn.dataset.tab === 'rubriques') renderRubMgr();
+        })
+    );
+}
+
 function renderForm(rule) {
     const main         = document.getElementById('regles-main');
     const isNew        = !rule?.id;
@@ -642,10 +956,17 @@ function renderForm(rule) {
                 `<button class="form-tab-btn active" data-tab="params">Paramètres</button>` +
                 `<button class="form-tab-btn" data-tab="apercu">Aperçu groupes</button>` +
                 `<button class="form-tab-btn" data-tab="ddg">DDG</button>` +
+                `<button class="form-tab-btn" data-tab="rubriques">Liste Rubrique</button>` +
                 `<button class="form-tab-btn" data-tab="circuit">Circuit</button>` +
             `</div>` +
             `<div class="form-tab-pane" id="tab-params">` +
-            `<div class="form-title">${isNew ? 'Nouvelle règle' : 'Modifier — ' + esc(rule.label || '')}</div>` +
+            `<div class="form-title-row">` +
+                `<div class="form-title">${isNew ? 'Nouvelle règle' : 'Modifier — ' + esc(rule.label || '')}</div>` +
+                `<div class="form-rubrique">` +
+                    `<label class="form-rubrique-lbl" for="f-rubrique">Rubrique Menu</label>` +
+                    `<select id="f-rubrique" class="form-rubrique-select" title="Rubrique de classement (menu de gauche)"></select>` +
+                `</div>` +
+            `</div>` +
 
             `<div class="form-row-top">` +
                 `<div class="form-head-left">` +
@@ -797,6 +1118,9 @@ function renderForm(rule) {
         `<div class="form-tab-pane" id="tab-apercu" hidden>` +
             `<iframe id="apercu-frame" class="apercu-frame" title="Aperçu des groupes" allowfullscreen></iframe>` +
         `</div>` +
+        `<div class="form-tab-pane" id="tab-rubriques" hidden>` +
+            `<div class="rubmgr" id="rubmgr"></div>` +
+        `</div>` +
         `<div class="form-tab-pane" id="tab-ddg" hidden>` +
             `<div class="ddg-toolbar">` +
                 `<span class="ddg-toolbar-title">Scripts DDG</span>` +
@@ -904,6 +1228,9 @@ function renderForm(rule) {
     document.getElementById('btn-unlock')?.addEventListener('click', () => toggleLock(false));
     if (locked) document.getElementById('rule-form')?.classList.add('rule-form--locked');
 
+    // Sélecteur de rubrique (zone bleue) — classement dans le menu de gauche
+    fillRubriqueSelect(document.getElementById('f-rubrique'), rule?.rubriqueId || '');
+
     document.getElementById('f-active').addEventListener('change', async e => {
         const newVal = e.target.checked;
         e.target.checked = !newVal;
@@ -922,17 +1249,7 @@ function renderForm(rule) {
     document.getElementById('btn-mail-pattern')?.addEventListener('click', () => openPatternModal('mailCentre'));
     setupNamingFields();
 
-    document.querySelectorAll('.form-tab-btn').forEach(btn =>
-        btn.addEventListener('click', () => {
-            activeFormTab = btn.dataset.tab;
-            document.querySelectorAll('.form-tab-btn').forEach(b => b.classList.remove('active'));
-            document.querySelectorAll('.form-tab-pane').forEach(p => { p.hidden = true; });
-            btn.classList.add('active');
-            document.getElementById('tab-' + btn.dataset.tab).hidden = false;
-            if (btn.dataset.tab === 'apercu') loadApercuGroupes();
-            if (btn.dataset.tab === 'ddg')    loadDdg();
-        })
-    );
+    wireFormTabs();
     document.getElementById('rule-form')?.addEventListener('input',  updateLdapDisplay);
     document.getElementById('rule-form')?.addEventListener('change', updateLdapDisplay);
     updateLdapDisplay();
@@ -1131,6 +1448,7 @@ function readForm() {
         ...(existing?.prefix ? { prefix: existing.prefix } : {}),
         niveau,
         monoNiveau: existing?.monoNiveau ?? false,
+        ...((document.getElementById('f-rubrique')?.value || '') ? { rubriqueId: document.getElementById('f-rubrique').value } : {}),
         ...(existing?.invertOf ? { invertOf: existing.invertOf } : {}),
         ...(existing?.locked ? { locked: true } : {}),
         conditions: { include, exclude },

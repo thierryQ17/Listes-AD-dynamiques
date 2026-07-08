@@ -23,7 +23,7 @@ function Start-AppServer {
 
     # -Browse : Pode ouvre lui-même le navigateur UNE FOIS le serveur à l'écoute
     # (évite le "connexion échouée" quand le navigateur était ouvert trop tôt).
-    Start-PodeServer -Threads 3 -Browse {
+    Start-PodeServer -Threads 8 -Browse {
         Add-PodeEndpoint -Address localhost -Port $global:__AppPort -Protocol Http
 
         # --- Snapshot des globals du thread principal vers l'état Pode ---
@@ -65,6 +65,10 @@ function Start-AppServer {
         Add-PodeRoute -Method Get -Path '/regles.html' -ScriptBlock { Serve-File -Key 'f_regles.html' -ContentType 'text/html' }
         Add-PodeRoute -Method Get -Path '/regles.js'   -ScriptBlock { Serve-File -Key 'f_regles.js'  -ContentType 'application/javascript' }
         Add-PodeRoute -Method Get -Path '/regles.css'  -ScriptBlock { Serve-File -Key 'f_regles.css' -ContentType 'text/css' }
+        Add-PodeRoute -Method Get -Path '/rubriques'      -ScriptBlock { Serve-File -Key 'f_rubriques.html' -ContentType 'text/html' }
+        Add-PodeRoute -Method Get -Path '/rubriques.html' -ScriptBlock { Serve-File -Key 'f_rubriques.html' -ContentType 'text/html' }
+        Add-PodeRoute -Method Get -Path '/rubriques.js'   -ScriptBlock { Serve-File -Key 'f_rubriques.js'   -ContentType 'application/javascript' }
+        Add-PodeRoute -Method Get -Path '/rubriques.css'  -ScriptBlock { Serve-File -Key 'f_rubriques.css'  -ContentType 'text/css' }
         Add-PodeRoute -Method Get -Path '/groups-doc.js' -ScriptBlock { Serve-File -Key 'f_groups-doc.js' -ContentType 'application/javascript' }
         Add-PodeRoute -Method Get -Path '/allgroupes'    -ScriptBlock { Serve-File -Key 'f_allgroupes.html' -ContentType 'text/html' }
         Add-PodeRoute -Method Get -Path '/allgroupes.js' -ScriptBlock { Serve-File -Key 'f_allgroupes.js'   -ContentType 'application/javascript' }
@@ -283,6 +287,24 @@ function Start-AppServer {
                     [System.IO.File]::WriteAllText($rPath, (ConvertTo-Json -InputObject @($regles) -Depth 10 -Compress), [System.Text.Encoding]::UTF8)
                     Send-Json -Body '{"ok":true}'
                 }
+            }
+        }
+
+        # ==================== API — Rubriques (catégories du menu de gauche) ====================
+        # Liste ordonnée de catégories libres servant à classer les règles dans la sidebar.
+        # Purement organisationnel — n'affecte PAS la génération (le champ `niveau` reste maître).
+        Add-PodeRoute -Method Get -Path '/api/rubriques' -ScriptBlock {
+            $rPath = Get-RubriquesPath
+            $data  = if (Test-Path $rPath) { [System.IO.File]::ReadAllText($rPath, [System.Text.Encoding]::UTF8) } else { '[]' }
+            Send-Json -Body $data
+        }
+        # POST = remplace la liste complète (le client gère ajout / édition / suppression / ordre).
+        Add-PodeRoute -Method Post -Path '/api/rubriques' -ScriptBlock {
+            $body = ConvertFrom-Json $WebEvent.Request.Body
+            Lock-PodeObject -ScriptBlock {
+                $rPath = Get-RubriquesPath
+                [System.IO.File]::WriteAllText($rPath, (ConvertTo-Json -InputObject @($body) -Depth 5 -Compress), [System.Text.Encoding]::UTF8)
+                Send-Json -Body '{"ok":true}'
             }
         }
 
@@ -1178,4 +1200,9 @@ function Get-ADFieldValues {
 function Get-ReglesPath {
     $dir = ($global:path."r_settings") -replace '/', '\'
     return Join-Path $dir "regles.json"
+}
+
+function Get-RubriquesPath {
+    $dir = ($global:path."r_settings") -replace '/', '\'
+    return Join-Path $dir "rubriques.json"
 }
